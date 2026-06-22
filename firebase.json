@@ -1,0 +1,42 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": ["node_modules", ".git", "firebase-debug.log"]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "safee-meet",
+          "appId": "1:606194809150:android:96550380224b752f78546f",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "safee-meet",
+          "appId": "1:606194809150:ios:4d7daa5973a94d0978546f",
+          "uploadDebugSymbols": true,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "safee-meet",
+          "configurations": {
+            "android": "1:606194809150:android:96550380224b752f78546f",
+            "ios": "1:606194809150:ios:4d7daa5973a94d0978546f",
+            "windows": "1:606194809150:web:cf9f995c0bcaa26378546f"
+          }
+        }
+      }
+    }
+  }
+}

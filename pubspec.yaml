@@ -1,0 +1,115 @@
+name: safee_meet
+description: "SAFEE MEET — Trust, Identity Verification & Meeting Protection Platform"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.5
+
+  # Code Generation (runtime)
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # Dependency Injection
+  get_it: ^8.0.2
+  injectable: ^2.4.4
+
+  # Networking
+  dio: ^5.7.0
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # Secure Storage
+  flutter_secure_storage: ^9.2.2
+
+  # Local DB
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Firebase
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.3
+  firebase_analytics: ^11.3.3
+  firebase_crashlytics: ^4.1.3
+  firebase_auth: ^5.3.1
+  firebase_storage: ^12.3.3
+  cloud_firestore: ^5.4.3
+
+  # Location & Maps
+  geolocator: ^13.0.2
+  google_maps_flutter: ^2.9.0
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Media
+  image_picker: ^1.1.2
+  file_picker: ^8.0.0+1
+
+  # Images
+  cached_network_image: ^3.4.1
+
+  # URL / File opening
+  url_launcher: ^6.3.0
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Functional Programming (Either / Failure)
+  dartz: ^0.10.1
+
+  # Internationalisation
+  intl: ^0.19.0
+
+  # Real-time Chat
+  socket_io_client: ^2.0.3+1
+
+  # Google Sign-In
+  google_sign_in: ^6.2.1
+
+  # QR Code Display
+  qr_flutter: ^4.1.0
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.3
+
+  # Code Generation
+  build_runner: ^2.4.13
+  freezed: 
+  injectable_generator: ^2.6.2
+  json_serializable: ^6.8.0
+  hive_generator: ^2.0.1
+
+  # Testing
+  bloc_test: ^9.1.7
+  mocktail: ^1.0.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/app_icon.png"
+  min_sdk_android: 21
+  web:
+    generate: false
+  windows:
+    generate: false
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/

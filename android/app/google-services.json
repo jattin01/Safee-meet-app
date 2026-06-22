@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "606194809150",
+    "project_id": "safee-meet",
+    "storage_bucket": "safee-meet.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:606194809150:android:96550380224b752f78546f",
+        "android_client_info": {
+          "package_name": "solutionbowl.com.safee_meet"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "606194809150-qpvt0kf2mts7p2iclgcm39hhas4u8259.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "solutionbowl.com.safee_meet",
+            "certificate_hash": "36c882f7153a4df78b8d6a9887b0b6e970cb9c9d"
+          }
+        },
+        {
+          "client_id": "606194809150-egt6nsiaii0rscdk84lf630f0bcdts36.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArpGxTlHeqBHfBkRHwpptZJ6tO6qFnOxY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "606194809150-egt6nsiaii0rscdk84lf630f0bcdts36.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "606194809150-fte53ern3snk9skkvhc0d2opgtipcm9g.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "solutionbowl.com.safeeMeet"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,103 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
+import 'core/config/app_constants.dart';
+import 'core/config/app_theme.dart';
+import 'core/dependency_injection/injection_container.dart';
+import 'core/routes/app_router.dart';
+import 'firebase_options.dart';
+
+// Must be a top-level function. Called by FCM when the app is in
+// background or terminated. Firebase auto-displays the notification
+// if the payload contains a 'notification' key. Add custom handling
+// (e.g. updating badge count) here as needed.
+@pragma('vm:entry-point')
+Future<void> _onBackgroundMessage(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Force portrait orientation
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  // Status/navigation bar style
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Color(0xFF0F172A),
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+
+  // Hive
+  await Hive.initFlutter();
+  await Future.wait([
+    Hive.openBox<dynamic>(AppConstants.kSettingsBox),
+    Hive.openBox<dynamic>(AppConstants.kCacheBox),
+    Hive.openBox<dynamic>(AppConstants.kUserBox),
+    Hive.openBox<dynamic>(AppConstants.kNotificationsBox),
+  ]);
+
+  // Firebase — explicit options bypass the native google-services.json lookup.
+  // Replace placeholder values in firebase_options.dart with real credentials
+  // from your Firebase console before shipping.
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    // Register background message handler BEFORE runApp so it works in
+    // terminated state. Must be called after Firebase.initializeApp().
+    FirebaseMessaging.onBackgroundMessage(_onBackgroundMessage);
+
+    FlutterError.onError =
+        FirebaseCrashlytics.instance.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  } catch (e) {
+    // Firebase unavailable in this environment (missing credentials).
+    // The app continues without crash reporting / push notifications.
+    debugPrint('Firebase init skipped: $e');
+  }
+
+  // Register all dependencies
+  await configureDependencies();
+
+  runApp(const SafeeMeetApp());
+}
+
+class SafeeMeetApp extends StatelessWidget {
+  const SafeeMeetApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final router = sl<AppRouter>().router;
+    return MaterialApp.router(
+      title: AppConstants.appName,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.dark,
+      routerConfig: router,
+      debugShowCheckedModeBanner: false,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: MediaQuery.of(context).textScaler.clamp(
+                minScaleFactor: 0.8,
+                maxScaleFactor: 1.2,
+              ),
+        ),
+        child: child!,
+      ),
+    );
+  }
+}
