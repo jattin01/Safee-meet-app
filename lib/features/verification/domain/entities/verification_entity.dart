@@ -6,14 +6,21 @@ class VerificationEntity extends Equatable {
   final String? idFrontUrl;
   final String? idBackUrl;
   final String? selfieUrl;
+  final bool hasIdFront;
+  final bool hasIdBack;
+  final bool hasSelfie;
   final VerificationStep currentStep;
-  final String status; // 'pending' | 'approved' | 'rejected'
+  final String
+      status; // 'not_started' | 'draft' | 'pending' | 'approved' | 'rejected'
   final String? rejectionReason;
 
   const VerificationEntity({
     this.idFrontUrl,
     this.idBackUrl,
     this.selfieUrl,
+    required this.hasIdFront,
+    required this.hasIdBack,
+    required this.hasSelfie,
     required this.currentStep,
     required this.status,
     this.rejectionReason,
@@ -24,6 +31,9 @@ class VerificationEntity extends Equatable {
         idFrontUrl,
         idBackUrl,
         selfieUrl,
+        hasIdFront,
+        hasIdBack,
+        hasSelfie,
         currentStep,
         status,
         rejectionReason,
@@ -36,6 +46,9 @@ class VerificationStatusEntity extends Equatable {
   final bool level1Complete;
   final bool level2Complete;
   final bool professionalComplete;
+  final String kycStatus;
+  final VerificationStep currentStep;
+  final String? rejectionReason;
   final double safetyMetricMeetings;
   final double safetyMetricResponsiveness;
   final double safetyMetricReviews;
@@ -47,6 +60,9 @@ class VerificationStatusEntity extends Equatable {
     required this.level1Complete,
     required this.level2Complete,
     required this.professionalComplete,
+    required this.kycStatus,
+    required this.currentStep,
+    this.rejectionReason,
     required this.safetyMetricMeetings,
     required this.safetyMetricResponsiveness,
     required this.safetyMetricReviews,
@@ -60,6 +76,9 @@ class VerificationStatusEntity extends Equatable {
         level1Complete,
         level2Complete,
         professionalComplete,
+        kycStatus,
+        currentStep,
+        rejectionReason,
         safetyMetricMeetings,
         safetyMetricResponsiveness,
         safetyMetricReviews,

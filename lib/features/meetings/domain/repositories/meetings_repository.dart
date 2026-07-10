@@ -10,11 +10,16 @@ abstract class MeetingsRepository {
     required DateTime scheduledAt,
     required MeetingPurpose purpose,
     required String location,
+    double? latitude,
+    double? longitude,
     String? notes,
+    String? itemOrService,
   });
   Future<Either<Failure, MeetingEntity>> updateMeetingStatus({
     required String meetingId,
     required MeetingStatus status,
   });
   Future<Either<Failure, void>> endMeeting(String meetingId);
+  Future<Either<Failure, MeetingEntity>> approveMeeting(String meetingId);
+  Future<Either<Failure, MeetingEntity>> denyMeeting(String meetingId);
 }

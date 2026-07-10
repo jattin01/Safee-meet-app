@@ -1,6 +1,5 @@
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
-import '../../../../core/services/hive_service.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../domain/entities/member_entity.dart';
 import '../../domain/repositories/member_search_repository.dart';
@@ -8,17 +7,14 @@ import '../remote_data_sources/member_search_remote_data_source.dart';
 
 class MemberSearchRepositoryImpl implements MemberSearchRepository {
   final MemberSearchRemoteDataSource _remote;
-  final HiveService _hive;
 
-  MemberSearchRepositoryImpl(this._remote, this._hive);
+  MemberSearchRepositoryImpl(this._remote);
 
   @override
   Future<Either<Failure, MemberEntity>> searchByPIN(String pin) async {
     try {
       final data = await _remote.searchByPIN(pin);
-      final entity = _parse(data);
-      await _hive.cacheValue('recent_$pin', pin);
-      return Right(entity);
+      return Right(_parse(data));
     } on DioException catch (e) {
       return Left(_map(e));
     } catch (_) {
@@ -39,8 +35,15 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
   }
 
   @override
-  Future<Either<Failure, List<String>>> getRecentSearches() async {
-    return const Right([]);
+  Future<Either<Failure, List<MemberEntity>>> getRecentSearches() async {
+    try {
+      final data = await _remote.getRecentSearches();
+      return Right(data.map(_parse).toList());
+    } on DioException catch (e) {
+      return Left(_map(e));
+    } catch (_) {
+      return const Left(UnknownFailure());
+    }
   }
 
   MemberEntity _parse(Map<String, dynamic> d) => MemberEntity(

@@ -11,16 +11,23 @@ import '../services/hive_service.dart';
 import '../services/presence_service.dart';
 import '../services/secure_storage_service.dart';
 import '../services/socket_service.dart';
+import '../storage/auth_session_manager.dart';
+import '../storage/token_storage_service.dart';
 
 // Auth
 import '../../features/auth/data/local_data_sources/auth_local_data_source.dart';
 import '../../features/auth/data/remote_data_sources/auth_remote_data_source.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
+import '../../features/auth/domain/use_cases/apple_login_use_case.dart';
+import '../../features/auth/domain/use_cases/check_auth_status_use_case.dart';
+import '../../features/auth/domain/use_cases/check_user_exists_use_case.dart';
+import '../../features/auth/domain/use_cases/get_current_user_use_case.dart';
+import '../../features/auth/domain/use_cases/google_login_use_case.dart';
+import '../../features/auth/domain/use_cases/login_use_case.dart';
+import '../../features/auth/domain/use_cases/logout_use_case.dart';
 import '../../features/auth/domain/use_cases/register_user_use_case.dart';
 import '../../features/auth/domain/use_cases/send_otp_use_case.dart';
-import '../../features/auth/domain/use_cases/social_login_use_case.dart';
-import '../../features/auth/domain/use_cases/verify_otp_use_case.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
 // Dashboard
@@ -41,6 +48,12 @@ import '../../features/member_search/data/remote_data_sources/member_search_remo
 import '../../features/member_search/data/repositories/member_search_repository_impl.dart';
 import '../../features/member_search/domain/repositories/member_search_repository.dart';
 import '../../features/member_search/presentation/bloc/member_search_bloc.dart';
+
+// Settings — Emergency Contacts
+import '../../features/settings/data/remote_data_sources/emergency_contact_remote_data_source.dart';
+import '../../features/settings/data/repositories/emergency_contact_repository_impl.dart';
+import '../../features/settings/domain/repositories/emergency_contact_repository.dart';
+import '../../features/settings/presentation/bloc/emergency_contact_bloc.dart';
 
 // Messaging — Firebase Firestore implementation
 import '../../features/messaging/data/datasources/chat_remote_datasource.dart';
@@ -66,6 +79,7 @@ import '../../features/sos/presentation/bloc/sos_bloc.dart';
 // Profile
 import '../../features/profile/data/repositories/profile_repository_impl.dart';
 import '../../features/profile/presentation/bloc/profile_bloc.dart';
+import '../../features/profile/presentation/cubit/current_user_cubit.dart';
 
 // GPS Tracking
 import '../../features/gps_tracking/presentation/bloc/gps_tracking_bloc.dart';
@@ -99,7 +113,15 @@ Future<void> configureDependencies() async {
     () => PresenceService(sl(), sl()),
   );
   sl.registerLazySingleton<FcmService>(
-    () => FcmService(sl(), sl()),
+    () => FcmService(sl(), sl(), sl()),
+  );
+
+  // ── Storage ───────────────────────────────────────────────────────────────
+  sl.registerLazySingleton<TokenStorageService>(
+    () => TokenStorageService(sl()),
+  );
+  sl.registerLazySingleton<AuthSessionManager>(
+    () => AuthSessionManager(sl()),
   );
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -110,21 +132,33 @@ Future<void> configureDependencies() async {
     () => AuthLocalDataSourceImpl(sl()),
   );
   sl.registerLazySingleton<AuthRepository>(
-    () => AuthRepositoryImpl(sl(), sl()),
+    () => AuthRepositoryImpl(
+      remote: sl(),
+      local: sl(),
+      session: sl(),
+      secureStorage: sl(),
+    ),
   );
-  sl.registerLazySingleton(() => SendOtpUseCase(sl()));
-  sl.registerLazySingleton(() => VerifyOtpUseCase(sl()));
   sl.registerLazySingleton(() => RegisterUserUseCase(sl()));
-  sl.registerLazySingleton(() => SocialLoginUseCase(sl()));
+  sl.registerLazySingleton(() => LoginUseCase(sl()));
+  sl.registerLazySingleton(() => GoogleLoginUseCase(sl()));
+  sl.registerLazySingleton(() => AppleLoginUseCase(sl()));
+  sl.registerLazySingleton(() => LogoutUseCase(sl()));
+  sl.registerLazySingleton(() => CheckUserExistsUseCase(sl()));
+  sl.registerLazySingleton(() => CheckAuthStatusUseCase(sl()));
+  sl.registerLazySingleton(() => GetCurrentUserUseCase(sl()));
+  sl.registerLazySingleton(() => SendOtpUseCase(sl()));
   sl.registerFactory(
     () => AuthBloc(
-      sendOtp: sl(),
-      verifyOtp: sl(),
+      checkAuthStatus: sl(),
       registerUser: sl(),
-      socialLogin: sl(),
-      googleAuthService: sl(),
-      session: sl(),
-      fcmService: sl(),
+      login: sl(),
+      googleLogin: sl(),
+      appleLogin: sl(),
+      logout: sl(),
+      checkUserExists: sl(),
+      getCurrentUser: sl(),
+      sendOtp: sl(),
     ),
   );
 
@@ -154,13 +188,23 @@ Future<void> configureDependencies() async {
     () => MemberSearchRemoteDataSourceImpl(sl()),
   );
   sl.registerLazySingleton<MemberSearchRepository>(
-    () => MemberSearchRepositoryImpl(sl(), sl()),
+    () => MemberSearchRepositoryImpl(sl()),
   );
   sl.registerFactory(() => MemberSearchBloc(sl()));
 
+  // ── Settings — Emergency Contacts ────────────────────────────────────────
+  sl.registerLazySingleton<EmergencyContactRemoteDataSource>(
+    () => EmergencyContactRemoteDataSourceImpl(sl()),
+  );
+  sl.registerLazySingleton<EmergencyContactRepository>(
+    () => EmergencyContactRepositoryImpl(sl()),
+  );
+  sl.registerFactory(() => EmergencyContactBloc(sl()));
+
   // ── Messaging (Firebase Firestore) ────────────────────────────────────────
   sl.registerLazySingleton<ChatRemoteDataSource>(
-    () => ChatRemoteDataSourceImpl(sl<FirebaseFirestore>(), sl<FirebaseStorage>()),
+    () => ChatRemoteDataSourceImpl(
+        sl<FirebaseFirestore>(), sl<FirebaseStorage>()),
   );
   sl.registerLazySingleton<MessagingRepository>(
     () => MessagingRepositoryImpl(sl(), sl()),
@@ -186,7 +230,7 @@ Future<void> configureDependencies() async {
 
   // ── Meetings ──────────────────────────────────────────────────────────────
   sl.registerLazySingleton<MeetingsRepository>(
-    () => MeetingsRepositoryImpl(sl()),
+    () => MeetingsRepositoryImpl(sl(), sl()),
   );
   sl.registerFactory(() => MeetingsBloc(sl()));
 
@@ -195,9 +239,10 @@ Future<void> configureDependencies() async {
 
   // ── Profile ───────────────────────────────────────────────────────────────
   sl.registerLazySingleton<ProfileRepository>(
-    () => ProfileRepositoryImpl(sl()),
+    () => ProfileRepositoryImpl(sl(), sl()),
   );
   sl.registerFactory(() => ProfileBloc(sl()));
+  sl.registerFactory(() => CurrentUserCubit(sl()));
 
   // ── GPS Tracking ──────────────────────────────────────────────────────────
   sl.registerFactory(() => GpsTrackingBloc(sl()));

@@ -1,32 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
-import '../../data/mock_meetings.dart';
 import '../../domain/entities/meeting_entity.dart';
+import '../bloc/meetings_bloc.dart';
 
-// PROTOTYPE MODE: this page renders mock data (MockMeetings) only — there
-// is no MeetingsBloc wiring or backend connectivity. Re-connect it to
-// MeetingsBloc (MeetingsLoadRequested) before shipping.
-class MeetingsListPage extends StatefulWidget {
-  const MeetingsListPage({super.key});
+class MeetingsListPage extends StatelessWidget {
+  final String? initialTab;
+  const MeetingsListPage({super.key, this.initialTab});
 
   @override
-  State<MeetingsListPage> createState() => _MeetingsListPageState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => sl<MeetingsBloc>()..add(const MeetingsLoadRequested()),
+      child: _MeetingsListView(initialTab: initialTab),
+    );
+  }
 }
 
-class _MeetingsListPageState extends State<MeetingsListPage>
+class _MeetingsListView extends StatefulWidget {
+  final String? initialTab;
+  const _MeetingsListView({this.initialTab});
+
+  @override
+  State<_MeetingsListView> createState() => _MeetingsListViewState();
+}
+
+class _MeetingsListViewState extends State<_MeetingsListView>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
-  List<MeetingEntity> _meetings = MockMeetings.all;
+  List<MeetingEntity> _meetings = const [];
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    final startIndex = widget.initialTab == 'requests' ? 1 : 0;
+    _tabs = TabController(length: 3, vsync: this, initialIndex: startIndex);
   }
 
   @override
@@ -35,79 +49,109 @@ class _MeetingsListPageState extends State<MeetingsListPage>
     super.dispose();
   }
 
-  // Prototype: simulates a network refresh against the mock dataset so the
-  // pull-to-refresh UX can still be demonstrated without a backend.
   Future<void> _refresh() async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) setState(() => _meetings = List.of(MockMeetings.all));
+    context.read<MeetingsBloc>().add(const MeetingsLoadRequested());
   }
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final upcoming = _meetings
-        .where((m) =>
-            m.scheduledAt.isAfter(now) ||
-            m.status == MeetingStatus.scheduled ||
-            m.status == MeetingStatus.enRoute ||
-            m.status == MeetingStatus.arrived)
-        .toList();
-    final past = _meetings
-        .where((m) =>
-            m.status == MeetingStatus.completed ||
-            m.status == MeetingStatus.cancelled)
-        .toList();
+    return BlocConsumer<MeetingsBloc, MeetingsState>(
+      listener: (context, state) {
+        if (state is MeetingsError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message)),
+          );
+        }
+        if (state is MeetingsListLoaded) {
+          setState(() => _meetings = state.meetings);
+        }
+      },
+      builder: (context, state) {
+        final upcoming = _meetings
+            .where((m) =>
+                m.status == MeetingStatus.scheduled ||
+                m.status == MeetingStatus.enRoute ||
+                m.status == MeetingStatus.arrived ||
+                (m.status == MeetingStatus.pendingApproval && m.isHost))
+            .toList();
+        final requests = _meetings
+            .where((m) =>
+                m.status == MeetingStatus.pendingApproval && !m.isHost)
+            .toList();
+        final past = _meetings
+            .where((m) =>
+                m.status == MeetingStatus.completed ||
+                m.status == MeetingStatus.cancelled ||
+                m.status == MeetingStatus.declined)
+            .toList();
 
-    return Scaffold(
-      backgroundColor: AppColors.darkBg,
-      appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        elevation: 0,
-        title: const Text(
-          'My Meetings',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
+        return Scaffold(
+          backgroundColor: AppColors.lightBg,
+          appBar: AppBar(
+            backgroundColor: AppColors.lightBg,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: AppColors.textPrimary),
+            title: const Text(
+              'My Meetings',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            bottom: TabBar(
+              controller: _tabs,
+              indicatorColor: AppColors.primary,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              tabs: [
+                const Tab(text: 'Upcoming'),
+                Tab(text: requests.isEmpty ? 'Requests' : 'Requests (${requests.length})'),
+                const Tab(text: 'Past'),
+              ],
+            ),
           ),
-        ),
-        bottom: TabBar(
-          controller: _tabs,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          tabs: const [
-            Tab(text: 'Upcoming'),
-            Tab(text: 'Past'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          _MeetingsList(
-            meetings: upcoming,
-            onRefresh: _refresh,
-            emptyMessage: 'No upcoming meetings',
-            emptyIcon: Icons.calendar_today_outlined,
+          body: state is MeetingsLoading && _meetings.isEmpty
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : TabBarView(
+                  controller: _tabs,
+                  children: [
+                    _MeetingsList(
+                      meetings: upcoming,
+                      onRefresh: _refresh,
+                      emptyMessage: 'No upcoming meetings',
+                      emptySubtitle: 'Plan a safe meetup with someone in your network.',
+                      emptyIcon: Icons.calendar_today_outlined,
+                      showEmptyAction: true,
+                    ),
+                    _MeetingsList(
+                      meetings: requests,
+                      onRefresh: _refresh,
+                      emptyMessage: 'No pending requests',
+                      emptySubtitle: 'Meeting requests from others will show up here.',
+                      emptyIcon: Icons.mark_email_unread_outlined,
+                      showActions: true,
+                    ),
+                    _MeetingsList(
+                      meetings: past,
+                      onRefresh: _refresh,
+                      emptyMessage: 'No past meetings',
+                      emptySubtitle: "Meetings you've completed or cancelled will appear here.",
+                      emptyIcon: Icons.history,
+                    ),
+                  ],
+                ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => context.push(AppRoutes.meetingSetup),
+            backgroundColor: AppColors.primary,
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text(
+              'Schedule',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
           ),
-          _MeetingsList(
-            meetings: past,
-            onRefresh: _refresh,
-            emptyMessage: 'No past meetings',
-            emptyIcon: Icons.history,
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(AppRoutes.meetingSetup),
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Schedule',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -116,19 +160,30 @@ class _MeetingsList extends StatelessWidget {
   final List<MeetingEntity> meetings;
   final Future<void> Function() onRefresh;
   final String emptyMessage;
+  final String emptySubtitle;
   final IconData emptyIcon;
+  final bool showActions;
+  final bool showEmptyAction;
 
   const _MeetingsList({
     required this.meetings,
     required this.onRefresh,
     required this.emptyMessage,
+    required this.emptySubtitle,
     required this.emptyIcon,
+    this.showActions = false,
+    this.showEmptyAction = false,
   });
 
   @override
   Widget build(BuildContext context) {
     if (meetings.isEmpty) {
-      return _EmptyState(message: emptyMessage, icon: emptyIcon);
+      return _EmptyState(
+        message: emptyMessage,
+        subtitle: emptySubtitle,
+        icon: emptyIcon,
+        showAction: showEmptyAction,
+      );
     }
 
     return RefreshIndicator(
@@ -138,7 +193,10 @@ class _MeetingsList extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         itemCount: meetings.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, i) => _MeetingCard(meeting: meetings[i]),
+        itemBuilder: (context, i) => _MeetingCard(
+          meeting: meetings[i],
+          showActions: showActions,
+        ),
       ),
     );
   }
@@ -146,7 +204,8 @@ class _MeetingsList extends StatelessWidget {
 
 class _MeetingCard extends StatelessWidget {
   final MeetingEntity meeting;
-  const _MeetingCard({required this.meeting});
+  final bool showActions;
+  const _MeetingCard({required this.meeting, this.showActions = false});
 
   @override
   Widget build(BuildContext context) {
@@ -158,9 +217,16 @@ class _MeetingCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.darkBg2,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,7 +262,7 @@ class _MeetingCard extends StatelessWidget {
                       Text(
                         meeting.partnerName,
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -231,7 +297,7 @@ class _MeetingCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            const Divider(color: Colors.white12, height: 1),
+            Divider(color: AppColors.border, height: 1),
             const SizedBox(height: 14),
             Row(
               children: [
@@ -253,6 +319,38 @@ class _MeetingCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (showActions) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => context
+                          .read<MeetingsBloc>()
+                          .add(MeetingDenyRequested(meeting.id)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.error,
+                        side: BorderSide(color: AppColors.error.withOpacity(0.4)),
+                      ),
+                      child: const Text('Deny'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => context
+                          .read<MeetingsBloc>()
+                          .add(MeetingApproveRequested(meeting.id)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Approve'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -271,6 +369,10 @@ class _MeetingCard extends StatelessWidget {
         return AppColors.textTertiary;
       case MeetingStatus.cancelled:
         return AppColors.error;
+      case MeetingStatus.pendingApproval:
+        return AppColors.warning;
+      case MeetingStatus.declined:
+        return AppColors.error;
     }
   }
 
@@ -286,6 +388,10 @@ class _MeetingCard extends StatelessWidget {
         return 'Completed';
       case MeetingStatus.cancelled:
         return 'Cancelled';
+      case MeetingStatus.pendingApproval:
+        return 'Pending approval';
+      case MeetingStatus.declined:
+        return 'Declined';
     }
   }
 }
@@ -313,29 +419,68 @@ class _InfoChip extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   final String message;
+  final String subtitle;
   final IconData icon;
-  const _EmptyState({required this.message, required this.icon});
+  final bool showAction;
+  const _EmptyState({
+    required this.message,
+    required this.subtitle,
+    required this.icon,
+    this.showAction = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AppColors.textTertiary, size: 56),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
-          ),
-          const SizedBox(height: 24),
-          PrimaryButton(
-            label: 'Schedule a Meeting',
-            onPressed: () => context.push(AppRoutes.meetingSetup),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primary.withOpacity(0.12),
+                    AppColors.primaryLight.withOpacity(0.06),
+                  ],
+                ),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 40),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            if (showAction) ...[
+              const SizedBox(height: 28),
+              PrimaryButton(
+                label: 'Schedule a Meeting',
+                onPressed: () => context.push(AppRoutes.meetingSetup),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 }
-

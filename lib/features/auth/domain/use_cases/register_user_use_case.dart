@@ -1,45 +1,51 @@
 import 'package:dartz/dartz.dart';
-import '../../../../core/config/app_constants.dart';
+import 'package:equatable/equatable.dart';
 import '../../../../core/shared/failures/failures.dart';
-import '../entities/user_entity.dart';
+import '../entities/auth_response_entity.dart';
 import '../repositories/auth_repository.dart';
 
-class RegisterParams {
-  final String name;
-  final String phone;
-  final String email;
-  final String password;
+class RegisterParams extends Equatable {
+  final String  provider;
+  final String  providerToken;
+  final String? name;
+  final String? email;
+  final String? accountType;
+  final String? companyName;
+  final bool    consentAccepted;
 
   const RegisterParams({
-    required this.name,
-    required this.phone,
-    required this.email,
-    required this.password,
+    required this.provider,
+    required this.providerToken,
+    this.name,
+    this.email,
+    this.accountType,
+    this.companyName,
+    this.consentAccepted = true,
   });
+
+  @override
+  List<Object?> get props => [provider, providerToken, name, email, accountType, companyName, consentAccepted];
 }
 
 class RegisterUserUseCase {
   final AuthRepository _repository;
-  RegisterUserUseCase(this._repository);
+  const RegisterUserUseCase(this._repository);
 
-  Future<Either<Failure, UserEntity>> call(RegisterParams params) {
-    if (params.name.trim().isEmpty) {
-      return Future.value(const Left(ValidationFailure('Name is required')));
+  Future<Either<Failure, AuthResponseEntity>> call(RegisterParams params) {
+    if (params.providerToken.trim().isEmpty) {
+      return Future.value(const Left(ValidationFailure('Provider token is required.')));
     }
-    if (params.email.trim().isEmpty ||
-        !RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(params.email)) {
-      return Future.value(const Left(ValidationFailure('Valid email is required')));
-    }
-    if (params.password.length < AppConstants.minPasswordLength) {
-      return Future.value(const Left(
-        ValidationFailure('Password must be at least 8 characters'),
-      ));
+    if (!params.consentAccepted) {
+      return Future.value(const Left(ValidationFailure('You must accept the terms to register.')));
     }
     return _repository.register(
-      name: params.name.trim(),
-      phone: params.phone.trim(),
-      email: params.email.trim().toLowerCase(),
-      password: params.password,
+      provider:        params.provider,
+      providerToken:   params.providerToken,
+      name:            params.name?.trim(),
+      email:           params.email?.trim(),
+      accountType:     params.accountType,
+      companyName:     params.companyName?.trim(),
+      consentAccepted: params.consentAccepted,
     );
   }
 }

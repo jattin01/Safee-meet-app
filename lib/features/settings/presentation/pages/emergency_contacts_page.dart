@@ -1,33 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
+import '../../domain/entities/emergency_contact_entity.dart';
+import '../bloc/emergency_contact_bloc.dart';
 
-// PROTOTYPE MODE: this page renders mock data only — there is no API
-// wiring or backend connectivity. Re-connect it to the /sos/contacts
-// endpoint before shipping.
-class _Contact {
-  String name;
-  String relationship;
-  String phone;
-  _Contact({required this.name, required this.relationship, required this.phone});
-}
-
-class EmergencyContactsPage extends StatefulWidget {
+class EmergencyContactsPage extends StatelessWidget {
   const EmergencyContactsPage({super.key});
 
   @override
-  State<EmergencyContactsPage> createState() => _EmergencyContactsPageState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => sl<EmergencyContactBloc>()..add(const EmergencyContactsLoadRequested()),
+      child: const _EmergencyContactsView(),
+    );
+  }
 }
 
-class _EmergencyContactsPageState extends State<EmergencyContactsPage> {
-  final List<_Contact> _contacts = [
-    _Contact(name: 'Sarah Johnson', relationship: 'Mother', phone: '+1 (555) 987-6543'),
-    _Contact(name: 'Jake Johnson', relationship: 'Brother', phone: '+1 (555) 456-7890'),
-    _Contact(name: 'Maria Garcia', relationship: 'Friend', phone: '+1 (555) 321-0987'),
-  ];
+class _EmergencyContactsView extends StatefulWidget {
+  const _EmergencyContactsView();
 
+  @override
+  State<_EmergencyContactsView> createState() => _EmergencyContactsViewState();
+}
+
+class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
   bool _showAddForm = false;
   final _nameCtrl = TextEditingController();
   final _relationshipCtrl = TextEditingController();
@@ -41,109 +41,162 @@ class _EmergencyContactsPageState extends State<EmergencyContactsPage> {
     super.dispose();
   }
 
-  void _addContact() {
-    setState(() {
-      _contacts.add(_Contact(
-        name: _nameCtrl.text.trim().isEmpty ? 'New Contact' : _nameCtrl.text.trim(),
-        relationship: _relationshipCtrl.text.trim().isEmpty ? 'Other' : _relationshipCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
-      ));
-      _nameCtrl.clear();
-      _relationshipCtrl.clear();
-      _phoneCtrl.clear();
-      _showAddForm = false;
-    });
+  void _submitContact() {
+    final name = _nameCtrl.text.trim();
+    final relationship = _relationshipCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    if (name.isEmpty || relationship.isEmpty || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Full name, relationship and phone number are required.')),
+      );
+      return;
+    }
+
+    context.read<EmergencyContactBloc>().add(
+          EmergencyContactAddRequested(
+            fullName: name,
+            relationship: relationship,
+            phoneNumber: phone,
+          ),
+        );
+
+    _nameCtrl.clear();
+    _relationshipCtrl.clear();
+    _phoneCtrl.clear();
+    setState(() => _showAddForm = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBg,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const DarkScreenHeader(title: 'Emergency Contacts'),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'These contacts are alerted instantly when you activate SOS or your '
-                            'live meeting safety check triggers.',
-                            style: TextStyle(color: AppColors.error, fontSize: 13, height: 1.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ..._contacts.asMap().entries.map((e) => _ContactRow(
-                        contact: e.value,
-                        onDelete: () => setState(() => _contacts.removeAt(e.key)),
-                      )),
-                  if (_showAddForm)
-                    _AddContactForm(
-                      nameCtrl: _nameCtrl,
-                      relationshipCtrl: _relationshipCtrl,
-                      phoneCtrl: _phoneCtrl,
-                      onCancel: () => setState(() => _showAddForm = false),
-                      onAdd: _addContact,
-                    )
-                  else
-                    GestureDetector(
-                      onTap: () => setState(() => _showAddForm = true),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+      body: BlocConsumer<EmergencyContactBloc, EmergencyContactState>(
+        listener: (context, state) {
+          if (state is EmergencyContactError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message)),
+            );
+          }
+        },
+        builder: (context, state) {
+          final contacts = switch (state) {
+            EmergencyContactLoaded(contacts: final c) => c,
+            EmergencyContactError(contacts: final c) => c,
+            _ => const <EmergencyContactEntity>[],
+          };
+          final isLoading = state is EmergencyContactLoading;
+          final isSubmitting = state is EmergencyContactLoaded && state.isSubmitting;
+
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const DarkScreenHeader(title: 'Emergency Contacts'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
+                          color: AppColors.error.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.textTertiary.withOpacity(0.4)),
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.add, color: AppColors.textSecondary, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Add Emergency Contact',
-                              style: GoogleFonts.inter(
-                                  color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w700),
+                            Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'These contacts are alerted instantly when you activate SOS or your '
+                                'live meeting safety check triggers.',
+                                style: TextStyle(color: AppColors.error, fontSize: 13, height: 1.4),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                ],
-              ),
+                      const SizedBox(height: 20),
+                      if (isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 40),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (contacts.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: Text(
+                              'No emergency contacts yet.',
+                              style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                            ),
+                          ),
+                        )
+                      else
+                        ...contacts.map((c) => _ContactRow(
+                              contact: c,
+                              onDelete: () => context
+                                  .read<EmergencyContactBloc>()
+                                  .add(EmergencyContactDeleteRequested(c.id)),
+                            )),
+                      if (_showAddForm)
+                        _AddContactForm(
+                          nameCtrl: _nameCtrl,
+                          relationshipCtrl: _relationshipCtrl,
+                          phoneCtrl: _phoneCtrl,
+                          isSubmitting: isSubmitting,
+                          onCancel: () => setState(() => _showAddForm = false),
+                          onAdd: _submitContact,
+                        )
+                      else
+                        GestureDetector(
+                          onTap: () => setState(() => _showAddForm = true),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.textTertiary.withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add, color: AppColors.textSecondary, size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Add Emergency Contact',
+                                  style: GoogleFonts.inter(
+                                      color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 }
 
 class _ContactRow extends StatelessWidget {
-  final _Contact contact;
+  final EmergencyContactEntity contact;
   final VoidCallback onDelete;
 
   const _ContactRow({required this.contact, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
+    final subtitle = [contact.relationship, contact.phoneNumber]
+        .where((s) => s != null && s.isNotEmpty)
+        .join(' · ');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -165,11 +218,10 @@ class _ContactRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(contact.name,
+                Text(contact.fullName,
                     style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text('${contact.relationship} · ${contact.phone}',
-                    style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                Text(subtitle, style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
               ],
             ),
           ),
@@ -192,6 +244,7 @@ class _AddContactForm extends StatelessWidget {
   final TextEditingController nameCtrl;
   final TextEditingController relationshipCtrl;
   final TextEditingController phoneCtrl;
+  final bool isSubmitting;
   final VoidCallback onCancel;
   final VoidCallback onAdd;
 
@@ -199,6 +252,7 @@ class _AddContactForm extends StatelessWidget {
     required this.nameCtrl,
     required this.relationshipCtrl,
     required this.phoneCtrl,
+    required this.isSubmitting,
     required this.onCancel,
     required this.onAdd,
   });
@@ -220,10 +274,10 @@ class _AddContactForm extends StatelessWidget {
           const SizedBox(height: 14),
           _FormField(hint: 'Full Name *', controller: nameCtrl),
           const SizedBox(height: 10),
-          _FormField(hint: 'Relationship (e.g. Mother)', controller: relationshipCtrl),
+          _FormField(hint: 'Relationship (e.g. Mother) *', controller: relationshipCtrl),
           const SizedBox(height: 10),
           _FormField(
-            hint: 'Phone Number',
+            hint: 'Phone Number *',
             controller: phoneCtrl,
             keyboardType: TextInputType.phone,
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s()]'))],
@@ -233,7 +287,7 @@ class _AddContactForm extends StatelessWidget {
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: onCancel,
+                  onTap: isSubmitting ? null : onCancel,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     decoration: BoxDecoration(color: AppColors.cardBg, borderRadius: BorderRadius.circular(12)),
@@ -248,7 +302,7 @@ class _AddContactForm extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: onAdd,
+                  onTap: isSubmitting ? null : onAdd,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     decoration: BoxDecoration(
@@ -256,9 +310,15 @@ class _AddContactForm extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Center(
-                      child: Text('Add',
-                          style:
-                              GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                      child: isSubmitting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text('Add',
+                              style:
+                                  GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ),

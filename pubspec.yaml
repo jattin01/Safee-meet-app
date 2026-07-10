@@ -44,9 +44,13 @@ dependencies:
   firebase_storage: ^12.3.3
   cloud_firestore: ^5.4.3
 
+  # Local notification banners (foreground push display)
+  flutter_local_notifications: ^18.0.1
+
   # Location & Maps
   geolocator: ^13.0.2
   google_maps_flutter: ^2.9.0
+  geocoding: ^3.0.0
 
   # Permissions
   permission_handler: ^11.3.1
@@ -76,8 +80,19 @@ dependencies:
   # Google Sign-In
   google_sign_in: ^6.2.1
 
+  # Apple Sign-In
+  sign_in_with_apple: ^6.1.4
+  crypto: ^3.0.6
+
   # QR Code Display
   qr_flutter: ^4.1.0
+
+  # QR Code Scanning
+  mobile_scanner: ^6.0.6
+
+  # Sharing (PIN + QR code)
+  share_plus: ^10.1.4
+  path_provider: ^2.1.5
 
   cupertino_icons: ^1.0.8
 

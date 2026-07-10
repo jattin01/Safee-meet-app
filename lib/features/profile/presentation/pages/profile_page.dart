@@ -1,119 +1,234 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
+import '../../domain/entities/profile_entity.dart';
+import '../bloc/profile_bloc.dart';
 
-// PROTOTYPE MODE: this page renders mock data only — there is no
-// ProfileBloc/repository wiring, so it never hits the (currently
-// unavailable) backend. Re-connect it to ProfileBloc (ProfileLoadRequested)
-// once the backend is ready.
+/// Renders the Safee PIN as a QR PNG and shares it together with the PIN
+/// text through a single OS share sheet.
+Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
+  if (pin == null || pin.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Your Safee PIN isn\'t ready yet.')),
+    );
+    return;
+  }
+  try {
+    final painter = QrPainter(
+      data: pin,
+      version: QrVersions.auto,
+      gapless: true,
+      eyeStyle: const QrEyeStyle(color: Color(0xFF000000)),
+      dataModuleStyle: const QrDataModuleStyle(color: Color(0xFF000000)),
+    );
+    final imageData = await painter.toImageData(600);
+    final bytes = imageData!.buffer.asUint8List();
+    final dir = await getTemporaryDirectory();
+    final file = await File('${dir.path}/safee_pin_qr.png').writeAsBytes(bytes);
+    if (!context.mounted) return;
+
+    final box = context.findRenderObject() as RenderBox?;
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: 'My Safee PIN is $pin. Scan the attached QR code to verify me on SafeeMeet.',
+      subject: 'My Safee PIN & Scanner',
+      sharePositionOrigin:
+          box != null ? (box.localToGlobal(Offset.zero) & box.size) : null,
+    );
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to share right now. Please try again.')),
+      );
+    }
+  }
+}
+
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.lightBg,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DarkScreenHeader(
-              title: 'My Profile',
-              centerTitle: true,
-              titleFontSize: 18,
-              trailing: GestureDetector(
-                onTap: () => context.push(AppRoutes.settings),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), shape: BoxShape.circle),
-                  child: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
-                ),
-              ),
-              child: const _ProfileAvatarSection(),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _PinCard(),
-                  const SizedBox(height: 16),
-                  const _StatsRow(),
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: () => context.push(AppRoutes.verificationStatus),
-                    child: const _TrustScoreRow(),
+    return BlocProvider(
+      create: (_) => sl<ProfileBloc>()..add(const ProfileLoadRequested()),
+      child: const _ProfileView(),
+    );
+  }
+}
+
+class _ProfileView extends StatelessWidget {
+  const _ProfileView();
+
+  String? _verificationLabel(String? level) => switch (level) {
+        'high' => 'Level 3 Verified',
+        'medium' => 'Level 2 Verified',
+        'low' => 'Level 1 Verified',
+        'none' => 'Not verified yet',
+        _ => null,
+      };
+
+  String _planLabel(String? plan) => switch (plan) {
+        'premium' => 'Premium plan',
+        'pro' => 'Pro plan',
+        _ => 'Free plan',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ProfileBloc, ProfileState>(
+      builder: (context, state) {
+        final profile = state is ProfileLoaded ? state.profile : null;
+        return Scaffold(
+          backgroundColor: AppColors.lightBg,
+          body: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DarkScreenHeader(
+                  title: 'My Profile',
+                  centerTitle: true,
+                  titleFontSize: 18,
+                  trailing: GestureDetector(
+                    onTap: () => context.push(AppRoutes.settings),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          shape: BoxShape.circle),
+                      child: const Icon(Icons.settings_outlined,
+                          color: Colors.white, size: 20),
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  const _CurrentPlanCard(),
-                  const SizedBox(height: 16),
-                  AppListCard(children: [
-                    _NavTile(
-                      icon: Icons.shield,
-                      iconColor: AppColors.success,
-                      label: 'Verification Status',
-                      subtitle: 'Level 2 Verified',
-                      onTap: () => context.push(AppRoutes.verificationStatus),
-                    ),
-                    _NavTile(
-                      icon: Icons.star,
-                      iconColor: AppColors.warning,
-                      label: 'Reviews & Ratings',
-                      subtitle: '47 reviews · 4.9 avg',
-                      onTap: () => context.push(AppRoutes.reviews),
-                    ),
-                    _NavTile(
-                      icon: Icons.workspace_premium,
-                      iconColor: AppColors.purple,
-                      label: 'Membership & Billing',
-                      subtitle: 'Premium plan',
-                      onTap: () => context.push(AppRoutes.subscription),
-                    ),
-                    _NavTile(
-                      icon: Icons.settings,
-                      iconColor: AppColors.textSecondary,
-                      label: 'Settings & Privacy',
-                      onTap: () => context.push(AppRoutes.settings),
-                    ),
-                  ]),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: state is ProfileLoading
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child:
+                              CircularProgressIndicator(color: Colors.white54),
+                        )
+                      : _ProfileAvatarSection(profile: profile),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Reviews',
-                          style: GoogleFonts.inter(
-                              color: AppColors.textPrimary, fontSize: 19, fontWeight: FontWeight.w800)),
-                      GestureDetector(
-                        onTap: () => context.push(AppRoutes.reviews),
-                        child: Text('See all',
-                            style: GoogleFonts.inter(
-                                color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w700)),
+                      _PinCard(pin: profile?.safeePIN),
+                      const SizedBox(height: 16),
+                      _StatsRow(
+                        trustScore: profile?.trustScore ?? 0,
+                        rating: profile?.rating ?? 0,
+                        totalMeetings: profile?.totalMeetings ?? 0,
                       ),
+                      const SizedBox(height: 16),
+                      GestureDetector(
+                        onTap: () => context.push(AppRoutes.verificationStatus),
+                        child: _TrustScoreRow(
+                          score: profile?.trustScore ?? 0,
+                          level: profile?.verificationLevel ?? 'none',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _CurrentPlanCard(
+                          plan: profile?.subscriptionPlan ?? 'free'),
+                      const SizedBox(height: 16),
+                      AppListCard(children: [
+                        _NavTile(
+                          icon: Icons.ios_share,
+                          iconColor: AppColors.primary,
+                          label: 'Share Safee PIN & Scanner',
+                          subtitle: 'Send your PIN and QR code together',
+                          onTap: () => _shareSafeePinAndScanner(
+                              context, profile?.safeePIN),
+                        ),
+                        _NavTile(
+                          icon: Icons.shield,
+                          iconColor: AppColors.success,
+                          label: 'Verification Status',
+                          subtitle:
+                              _verificationLabel(profile?.verificationLevel),
+                          onTap: () =>
+                              context.push(AppRoutes.verificationStatus),
+                        ),
+                        _NavTile(
+                          icon: Icons.star,
+                          iconColor: AppColors.warning,
+                          label: 'Reviews & Ratings',
+                          subtitle: profile != null
+                              ? '${profile.totalReviews} reviews · ${profile.rating.toStringAsFixed(1)} avg'
+                              : null,
+                          onTap: () => context.push(AppRoutes.reviews),
+                        ),
+                        _NavTile(
+                          icon: Icons.workspace_premium,
+                          iconColor: AppColors.purple,
+                          label: 'Membership & Billing',
+                          subtitle: _planLabel(profile?.subscriptionPlan),
+                          onTap: () => context.push(AppRoutes.subscription),
+                        ),
+                        _NavTile(
+                          icon: Icons.settings,
+                          iconColor: AppColors.textSecondary,
+                          label: 'Settings & Privacy',
+                          onTap: () => context.push(AppRoutes.settings),
+                        ),
+                      ]),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Reviews',
+                              style: GoogleFonts.inter(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w800)),
+                          GestureDetector(
+                            onTap: () => context.push(AppRoutes.reviews),
+                            child: Text('See all',
+                                style: GoogleFonts.inter(
+                                    color: AppColors.primary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const _ReviewPreview(),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  const _ReviewPreview(),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
 class _ProfileAvatarSection extends StatelessWidget {
-  const _ProfileAvatarSection();
+  final ProfileEntity? profile;
+  const _ProfileAvatarSection({this.profile});
 
   @override
   Widget build(BuildContext context) {
+    final name = profile?.name ?? '—';
+    final email = profile?.email;
+    final phone = profile?.phone;
+    final avatar = profile?.avatarUrl;
+    final level = profile?.verificationLevel ?? 'none';
+
     return Column(
       children: [
         Stack(
@@ -122,8 +237,18 @@ class _ProfileAvatarSection extends StatelessWidget {
             Container(
               width: 88,
               height: 88,
-              decoration: BoxDecoration(color: AppColors.blue, borderRadius: BorderRadius.circular(22)),
-              child: const Icon(Icons.person, color: Colors.white70, size: 44),
+              decoration: BoxDecoration(
+                  color: AppColors.blue,
+                  borderRadius: BorderRadius.circular(22)),
+              child: avatar != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Image.network(avatar,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.person,
+                              color: Colors.white70, size: 44)),
+                    )
+                  : const Icon(Icons.person, color: Colors.white70, size: 44),
             ),
             Positioned(
               right: -4,
@@ -142,21 +267,37 @@ class _ProfileAvatarSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        Text('Alex Johnson',
-            style: GoogleFonts.inter(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+        Text(name,
+            style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 21,
+                fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        Text('alex.johnson@email.com', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-        const SizedBox(height: 2),
-        Text('+1 (555) 123-4567', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+        if (email != null)
+          Text(email,
+              style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+        if (phone != null) ...[
+          const SizedBox(height: 2),
+          Text(phone,
+              style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+        ],
         const SizedBox(height: 14),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            _Badge(emoji: '🟢', label: 'Level 1', color: AppColors.success),
-            SizedBox(width: 8),
-            _Badge(emoji: '🔵', label: 'Level 2', color: AppColors.blue),
-            SizedBox(width: 8),
-            _Badge(emoji: null, label: 'Premium', color: AppColors.purple),
+          children: [
+            if (level == 'low' || level == 'medium' || level == 'high')
+              const _Badge(
+                  emoji: '🟢', label: 'Level 1', color: AppColors.success),
+            if (level == 'medium' || level == 'high') ...[
+              const SizedBox(width: 8),
+              const _Badge(
+                  emoji: '🔵', label: 'Level 2', color: AppColors.blue),
+            ],
+            if (level == 'high') ...[
+              const SizedBox(width: 8),
+              const _Badge(
+                  emoji: '⭐', label: 'Level 3', color: AppColors.warning),
+            ],
           ],
         ),
       ],
@@ -174,12 +315,21 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(20)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (emoji != null) ...[Text(emoji!, style: const TextStyle(fontSize: 11)), const SizedBox(width: 5)],
-          Text(label, style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+          if (emoji != null) ...[
+            Text(emoji!, style: const TextStyle(fontSize: 11)),
+            const SizedBox(width: 5)
+          ],
+          Text(label,
+              style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -187,10 +337,12 @@ class _Badge extends StatelessWidget {
 }
 
 class _PinCard extends StatelessWidget {
-  const _PinCard();
+  final String? pin;
+  const _PinCard({this.pin});
 
   @override
   Widget build(BuildContext context) {
+    final displayPin = pin?.isNotEmpty == true ? pin! : '—';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -207,14 +359,21 @@ class _PinCard extends StatelessWidget {
                 Text(
                   'SAFEE PIN',
                   style: GoogleFonts.inter(
-                      color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6),
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6),
                 ),
                 const SizedBox(height: 4),
-                Text('#SM-7821',
-                    style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w800)),
+                Text(displayPin,
+                    style: GoogleFonts.inter(
+                        color: AppColors.textPrimary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
                 Text('Share your PIN to let others verify you',
-                    style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                    style:
+                        TextStyle(color: AppColors.textTertiary, fontSize: 12)),
               ],
             ),
           ),
@@ -223,17 +382,21 @@ class _PinCard extends StatelessWidget {
               context: context,
               builder: (_) => Dialog(
                 backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: QrImageView(data: '#SM-7821', version: QrVersions.auto, size: 200),
+                  child: QrImageView(
+                      data: displayPin, version: QrVersions.auto, size: 200),
                 ),
               ),
             ),
             child: Container(
               width: 52,
               height: 52,
-              decoration: BoxDecoration(color: AppColors.darkBg, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                  color: AppColors.darkBg,
+                  borderRadius: BorderRadius.circular(14)),
               child: const Icon(Icons.qr_code_2, color: Colors.white, size: 26),
             ),
           ),
@@ -244,17 +407,36 @@ class _PinCard extends StatelessWidget {
 }
 
 class _StatsRow extends StatelessWidget {
-  const _StatsRow();
+  final int trustScore;
+  final double rating;
+  final int totalMeetings;
+  const _StatsRow(
+      {this.trustScore = 0, this.rating = 0, this.totalMeetings = 0});
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: const [
-        Expanded(child: _StatCard(icon: Icons.calendar_today, value: '47', label: 'Meetings', color: AppColors.blue)),
-        SizedBox(width: 10),
-        Expanded(child: _StatCard(icon: Icons.shield, value: '94', label: 'Trust Score', color: AppColors.success)),
-        SizedBox(width: 10),
-        Expanded(child: _StatCard(icon: Icons.star, value: '4.9', label: 'Rating', color: AppColors.warning)),
+      children: [
+        Expanded(
+            child: _StatCard(
+                icon: Icons.calendar_today,
+                value: '$totalMeetings',
+                label: 'Meetings',
+                color: AppColors.blue)),
+        const SizedBox(width: 10),
+        Expanded(
+            child: _StatCard(
+                icon: Icons.shield,
+                value: '$trustScore',
+                label: 'Trust Score',
+                color: AppColors.success)),
+        const SizedBox(width: 10),
+        Expanded(
+            child: _StatCard(
+                icon: Icons.star,
+                value: rating.toStringAsFixed(1),
+                label: 'Rating',
+                color: AppColors.warning)),
       ],
     );
   }
@@ -265,7 +447,11 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String label;
   final Color color;
-  const _StatCard({required this.icon, required this.value, required this.label, required this.color});
+  const _StatCard(
+      {required this.icon,
+      required this.value,
+      required this.label,
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -280,9 +466,14 @@ class _StatCard extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(height: 6),
-          Text(value, style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(value,
+              style: GoogleFonts.inter(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
-          Text(label, style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+          Text(label,
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
         ],
       ),
     );
@@ -290,10 +481,13 @@ class _StatCard extends StatelessWidget {
 }
 
 class _TrustScoreRow extends StatelessWidget {
-  const _TrustScoreRow();
+  final int score;
+  final String level;
+  const _TrustScoreRow({this.score = 0, this.level = 'none'});
 
   @override
   Widget build(BuildContext context) {
+    final progress = (score / 100).clamp(0.0, 1.0);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -309,13 +503,18 @@ class _TrustScoreRow extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                const CircularProgressIndicator(
-                  value: 0.94,
+                CircularProgressIndicator(
+                  value: progress,
                   strokeWidth: 5,
                   backgroundColor: AppColors.borderLight,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.primary),
                 ),
-                Text('94', style: GoogleFonts.inter(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w800)),
+                Text('$score',
+                    style: GoogleFonts.inter(
+                        color: AppColors.primary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800)),
               ],
             ),
           ),
@@ -325,10 +524,14 @@ class _TrustScoreRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Trust Score',
-                    style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                    style: GoogleFonts.inter(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
                 Text('Based on verification level, meeting history & reviews',
-                    style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                    style:
+                        TextStyle(color: AppColors.textTertiary, fontSize: 12)),
               ],
             ),
           ),
@@ -340,10 +543,14 @@ class _TrustScoreRow extends StatelessWidget {
 }
 
 class _CurrentPlanCard extends StatelessWidget {
-  const _CurrentPlanCard();
+  final String plan;
+  const _CurrentPlanCard({this.plan = 'free'});
 
   @override
   Widget build(BuildContext context) {
+    final isPremium = plan == 'premium' || plan == 'pro';
+    final label =
+        isPremium ? plan[0].toUpperCase() + plan.substring(1) : 'Free';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -355,8 +562,11 @@ class _CurrentPlanCard extends StatelessWidget {
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.workspace_premium, color: Colors.white, size: 24),
+            decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(14)),
+            child: const Icon(Icons.workspace_premium,
+                color: Colors.white, size: 24),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -366,12 +576,17 @@ class _CurrentPlanCard extends StatelessWidget {
                 Text(
                   'CURRENT PLAN',
                   style: GoogleFonts.inter(
-                      color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6),
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6),
                 ),
                 const SizedBox(height: 2),
-                Text('Premium', style: GoogleFonts.inter(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text('Renews Jul 10, 2026', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                Text(label,
+                    style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800)),
               ],
             ),
           ),
@@ -380,11 +595,15 @@ class _CurrentPlanCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [AppColors.primary, AppColors.primaryLight]),
+                gradient: LinearGradient(
+                    colors: [AppColors.primary, AppColors.primaryLight]),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text('Upgrade',
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                  style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700)),
             ),
           ),
         ],
@@ -392,7 +611,6 @@ class _CurrentPlanCard extends StatelessWidget {
     );
   }
 }
-
 
 class _NavTile extends StatelessWidget {
   final IconData icon;
@@ -420,7 +638,8 @@ class _NavTile extends StatelessWidget {
             Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: iconColor.withOpacity(0.12), shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.12), shape: BoxShape.circle),
               child: Icon(icon, color: iconColor, size: 19),
             ),
             const SizedBox(width: 14),
@@ -430,10 +649,14 @@ class _NavTile extends StatelessWidget {
                 children: [
                   Text(label,
                       style: GoogleFonts.inter(
-                          color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
-                    Text(subtitle!, style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                    Text(subtitle!,
+                        style: TextStyle(
+                            color: AppColors.textTertiary, fontSize: 12)),
                   ],
                 ],
               ),
@@ -466,8 +689,10 @@ class _ReviewPreview extends StatelessWidget {
               Container(
                 width: 36,
                 height: 36,
-                decoration: const BoxDecoration(color: Color(0xFFDCEBFF), shape: BoxShape.circle),
-                child: const Center(child: Text('😊', style: TextStyle(fontSize: 16))),
+                decoration: const BoxDecoration(
+                    color: Color(0xFFDCEBFF), shape: BoxShape.circle),
+                child: const Center(
+                    child: Text('😊', style: TextStyle(fontSize: 16))),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -476,21 +701,28 @@ class _ReviewPreview extends StatelessWidget {
                   children: [
                     Text('Sarah M.',
                         style: GoogleFonts.inter(
-                            color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700)),
                     Row(
                       children: List.generate(
-                          5, (i) => const Icon(Icons.star, color: AppColors.warning, size: 13)),
+                          5,
+                          (i) => const Icon(Icons.star,
+                              color: AppColors.warning, size: 13)),
                     ),
                   ],
                 ),
               ),
-              Text('Jun 9', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+              Text('Jun 9',
+                  style:
+                      TextStyle(color: AppColors.textTertiary, fontSize: 12)),
             ],
           ),
           const SizedBox(height: 10),
           Text(
             'Alex was incredibly professional and trustworthy. Felt completely safe during our meeting.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+            style: TextStyle(
+                color: AppColors.textSecondary, fontSize: 13, height: 1.5),
           ),
         ],
       ),

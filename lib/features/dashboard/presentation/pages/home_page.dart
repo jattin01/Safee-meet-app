@@ -1,155 +1,158 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/widgets/app_logo_widget.dart';
 import '../../../../core/shared/widgets/section_header.dart';
+import '../../../profile/domain/entities/profile_entity.dart';
+import '../../../profile/presentation/cubit/current_user_cubit.dart';
 
-// PROTOTYPE MODE: this page is a pixel-matching UI build of the Home screen
-// design. It renders hard-coded mock data only — there is no DashboardBloc,
-// no API/repository wiring, and no validation. Re-connect it to
-// DashboardBloc (see dashboard_bloc.dart) once the backend is ready.
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
-  // ── Mock data ────────────────────────────────────────────────────────────
-  static const _userName = 'Alex Johnson';
-  static const _userInitials = 'AJ';
-  static const _verificationLabel = 'Level 2 Verified';
-  static const _trustScore = 94;
-  static const _meetingsCount = 47;
-  static const _safetyRating = '4.9';
-  static const _safeePin = '#SM-7821';
-  static const _unreadNotifications = 3;
-  static const _trustedContactsCount = 3;
-
-  static const _meetings = [
-    _MeetingMock(
-      icon: Icons.coffee,
-      iconColor: Color(0xFF64748B),
-      iconBg: Color(0xFFE2E8F0),
-      partnerName: 'Sarah Mitchell',
-      subtitle: 'Jun 9 · Downtown Coffee',
-      status: 'Completed',
-      rating: '5.0',
-    ),
-    _MeetingMock(
-      icon: Icons.park,
-      iconColor: AppColors.success,
-      iconBg: Color(0xFFDCFCE7),
-      partnerName: 'James Carter',
-      subtitle: 'Jun 7 · City Park',
-      status: 'Completed',
-      rating: '4.8',
-    ),
-    _MeetingMock(
-      icon: Icons.shopping_bag,
-      iconColor: Color(0xFFF59E0B),
-      iconBg: Color(0xFFFFEDD5),
-      partnerName: 'Marketplace Item',
-      subtitle: 'Jun 5 · Mall Entrance',
-      status: 'Upcoming',
-      rating: '—',
-    ),
-  ];
-
-  // Prototype: simulates a network refresh so the pull-to-refresh UX can
-  // still be demonstrated against the existing mock data, without a
-  // backend to actually re-fetch from.
-  Future<void> _refresh() => Future.delayed(const Duration(milliseconds: 700));
+  Future<void> _refresh(BuildContext context) =>
+      context.read<CurrentUserCubit>().load(forceRefresh: true);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: RefreshIndicator(
-        color: AppColors.primary,
-        onRefresh: _refresh,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _DarkHeader(
-                userName: _userName,
-                userInitials: _userInitials,
-                verificationLabel: _verificationLabel,
-                trustScore: _trustScore,
-                meetingsCount: _meetingsCount,
-                safetyRating: _safetyRating,
-                safeePin: _safeePin,
-                unreadNotifications: _unreadNotifications,
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SectionHeader(title: 'Quick Actions'),
-                    const _QuickActions(),
-                    const SizedBox(height: 24),
-                    SectionHeader(title: 'Safety Center'),
-                    _SafetyCenter(trustedContactsCount: _trustedContactsCount),
-                    const SizedBox(height: 24),
-                    SectionHeader(
-                      title: 'Recent Meetings',
-                      actionLabel: 'See all',
-                      onAction: () => context.push(AppRoutes.meetings),
+      body: BlocBuilder<CurrentUserCubit, CurrentUserState>(
+        builder: (context, state) {
+          if (state.status == CurrentUserStatus.loading &&
+              state.profile == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (state.status == CurrentUserStatus.error &&
+              state.profile == null) {
+            return _HomeErrorState(
+              message: state.errorMessage ??
+                  'Unable to load your profile right now.',
+              onRetry: () => _refresh(context),
+            );
+          }
+
+          final profile = state.profile!;
+          return RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () => _refresh(context),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _DarkHeader(profile: profile),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (state.status == CurrentUserStatus.error &&
+                            state.errorMessage != null) ...[
+                          _InlineWarning(message: state.errorMessage!),
+                          const SizedBox(height: 16),
+                        ],
+                        SectionHeader(title: 'Quick Actions'),
+                        const _QuickActions(),
+                        const SizedBox(height: 24),
+                        SectionHeader(title: 'Safety Center'),
+                        const _SafetyCenter(),
+                        const SizedBox(height: 24),
+                        SectionHeader(
+                          title: 'Meeting Activity',
+                          actionLabel: 'See all',
+                          onAction: () => context.push(AppRoutes.meetings),
+                        ),
+                        _MeetingSyncCard(profile: profile),
+                        const SizedBox(height: 24),
+                        _UpgradeCard(plan: profile.subscriptionPlan),
+                        const SizedBox(height: 100),
+                      ],
                     ),
-                    ..._meetings.map((m) => _MeetingCard(meeting: m)),
-                    const SizedBox(height: 24),
-                    const _UpgradeCard(),
-                    const SizedBox(height: 100),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HomeErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _HomeErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off,
+                color: AppColors.textTertiary, size: 44),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _MeetingMock {
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
-  final String partnerName;
-  final String subtitle;
-  final String status;
-  final String rating;
+class _InlineWarning extends StatelessWidget {
+  final String message;
+  const _InlineWarning({required this.message});
 
-  const _MeetingMock({
-    required this.icon,
-    required this.iconColor,
-    required this.iconBg,
-    required this.partnerName,
-    required this.subtitle,
-    required this.status,
-    required this.rating,
-  });
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withOpacity(0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.warning, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DarkHeader extends StatelessWidget {
-  final String userName;
-  final String userInitials;
-  final String verificationLabel;
-  final int trustScore;
-  final int meetingsCount;
-  final String safetyRating;
-  final String safeePin;
-  final int unreadNotifications;
-
-  const _DarkHeader({
-    required this.userName,
-    required this.userInitials,
-    required this.verificationLabel,
-    required this.trustScore,
-    required this.meetingsCount,
-    required this.safetyRating,
-    required this.safeePin,
-    required this.unreadNotifications,
-  });
+  final ProfileEntity profile;
+  const _DarkHeader({required this.profile});
 
   String get _greeting {
     final h = DateTime.now().hour;
@@ -157,6 +160,13 @@ class _DarkHeader extends StatelessWidget {
     if (h < 17) return 'Good afternoon';
     return 'Good evening';
   }
+
+  String get _verificationLabel => switch (profile.verificationLevel) {
+        'high' => 'Level 3 Verified',
+        'medium' => 'Level 2 Verified',
+        'low' => 'Level 1 Verified',
+        _ => 'Verification Pending',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -184,44 +194,18 @@ class _DarkHeader extends StatelessWidget {
               const Spacer(),
               GestureDetector(
                 onTap: () => context.push(AppRoutes.notifications),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.notifications_none,
-                          color: Colors.white, size: 20),
-                    ),
-                    if (unreadNotifications > 0)
-                      Positioned(
-                        right: -2,
-                        top: -2,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints:
-                              const BoxConstraints(minWidth: 18, minHeight: 18),
-                          child: Center(
-                            child: Text(
-                              '$unreadNotifications',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.notifications_none,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
               ),
             ],
@@ -250,16 +234,34 @@ class _DarkHeader extends StatelessWidget {
                             color: AppColors.blue,
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Center(
-                            child: Text(
-                              userInitials,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
+                          child: profile.avatarUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image.network(
+                                    profile.avatarUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Center(
+                                      child: Text(
+                                        profile.initials,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Center(
+                                  child: Text(
+                                    profile.initials,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
                         ),
                         Positioned(
                           right: -4,
@@ -273,8 +275,11 @@ class _DarkHeader extends StatelessWidget {
                               border: Border.all(
                                   color: AppColors.darkBg2, width: 2),
                             ),
-                            child: const Icon(Icons.check,
-                                color: Colors.white, size: 12),
+                            child: const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 12,
+                            ),
                           ),
                         ),
                       ],
@@ -288,9 +293,10 @@ class _DarkHeader extends StatelessWidget {
                             children: [
                               Text(
                                 _greeting,
-                                style: TextStyle(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 13),
+                                style: const TextStyle(
+                                  color: AppColors.textTertiary,
+                                  fontSize: 13,
+                                ),
                               ),
                               const SizedBox(width: 4),
                               const Text('👋', style: TextStyle(fontSize: 13)),
@@ -298,7 +304,7 @@ class _DarkHeader extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            userName,
+                            profile.name,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 19,
@@ -306,35 +312,10 @@ class _DarkHeader extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.blue.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.blue,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  verificationLabel,
-                                  style: const TextStyle(
-                                    color: AppColors.blueLight,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          _HeaderBadge(
+                            label: _verificationLabel,
+                            color: AppColors.blue,
+                            textColor: AppColors.blueLight,
                           ),
                         ],
                       ),
@@ -350,7 +331,7 @@ class _DarkHeader extends StatelessWidget {
                       child: Column(
                         children: [
                           Text(
-                            '$trustScore',
+                            '${profile.trustScore}',
                             style: const TextStyle(
                               color: AppColors.primary,
                               fontSize: 22,
@@ -372,40 +353,74 @@ class _DarkHeader extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _StatTile(
-                        icon: Icons.calendar_today,
-                        iconColor: AppColors.primary,
-                        value: '$meetingsCount',
-                        label: 'Meetings',
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.calendar_today,
+                          iconColor: AppColors.primary,
+                          value: '${profile.totalMeetings}',
+                          label: 'Meetings',
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StatTile(
-                        icon: Icons.star,
-                        iconColor: Color(0xFFFBBF24),
-                        value: '$safetyRating★',
-                        label: 'Safety',
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.star,
+                          iconColor: const Color(0xFFFBBF24),
+                          value: '${profile.rating.toStringAsFixed(1)}★',
+                          label: 'Safety',
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _StatTile(
-                        icon: Icons.key,
-                        iconColor: Color(0xFFFBBF24),
-                        value: safeePin,
-                        label: 'SAFEE PIN',
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatTile(
+                          icon: Icons.person_search,
+                          iconColor: const Color(0xFFFBBF24),
+                          value: '${profile.pinSearchCount}',
+                          label: 'Safee PIN Searches',
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeaderBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color textColor;
+
+  const _HeaderBadge({
+    required this.label,
+    required this.color,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -427,17 +442,20 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, color: iconColor, size: 18),
           const SizedBox(height: 6),
           Text(
             value,
+            textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 15,
@@ -449,7 +467,10 @@ class _StatTile extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
           ),
         ],
       ),
@@ -493,13 +514,16 @@ class _QuickActions extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: _actions
-            .map((a) => Expanded(
-                  child: Padding(
-                    padding:
-                        EdgeInsets.only(right: _actions.last == a ? 0 : 10),
-                    child: _QuickActionTile(action: a),
+            .map(
+              (action) => Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: _actions.last == action ? 0 : 10,
                   ),
-                ))
+                  child: _QuickActionTile(action: action),
+                ),
+              ),
+            )
             .toList(),
       ),
     );
@@ -545,6 +569,7 @@ class _QuickAction {
   final String label;
   final Color color;
   final String route;
+
   const _QuickAction({
     required this.icon,
     required this.label,
@@ -554,8 +579,7 @@ class _QuickAction {
 }
 
 class _SafetyCenter extends StatelessWidget {
-  final int trustedContactsCount;
-  const _SafetyCenter({required this.trustedContactsCount});
+  const _SafetyCenter();
 
   @override
   Widget build(BuildContext context) {
@@ -572,7 +596,7 @@ class _SafetyCenter extends StatelessWidget {
             iconColor: AppColors.primary,
             iconBg: AppColors.primary.withOpacity(0.1),
             title: 'Emergency SOS',
-            subtitle: 'Tap to activate emergency alert',
+            subtitle: 'Tap to activate an emergency alert',
             onTap: () => context.push(AppRoutes.sos),
           ),
           const _RowDivider(),
@@ -581,9 +605,8 @@ class _SafetyCenter extends StatelessWidget {
             iconColor: AppColors.success,
             iconBg: AppColors.success.withOpacity(0.1),
             title: 'Live Location',
-            subtitle: 'Share real-time location',
-            // No dedicated live-location screen yet — prototype only.
-            onTap: () {},
+            subtitle: 'Share your location in real time',
+            onTap: () => context.push(AppRoutes.liveLocation),
           ),
           const _RowDivider(),
           _SafetyRow(
@@ -591,7 +614,7 @@ class _SafetyCenter extends StatelessWidget {
             iconColor: AppColors.blue,
             iconBg: AppColors.blue.withOpacity(0.1),
             title: 'Trusted Contacts',
-            subtitle: '$trustedContactsCount contacts configured',
+            subtitle: 'Manage emergency contacts and alerts',
             onTap: () => context.push(AppRoutes.emergencyContacts),
           ),
         ],
@@ -605,7 +628,7 @@ class _RowDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Divider(height: 1, thickness: 1, color: AppColors.borderLight);
+    return const Divider(height: 1, thickness: 1, color: AppColors.borderLight);
   }
 }
 
@@ -638,7 +661,9 @@ class _SafetyRow extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                  color: iconBg, borderRadius: BorderRadius.circular(12)),
+                color: iconBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Icon(icon, color: iconColor, size: 20),
             ),
             const SizedBox(width: 14),
@@ -657,13 +682,16 @@ class _SafetyRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style:
-                        TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 22),
+            const Icon(Icons.chevron_right,
+                color: AppColors.textTertiary, size: 22),
           ],
         ),
       ),
@@ -671,20 +699,17 @@ class _SafetyRow extends StatelessWidget {
   }
 }
 
-class _MeetingCard extends StatelessWidget {
-  final _MeetingMock meeting;
-  const _MeetingCard({required this.meeting});
+class _MeetingSyncCard extends StatelessWidget {
+  final ProfileEntity profile;
+  const _MeetingSyncCard({required this.profile});
 
   @override
   Widget build(BuildContext context) {
-    final isCompleted = meeting.status == 'Completed';
-    final statusColor = isCompleted ? AppColors.success : AppColors.warning;
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
@@ -693,64 +718,38 @@ class _MeetingCard extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration:
-                BoxDecoration(color: meeting.iconBg, shape: BoxShape.circle),
-            child: Icon(meeting.icon, color: meeting.iconColor, size: 20),
+            decoration: BoxDecoration(
+              color: AppColors.cardBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.event_note, color: AppColors.blue),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  meeting.partnerName,
+                  'Meeting history sync',
                   style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
-                  meeting.subtitle,
-                  style:
-                      TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  profile.totalMeetings > 0
+                      ? 'You have ${profile.totalMeetings} meetings recorded. Detailed history will appear here as dashboard data becomes available.'
+                      : 'No live meeting history is available from the current profile API yet.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  meeting.status,
-                  style: TextStyle(
-                      color: statusColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  const Icon(Icons.star, color: Color(0xFFFBBF24), size: 14),
-                  const SizedBox(width: 3),
-                  Text(
-                    meeting.rating,
-                    style:
-                        TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
-            ],
           ),
         ],
       ),
@@ -759,10 +758,13 @@ class _MeetingCard extends StatelessWidget {
 }
 
 class _UpgradeCard extends StatelessWidget {
-  const _UpgradeCard();
+  final String plan;
+  const _UpgradeCard({required this.plan});
 
   @override
   Widget build(BuildContext context) {
+    final isFree = plan == 'free';
+
     return GestureDetector(
       onTap: () => context.push(AppRoutes.subscription),
       child: Container(
@@ -784,22 +786,24 @@ class _UpgradeCard extends StatelessWidget {
                   const Icon(Icons.trending_up, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 14),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Upgrade to Premium',
-                    style: TextStyle(
+                    isFree ? 'Upgrade to Premium' : 'Manage Your Plan',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
-                    'Unlock background checks & trust score',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                    isFree
+                        ? 'Unlock more trust and safety features'
+                        : 'Review billing and subscription details',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),

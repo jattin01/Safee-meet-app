@@ -15,30 +15,33 @@ class VerificationRemoteDataSourceImpl implements VerificationRemoteDataSource {
 
   @override
   Future<Map<String, dynamic>> getVerificationStatus() async {
-    final res = await _api.dio.get('/verification/status');
+    final res = await _api.dio.get('/v1/verification/status');
     return res.data as Map<String, dynamic>;
   }
 
   @override
-  Future<void> uploadIdDocument({required File front, required File back}) async {
+  Future<void> uploadIdDocument(
+      {required File front, required File back}) async {
     final formData = FormData.fromMap({
-      'front': await MultipartFile.fromFile(front.path, filename: 'id_front.jpg'),
+      'front':
+          await MultipartFile.fromFile(front.path, filename: 'id_front.jpg'),
       'back': await MultipartFile.fromFile(back.path, filename: 'id_back.jpg'),
     });
-    await _api.dio.post('/verification/id', data: formData);
+    await _api.dio.post('/v1/verification/id', data: formData);
   }
 
   @override
   Future<void> uploadSelfie(File selfie) async {
     final formData = FormData.fromMap({
-      'selfie': await MultipartFile.fromFile(selfie.path, filename: 'selfie.jpg'),
+      'selfie':
+          await MultipartFile.fromFile(selfie.path, filename: 'selfie.jpg'),
     });
-    await _api.dio.post('/verification/selfie', data: formData);
+    await _api.dio.post('/v1/verification/selfie', data: formData);
   }
 
   @override
   Future<Map<String, dynamic>> getVerificationProgress() async {
-    final res = await _api.dio.get('/verification/progress');
+    final res = await _api.dio.get('/v1/verification/progress');
     return res.data as Map<String, dynamic>;
   }
 }

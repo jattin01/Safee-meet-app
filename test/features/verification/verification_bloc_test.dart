@@ -8,14 +8,18 @@ import 'package:safee_meet/features/verification/domain/entities/verification_en
 import 'package:safee_meet/features/verification/domain/repositories/verification_repository.dart';
 import 'package:safee_meet/features/verification/presentation/bloc/verification_bloc.dart';
 
-class MockVerificationRepository extends Mock implements VerificationRepository {}
+class MockVerificationRepository extends Mock
+    implements VerificationRepository {}
 
 final _status = VerificationStatusEntity(
   trustScore: 72,
-  verificationLevel: 'level1',
+  verificationLevel: 'low',
   level1Complete: true,
   level2Complete: false,
   professionalComplete: false,
+  kycStatus: 'approved',
+  currentStep: VerificationStep.complete,
+  rejectionReason: null,
   safetyMetricMeetings: 0.8,
   safetyMetricResponsiveness: 0.9,
   safetyMetricReviews: 0.75,

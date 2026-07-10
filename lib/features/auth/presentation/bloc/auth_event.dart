@@ -6,6 +6,63 @@ abstract class AuthEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+/// Check stored token on app start
+class AuthStatusChecked extends AuthEvent {
+  const AuthStatusChecked();
+}
+
+/// Registration with any provider
+class RegisterRequested extends AuthEvent {
+  final String  provider;
+  final String  providerToken;
+  final String? name;
+  final String? email;
+  final String? accountType;
+  final String? companyName;
+  final bool    consentAccepted;
+
+  const RegisterRequested({
+    required this.provider,
+    required this.providerToken,
+    this.name,
+    this.email,
+    this.accountType,
+    this.companyName,
+    this.consentAccepted = true,
+  });
+
+  @override
+  List<Object?> get props => [provider, providerToken, name, email, accountType, companyName, consentAccepted];
+}
+
+/// Login with any provider token (already obtained by datasource)
+class LoginRequested extends AuthEvent {
+  final String provider;
+  final String providerToken;
+
+  const LoginRequested({required this.provider, required this.providerToken});
+
+  @override
+  List<Object?> get props => [provider, providerToken];
+}
+
+/// Google Sign-In: opens picker, gets Firebase token, calls backend
+class GoogleLoginRequested extends AuthEvent {
+  const GoogleLoginRequested();
+}
+
+/// Apple Sign-In: gets Apple token, calls backend
+class AppleLoginRequested extends AuthEvent {
+  const AppleLoginRequested();
+}
+
+/// Logout
+class LogoutRequested extends AuthEvent {
+  const LogoutRequested();
+}
+
+// ── Legacy events (kept for existing UI compat) ───────────────────────────────
+
 class SendOtpRequested extends AuthEvent {
   final String phone;
   const SendOtpRequested(this.phone);
@@ -36,29 +93,6 @@ class EmailOtpVerificationRequested extends AuthEvent {
   List<Object?> get props => [email, otp];
 }
 
-class RegisterRequested extends AuthEvent {
-  final String name;
-  final String phone;
-  final String email;
-  final String password;
-  const RegisterRequested({
-    required this.name,
-    required this.phone,
-    required this.email,
-    required this.password,
-  });
-  @override
-  List<Object?> get props => [name, phone, email, password];
-}
-
-class SocialLoginRequested extends AuthEvent {
-  final String provider;
-  final String token;
-  const SocialLoginRequested({required this.provider, required this.token});
-  @override
-  List<Object?> get props => [provider, token];
-}
-
 class RegisterStepChanged extends AuthEvent {
   final int step;
   const RegisterStepChanged(this.step);
@@ -70,7 +104,7 @@ class AuthResetRequested extends AuthEvent {
   const AuthResetRequested();
 }
 
-/// Trigger the Google Sign-In picker and authenticate via Firebase Auth.
+/// @deprecated — use GoogleLoginRequested instead
 class GoogleSignInStarted extends AuthEvent {
   const GoogleSignInStarted();
 }

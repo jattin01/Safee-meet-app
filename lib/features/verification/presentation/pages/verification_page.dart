@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,12 +9,10 @@ import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/info_banner.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
+import '../../domain/entities/verification_entity.dart';
+import '../bloc/verification_bloc.dart';
 
-// PROTOTYPE MODE: this page renders mock data only — there is no
-// VerificationBloc wiring, OCR/upload pipeline, or backend connectivity.
-// Re-connect it to VerificationBloc (IdDocumentUploaded / SelfieUploaded)
-// before shipping.
-enum _Step { uploadId, selfie, processing }
+enum _Step { uploadId, selfie, processing, complete }
 
 class VerificationPage extends StatefulWidget {
   const VerificationPage({super.key});
@@ -27,15 +26,29 @@ class _VerificationPageState extends State<VerificationPage> {
   File? _idFront;
   File? _idBack;
   File? _selfie;
+  VerificationEntity? _progress;
   final _picker = ImagePicker();
 
   static const _stepLabels = ['Upload ID', 'Selfie', 'Processing', 'Complete'];
 
   int get _stepIndex => _step.index;
+  bool get _hasFront => _idFront != null || (_progress?.hasIdFront ?? false);
+  bool get _hasBack => _idBack != null || (_progress?.hasIdBack ?? false);
+  bool get _hasSelfie => _selfie != null || (_progress?.hasSelfie ?? false);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context
+          .read<VerificationBloc>()
+          .add(const VerificationProgressRequested());
+    });
+  }
 
   Future<void> _pickImage(ImageSource source, _ImageType type) async {
     final xFile = await _picker.pickImage(source: source, imageQuality: 85);
-    if (xFile == null) return;
+    if (xFile == null || !mounted) return;
     final file = File(xFile.path);
     setState(() {
       switch (type) {
@@ -49,51 +62,147 @@ class _VerificationPageState extends State<VerificationPage> {
     });
   }
 
-  void _goTo(_Step step) => setState(() => _step = step);
+  void _syncProgress(VerificationEntity progress) {
+    if (!mounted) return;
+    setState(() {
+      _progress = progress;
+      _step = switch (progress.currentStep) {
+        VerificationStep.selfie => _Step.selfie,
+        VerificationStep.processing => _Step.processing,
+        VerificationStep.complete => _Step.complete,
+        VerificationStep.uploadId => _Step.uploadId,
+      };
+    });
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.lightBg,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DarkScreenHeader(
-              title: 'Identity Verification',
-              titleFontSize: 21,
-              childGap: 24,
-              child: _StepCircleRow(activeIndex: _stepIndex, labels: _stepLabels),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-              child: _buildStep(context),
-            ),
-          ],
-        ),
+  void _showMessage(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? AppColors.error : AppColors.success,
       ),
     );
   }
 
-  Widget _buildStep(BuildContext context) {
+  void _submitIdDocuments() {
+    if (_idFront == null || _idBack == null) {
+      if (_hasFront && _hasBack) {
+        setState(() => _step = _Step.selfie);
+        return;
+      }
+      _showMessage('Please upload both sides of your ID before continuing.',
+          error: true);
+      return;
+    }
+
+    context.read<VerificationBloc>().add(
+          IdDocumentUploaded(front: _idFront!, back: _idBack!),
+        );
+  }
+
+  void _submitSelfie() {
+    if (_selfie == null) {
+      if (_hasSelfie) {
+        setState(() => _step = _Step.processing);
+        return;
+      }
+      _showMessage('Please capture a selfie before submitting.', error: true);
+      return;
+    }
+
+    context.read<VerificationBloc>().add(SelfieUploaded(_selfie!));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocConsumer<VerificationBloc, VerificationState>(
+      listener: (context, state) {
+        if (state is VerificationProgressLoaded) {
+          _syncProgress(state.progress);
+        }
+
+        if (state is VerificationUploadSuccess) {
+          context
+              .read<VerificationBloc>()
+              .add(const VerificationProgressRequested());
+        }
+
+        if (state is VerificationError) {
+          _showMessage(state.message, error: true);
+        }
+      },
+      builder: (context, state) {
+        final initialLoad = state is VerificationLoading && _progress == null;
+        final isUploading = state is VerificationUploading;
+
+        if (initialLoad) {
+          return const Scaffold(
+            backgroundColor: AppColors.lightBg,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: AppColors.lightBg,
+          body: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DarkScreenHeader(
+                  title: 'Identity Verification',
+                  titleFontSize: 21,
+                  childGap: 24,
+                  child: _StepCircleRow(
+                      activeIndex: _stepIndex, labels: _stepLabels),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+                  child: _buildStep(context, isUploading: isUploading),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStep(BuildContext context, {required bool isUploading}) {
     switch (_step) {
       case _Step.uploadId:
         return _UploadIdStep(
           front: _idFront,
           back: _idBack,
+          hasServerFront: _progress?.hasIdFront ?? false,
+          hasServerBack: _progress?.hasIdBack ?? false,
+          rejectionReason: _progress?.status == 'rejected'
+              ? _progress?.rejectionReason
+              : null,
+          isSubmitting: isUploading,
           onPickFront: () => _pickImage(ImageSource.gallery, _ImageType.front),
           onPickBack: () => _pickImage(ImageSource.gallery, _ImageType.back),
-          onContinue: () => _goTo(_Step.selfie),
+          onContinue: _submitIdDocuments,
         );
       case _Step.selfie:
         return _SelfieStep(
           selfie: _selfie,
+          hasServerSelfie: _progress?.hasSelfie ?? false,
+          isSubmitting: isUploading,
           onPickSelfie: () => _pickImage(ImageSource.camera, _ImageType.selfie),
-          onSubmit: () => _goTo(_Step.processing),
+          onSubmit: _submitSelfie,
         );
       case _Step.processing:
         return _ProcessingStep(
-          onViewStatus: () => context.push(AppRoutes.verificationStatus),
+          status: _progress?.status ?? 'pending',
+          onRefresh: () => context
+              .read<VerificationBloc>()
+              .add(const VerificationProgressRequested()),
+          onViewStatus: () => context.go(AppRoutes.verificationStatus),
+        );
+      case _Step.complete:
+        return _CompleteStep(
+          onViewStatus: () => context.go(AppRoutes.verificationStatus),
         );
     }
   }
@@ -127,7 +236,9 @@ class _StepCircleRow extends StatelessWidget {
               child: Container(
                 height: 2,
                 margin: const EdgeInsets.only(bottom: 20),
-                color: i < activeIndex ? AppColors.success : Colors.white.withOpacity(0.15),
+                color: i < activeIndex
+                    ? AppColors.success
+                    : Colors.white.withOpacity(0.15),
               ),
             ),
         ];
@@ -143,7 +254,8 @@ class _StepCircle extends StatelessWidget {
   final _CircleState state;
   final String label;
 
-  const _StepCircle({required this.number, required this.state, required this.label});
+  const _StepCircle(
+      {required this.number, required this.state, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +264,8 @@ class _StepCircle extends StatelessWidget {
       _CircleState.active => AppColors.primary,
       _CircleState.pending => Colors.white.withOpacity(0.08),
     };
-    final Color textColor = state == _CircleState.pending ? AppColors.textTertiary : Colors.white;
+    final Color textColor =
+        state == _CircleState.pending ? AppColors.textTertiary : Colors.white;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -165,7 +278,10 @@ class _StepCircle extends StatelessWidget {
                 ? const Icon(Icons.check, color: Colors.white, size: 18)
                 : Text(
                     '$number',
-                    style: GoogleFonts.inter(color: textColor, fontSize: 15, fontWeight: FontWeight.w800),
+                    style: GoogleFonts.inter(
+                        color: textColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800),
                   ),
           ),
         ),
@@ -173,9 +289,13 @@ class _StepCircle extends StatelessWidget {
         Text(
           label,
           style: GoogleFonts.inter(
-            color: state == _CircleState.pending ? AppColors.textTertiary : Colors.white,
+            color: state == _CircleState.pending
+                ? AppColors.textTertiary
+                : Colors.white,
             fontSize: 11,
-            fontWeight: state == _CircleState.active ? FontWeight.w700 : FontWeight.w500,
+            fontWeight: state == _CircleState.active
+                ? FontWeight.w700
+                : FontWeight.w500,
           ),
         ),
       ],
@@ -205,6 +325,10 @@ class _StepIcon extends StatelessWidget {
 class _UploadIdStep extends StatelessWidget {
   final File? front;
   final File? back;
+  final bool hasServerFront;
+  final bool hasServerBack;
+  final String? rejectionReason;
+  final bool isSubmitting;
   final VoidCallback onPickFront;
   final VoidCallback onPickBack;
   final VoidCallback onContinue;
@@ -212,6 +336,10 @@ class _UploadIdStep extends StatelessWidget {
   const _UploadIdStep({
     required this.front,
     required this.back,
+    required this.hasServerFront,
+    required this.hasServerBack,
+    required this.rejectionReason,
+    required this.isSubmitting,
     required this.onPickFront,
     required this.onPickBack,
     required this.onContinue,
@@ -222,24 +350,38 @@ class _UploadIdStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Center(child: _StepIcon(icon: Icons.description_outlined, color: AppColors.blue)),
+        const Center(
+            child: _StepIcon(
+                icon: Icons.description_outlined, color: AppColors.blue)),
         const SizedBox(height: 20),
         Text(
           'Upload Government ID',
           textAlign: TextAlign.center,
-          style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+          style: GoogleFonts.inter(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary),
         ),
         const SizedBox(height: 6),
         Text(
           "Driver's license, passport, or national ID",
           textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
+        if (rejectionReason != null) ...[
+          const SizedBox(height: 20),
+          InfoBanner(
+            emoji: '⚠️',
+            text: 'Previous submission was rejected: $rejectionReason',
+            color: AppColors.warning,
+          ),
+        ],
         const SizedBox(height: 28),
         _UploadRow(
           icon: Icons.credit_card,
           title: 'ID Front Side',
           file: front,
+          uploadedOnServer: hasServerFront,
           onTap: onPickFront,
         ),
         const SizedBox(height: 14),
@@ -247,16 +389,21 @@ class _UploadIdStep extends StatelessWidget {
           icon: Icons.badge_outlined,
           title: 'ID Back Side',
           file: back,
+          uploadedOnServer: hasServerBack,
           onTap: onPickBack,
         ),
         const SizedBox(height: 20),
         const InfoBanner(
           emoji: '🔒',
-          text: 'Your ID is encrypted and never stored unprotected',
+          text:
+              'Your ID is stored securely and shared only for verification review',
           color: AppColors.blue,
         ),
         const SizedBox(height: 28),
-        PrimaryButton(label: 'Continue to Selfie', onPressed: onContinue),
+        PrimaryButton(
+          label: isSubmitting ? 'Uploading...' : 'Continue to Selfie',
+          onPressed: isSubmitting ? null : onContinue,
+        ),
       ],
     );
   }
@@ -264,11 +411,15 @@ class _UploadIdStep extends StatelessWidget {
 
 class _SelfieStep extends StatelessWidget {
   final File? selfie;
+  final bool hasServerSelfie;
+  final bool isSubmitting;
   final VoidCallback onPickSelfie;
   final VoidCallback onSubmit;
 
   const _SelfieStep({
     required this.selfie,
+    required this.hasServerSelfie,
+    required this.isSubmitting,
     required this.onPickSelfie,
     required this.onSubmit,
   });
@@ -278,15 +429,19 @@ class _SelfieStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Center(child: _StepIcon(icon: Icons.camera_alt, color: AppColors.primary)),
+        const Center(
+            child: _StepIcon(icon: Icons.camera_alt, color: AppColors.primary)),
         const SizedBox(height: 20),
         Text(
           'Selfie Verification',
           textAlign: TextAlign.center,
-          style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+          style: GoogleFonts.inter(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary),
         ),
         const SizedBox(height: 6),
-        Text(
+        const Text(
           'Take a selfie to match with your ID photo',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
@@ -301,7 +456,8 @@ class _SelfieStep extends StatelessWidget {
           child: selfie != null
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Image.file(selfie!, fit: BoxFit.cover, width: double.infinity),
+                  child: Image.file(selfie!,
+                      fit: BoxFit.cover, width: double.infinity),
                 )
               : Stack(
                   alignment: Alignment.center,
@@ -312,15 +468,19 @@ class _SelfieStep extends StatelessWidget {
                         child: SizedBox(
                           width: 180,
                           height: 240,
-                          child: Icon(Icons.person_outline, color: Colors.white.withOpacity(0.3), size: 56),
+                          child: Icon(Icons.person_outline,
+                              color: Colors.white.withOpacity(0.3), size: 56),
                         ),
                       ),
                     ),
                     Positioned(
                       bottom: 16,
                       child: Text(
-                        'Position your face in the frame',
-                        style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                        hasServerSelfie
+                            ? 'Selfie already uploaded'
+                            : 'Position your face in the frame',
+                        style: const TextStyle(
+                            color: AppColors.textTertiary, fontSize: 13),
                       ),
                     ),
                   ],
@@ -331,10 +491,14 @@ class _SelfieStep extends StatelessWidget {
           icon: Icons.camera_alt_outlined,
           title: 'Take Selfie',
           file: selfie,
+          uploadedOnServer: hasServerSelfie,
           onTap: onPickSelfie,
         ),
         const SizedBox(height: 28),
-        PrimaryButton(label: 'Submit for Verification', onPressed: onSubmit),
+        PrimaryButton(
+          label: isSubmitting ? 'Submitting...' : 'Submit for Verification',
+          onPressed: isSubmitting ? null : onSubmit,
+        ),
       ],
     );
   }
@@ -371,57 +535,112 @@ class _DashedRRectPainter extends CustomPainter {
 }
 
 class _ProcessingStep extends StatelessWidget {
+  final String status;
+  final VoidCallback onRefresh;
   final VoidCallback onViewStatus;
-  const _ProcessingStep({required this.onViewStatus});
+
+  const _ProcessingStep({
+    required this.status,
+    required this.onRefresh,
+    required this.onViewStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isManualReview = status == 'manual_review';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(
+            child:
+                _StepIcon(icon: Icons.access_time, color: AppColors.success)),
+        const SizedBox(height: 20),
+        Text(
+          isManualReview ? 'Manual Review' : 'Processing',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          isManualReview
+              ? 'Your verification needs an extra review by the SAFEE team'
+              : 'Your verification is under review right now',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        ),
+        const SizedBox(height: 28),
+        const _ProcessingRow(
+          icon: Icons.check_circle,
+          color: AppColors.success,
+          title: 'ID Received',
+          subtitle: 'Front and back images uploaded',
+          done: true,
+        ),
+        const _ProcessingRow(
+          icon: Icons.check_circle,
+          color: AppColors.success,
+          title: 'Selfie Received',
+          subtitle: 'Selfie submitted for review',
+          done: true,
+        ),
+        _ProcessingRow(
+          icon: isManualReview ? Icons.manage_search : Icons.access_time,
+          color: isManualReview ? AppColors.warning : AppColors.primary,
+          title: isManualReview ? 'Manual Review' : 'Review In Progress',
+          subtitle: isManualReview
+              ? 'Team is checking your submission'
+              : 'Verification team is reviewing your details',
+          done: false,
+        ),
+        const SizedBox(height: 20),
+        PrimaryButton(label: 'View Status', onPressed: onViewStatus),
+        const SizedBox(height: 12),
+        OutlinedButton(
+          onPressed: onRefresh,
+          child: const Text('Refresh Progress'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompleteStep extends StatelessWidget {
+  final VoidCallback onViewStatus;
+  const _CompleteStep({required this.onViewStatus});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Center(child: _StepIcon(icon: Icons.access_time, color: AppColors.success)),
+        const Center(
+            child: _StepIcon(icon: Icons.verified, color: AppColors.success)),
         const SizedBox(height: 20),
         Text(
-          'Processing',
+          'Verification Complete',
           textAlign: TextAlign.center,
-          style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+          style: GoogleFonts.inter(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary),
         ),
         const SizedBox(height: 6),
-        Text(
-          'Verifying your identity — usually 2-5 minutes',
+        const Text(
+          'Your identity has been approved successfully',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
+        const SizedBox(height: 24),
+        const InfoBanner(
+          emoji: '✅',
+          text: 'Your Level 1 verification badge is now active',
+          color: AppColors.success,
+        ),
         const SizedBox(height: 28),
-        _ProcessingRow(
-          icon: Icons.check_circle,
-          color: AppColors.success,
-          title: 'OCR Data Extraction',
-          subtitle: 'Reading ID information',
-          done: true,
-        ),
-        _ProcessingRow(
-          icon: Icons.check_circle,
-          color: AppColors.success,
-          title: 'Facial Recognition',
-          subtitle: 'Matching selfie to ID',
-          done: true,
-        ),
-        _ProcessingRow(
-          icon: Icons.access_time,
-          color: AppColors.warning,
-          title: 'Liveness Detection',
-          subtitle: 'Confirming live selfie',
-          done: false,
-        ),
-        _ProcessingRow(
-          icon: Icons.access_time,
-          color: AppColors.warning,
-          title: 'Identity Validation',
-          subtitle: 'Cross-referencing database',
-          done: false,
-        ),
-        const SizedBox(height: 20),
         PrimaryButton(label: 'View Status', onPressed: onViewStatus),
       ],
     );
@@ -458,7 +677,8 @@ class _ProcessingRow extends StatelessWidget {
           Container(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+                color: color.withOpacity(0.12), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(width: 12),
@@ -468,8 +688,12 @@ class _ProcessingRow extends StatelessWidget {
               children: [
                 Text(title,
                     style: GoogleFonts.inter(
-                        color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-                Text(subtitle, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700)),
+                Text(subtitle,
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 12)),
               ],
             ),
           ),
@@ -484,18 +708,26 @@ class _UploadRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final File? file;
+  final bool uploadedOnServer;
   final VoidCallback onTap;
 
   const _UploadRow({
     required this.icon,
     required this.title,
     required this.file,
+    required this.uploadedOnServer,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final selected = file != null;
+    final selected = file != null || uploadedOnServer;
+    final subtitle = file != null
+        ? 'New photo selected'
+        : uploadedOnServer
+            ? 'Already uploaded, tap to replace'
+            : 'Tap to upload or take photo';
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -513,7 +745,8 @@ class _UploadRow extends StatelessWidget {
             Container(
               width: 48,
               height: 48,
-              decoration: BoxDecoration(color: AppColors.cardBg, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: AppColors.cardBg, shape: BoxShape.circle),
               child: Icon(
                 selected ? Icons.check : icon,
                 color: selected ? AppColors.success : AppColors.textSecondary,
@@ -527,15 +760,19 @@ class _UploadRow extends StatelessWidget {
                 children: [
                   Text(title,
                       style: GoogleFonts.inter(
-                          color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
                   Text(
-                    selected ? 'Photo selected' : 'Tap to upload or take photo',
-                    style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                    subtitle,
+                    style: const TextStyle(
+                        color: AppColors.textTertiary, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.upload_outlined, color: AppColors.textTertiary, size: 20),
+            Icon(Icons.upload_outlined,
+                color: AppColors.textTertiary, size: 20),
           ],
         ),
       ),

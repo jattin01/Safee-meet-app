@@ -1,8 +1,13 @@
+import 'dart:io' show Platform;
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
@@ -34,9 +39,18 @@ class _LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<_LoginView> {
-  final _phoneCtrl = TextEditingController();
-  final _phoneFocus = FocusNode();
+  final _phoneCtrl   = TextEditingController();
+  final _phoneFocus  = FocusNode();
+
+  // ── Step ──────────────────────────────────────────────────────────────────
   bool _isOtpStep = false;
+
+  // ── Firebase phone auth ───────────────────────────────────────────────────
+  String? _verificationId;
+  String? _enteredOtp;
+  bool    _sendingOtp   = false;
+  bool    _verifyingOtp = false;
+  String? _otpError;
 
   @override
   void dispose() {
@@ -45,46 +59,170 @@ class _LoginViewState extends State<_LoginView> {
     super.dispose();
   }
 
-  void _sendOtp() {
+  // ── Phone validation ──────────────────────────────────────────────────────
+  bool get _isValidPhone {
+    final digits = _phoneCtrl.text.replaceAll(RegExp(r'[^\d]'), '');
+    return digits.length >= 10;
+  }
+
+  // ── E.164 conversion ──────────────────────────────────────────────────────
+  String _toE164(String raw) {
+    final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
+    if (raw.startsWith('+')) return raw.replaceAll(RegExp(r'\s'), '');
+    if (digits.length == 12 && digits.startsWith('91')) return '+$digits';
+    if (digits.length == 11 && digits.startsWith('0'))  return '+91${digits.substring(1)}';
+    if (digits.length == 10) return '+91$digits';
+    return '+$digits';
+  }
+
+  // ── Firebase: Send OTP ────────────────────────────────────────────────────
+  Future<void> _sendPhoneOtp() async {
     final phone = _phoneCtrl.text.trim();
     if (phone.isEmpty) return;
-    context.read<AuthBloc>().add(SendOtpRequested(phone));
+
+    final e164 = _toE164(phone);
+    setState(() { _sendingOtp = true; _otpError = null; });
+
+    await FirebaseAuth.instance.verifyPhoneNumber(
+      phoneNumber: e164,
+      timeout: const Duration(seconds: 60),
+      verificationCompleted: (credential) async {
+        // Android auto-retrieval
+        try {
+          final result = await FirebaseAuth.instance.signInWithCredential(credential);
+          final token  = await result.user?.getIdToken();
+          if (token != null && mounted) {
+            context.read<AuthBloc>().add(
+              LoginRequested(provider: 'phone', providerToken: token),
+            );
+          }
+        } catch (_) {}
+      },
+      verificationFailed: (e) {
+        if (mounted) {
+          setState(() {
+            _sendingOtp = false;
+            _otpError   = e.message ?? 'Phone verification failed.';
+          });
+        }
+      },
+      codeSent: (verificationId, _) {
+        if (mounted) {
+          setState(() {
+            _verificationId = verificationId;
+            _sendingOtp     = false;
+            _isOtpStep      = true;
+          });
+        }
+      },
+      codeAutoRetrievalTimeout: (_) {},
+    );
   }
 
-  void _verifyOtp(String otp) {
-    final phone = _phoneCtrl.text.trim();
-    context.read<AuthBloc>().add(
-          OtpVerificationRequested(phone: phone, otp: otp),
+  // ── Firebase: Verify OTP → Backend Login ──────────────────────────────────
+  Future<void> _verifyPhoneOtp() async {
+    if (_verificationId == null || _enteredOtp == null) return;
+    setState(() { _verifyingOtp = true; _otpError = null; });
+
+    try {
+      final credential = PhoneAuthProvider.credential(
+        verificationId: _verificationId!,
+        smsCode:        _enteredOtp!,
+      );
+      final result = await FirebaseAuth.instance.signInWithCredential(credential);
+      final token  = await result.user?.getIdToken();
+
+      if (token != null && mounted) {
+        setState(() => _verifyingOtp = false);
+        context.read<AuthBloc>().add(
+          LoginRequested(provider: 'phone', providerToken: token),
         );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        setState(() {
+          _verifyingOtp = false;
+          _otpError = e.message ?? 'Invalid OTP. Please try again.';
+        });
+      }
+    }
   }
 
+  // ── Google Sign-In ────────────────────────────────────────────────────────
   void _onGoogleSignIn() {
-    context.read<AuthBloc>().add(const GoogleSignInStarted());
+    context.read<AuthBloc>().add(const GoogleLoginRequested());
   }
 
-  void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  void _onAppleSignIn() {
+    context.read<AuthBloc>().add(const AppleLoginRequested());
+  }
+
+  // Apple only accepts native Sign in with Apple on iOS/macOS; Android/web
+  // would need a separate Services ID + web redirect flow that isn't set up.
+  bool get _supportsAppleSignIn =>
+      !kIsWeb && (Platform.isIOS || Platform.isMacOS);
+
+  // ── USER_NOT_REGISTERED dialog ────────────────────────────────────────────
+  void _showNotRegisteredDialog(BuildContext ctx, String message) {
+    showDialog<void>(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(children: [
+          Icon(Icons.person_add_outlined, color: AppColors.primary, size: 24),
+          const SizedBox(width: 10),
+          const Text('Not Registered'),
+        ]),
+        content: Text(
+          message,
+          style: TextStyle(color: AppColors.textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              ctx.push(AppRoutes.register);
+            },
+            child: const Text('Register Now',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        if (state is OtpSent) {
-          setState(() => _isOtpStep = true);
-        }
-        if (state is AuthAuthenticated) {
+        if (state is LoginSuccess) {
           context.go(AppRoutes.dashboardHome);
         }
-        if (state is AuthError) {
-          _showError(context, state.message);
+        if (state is UserNotRegistered) {
+          _showNotRegisteredDialog(context, state.message);
+        }
+        if (state is AuthFailureState) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          );
         }
       },
       child: BlocBuilder<AuthBloc, AuthState>(
@@ -107,6 +245,12 @@ class _LoginViewState extends State<_LoginView> {
                           ..._buildPhoneStep(context, isLoading)
                         else
                           ..._buildOtpStep(context, isLoading),
+                        if (_otpError != null) ...[
+                          const SizedBox(height: 12),
+                          Text(_otpError!,
+                              style: TextStyle(
+                                  color: AppColors.error, fontSize: 13)),
+                        ],
                         const SizedBox(height: 28),
                         _Footer(),
                       ],
@@ -121,75 +265,69 @@ class _LoginViewState extends State<_LoginView> {
     );
   }
 
+  // ── Phone step ────────────────────────────────────────────────────────────
   List<Widget> _buildPhoneStep(BuildContext context, bool isLoading) {
     return [
-      FieldInput(
-        label: 'Mobile Number',
-        hint: '+1 (555) 000-0000',
+      _PhoneInput(
         controller: _phoneCtrl,
-        focusNode: _phoneFocus,
-        keyboardType: TextInputType.phone,
-        prefixIcon: Icons.call_outlined,
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s()]'))
-        ],
+        focusNode:  _phoneFocus,
+        onChanged:  (_) => setState(() {}),
       ),
       const SizedBox(height: 20),
       PrimaryButton(
-        label: isLoading ? 'Sending…' : 'Send OTP',
-        onPressed: isLoading ? null : _sendOtp,
+        label:     _sendingOtp ? 'Sending OTP...' : 'Send OTP',
+        onPressed: (_sendingOtp || isLoading || !_isValidPhone)
+            ? null
+            : _sendPhoneOtp,
+        gradientStart: (_sendingOtp || !_isValidPhone)
+            ? AppColors.textTertiary : null,
+        gradientEnd: (_sendingOtp || !_isValidPhone)
+            ? AppColors.textTertiary : null,
       ),
       const SizedBox(height: 28),
-      Row(
-        children: [
-          Expanded(child: Divider(color: AppColors.border)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Text(
-              'or continue with',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
-            ),
-          ),
-          Expanded(child: Divider(color: AppColors.border)),
-        ],
-      ),
+      Row(children: [
+        Expanded(child: Divider(color: AppColors.border)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Text('or continue with',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+        ),
+        Expanded(child: Divider(color: AppColors.border)),
+      ]),
       const SizedBox(height: 20),
-      Row(
-        children: [
-          Expanded(
-            child: _SocialButton(
-              label: isLoading ? 'Signing in…' : 'Google',
-              icon: isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.primary),
-                    )
-                  : SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CustomPaint(painter: _GoogleLogoPainter()),
-                    ),
-              onPressed: isLoading ? null : _onGoogleSignIn,
-            ),
+      Row(children: [
+        Expanded(
+          child: _SocialButton(
+            label: isLoading ? 'Signing in…' : 'Google',
+            icon:  isLoading
+                ? const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.primary),
+                  )
+                : SizedBox(
+                    width: 20, height: 20,
+                    child: CustomPaint(painter: _GoogleLogoPainter()),
+                  ),
+            onPressed: isLoading ? null : _onGoogleSignIn,
           ),
+        ),
+        if (_supportsAppleSignIn) ...[
           const SizedBox(width: 12),
           Expanded(
             child: _SocialButton(
-              label: 'Apple',
-              icon: const Icon(Icons.apple, color: Colors.black, size: 20),
-              // Apple Sign-In — Phase 2
-              onPressed: isLoading ? null : () {},
+              label:     'Apple',
+              icon:      const Icon(Icons.apple, color: Colors.black, size: 20),
+              onPressed: isLoading ? null : _onAppleSignIn,
             ),
           ),
         ],
-      ),
+      ]),
     ];
   }
 
+  // ── OTP step ──────────────────────────────────────────────────────────────
   List<Widget> _buildOtpStep(BuildContext context, bool isLoading) {
-    final phone = _phoneCtrl.text.trim();
     return [
       const Center(child: _OtpStepIcon()),
       const SizedBox(height: 20),
@@ -197,43 +335,57 @@ class _LoginViewState extends State<_LoginView> {
         'Enter OTP Code',
         textAlign: TextAlign.center,
         style: GoogleFonts.inter(
-          fontSize: 20,
-          fontWeight: FontWeight.w800,
-          color: AppColors.textPrimary,
-        ),
+            fontSize: 20, fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary),
       ),
       const SizedBox(height: 6),
       Text(
-        'Sent to $phone',
+        'Sent to ${_phoneCtrl.text.trim()}',
         textAlign: TextAlign.center,
         style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
       ),
       const SizedBox(height: 28),
       OtpInputWidget(
         length: 6,
-        onCompleted: (otp) => _verifyOtp(otp),
-        onResend: _sendOtp,
+        onCompleted: (otp) => setState(() => _enteredOtp = otp),
+        onResend:    () => setState(() {
+          _isOtpStep  = false;
+          _enteredOtp = null;
+          _otpError   = null;
+        }),
       ),
-      const SizedBox(height: 24),
-      PrimaryButton(
-        label: isLoading ? 'Verifying…' : 'Verify',
-        onPressed: isLoading ? null : () {},
+      const SizedBox(height: 20),
+      BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) {
+          final loading = state is AuthLoading || _verifyingOtp;
+          return PrimaryButton(
+            label: loading ? 'Verifying...' : 'Verify & Sign In',
+            onPressed: (loading || (_enteredOtp?.length ?? 0) < 6)
+                ? null
+                : _verifyPhoneOtp,
+            gradientStart: (_enteredOtp?.length ?? 0) < 6
+                ? AppColors.textTertiary : null,
+            gradientEnd: (_enteredOtp?.length ?? 0) < 6
+                ? AppColors.textTertiary : null,
+          );
+        },
       ),
       const SizedBox(height: 16),
       Center(
         child: GestureDetector(
-          onTap: isLoading ? null : () => setState(() => _isOtpStep = false),
+          onTap: () => setState(() {
+            _isOtpStep  = false;
+            _enteredOtp = null;
+            _otpError   = null;
+          }),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.arrow_back,
-                  size: 14, color: AppColors.textSecondary),
+              Icon(Icons.arrow_back, size: 14, color: AppColors.textSecondary),
               const SizedBox(width: 6),
-              Text(
-                'Go back',
-                style:
-                    TextStyle(color: AppColors.textSecondary, fontSize: 14),
-              ),
+              Text('Change number',
+                  style: TextStyle(
+                      color: AppColors.textSecondary, fontSize: 14)),
             ],
           ),
         ),
@@ -255,7 +407,7 @@ class _Header extends StatelessWidget {
       decoration: const BoxDecoration(
         color: AppColors.darkBg,
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
+          bottomLeft:  Radius.circular(28),
           bottomRight: Radius.circular(28),
         ),
       ),
@@ -267,16 +419,15 @@ class _Header extends StatelessWidget {
           const AppLogoWidget(size: LogoSize.sm, variant: LogoVariant.light),
           const SizedBox(height: 28),
           Text(
-            'Welcome back',
+            isOtpStep ? 'Verify your number' : 'Welcome back',
             style: GoogleFonts.inter(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
+                fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
           ),
           const SizedBox(height: 6),
           Text(
-            'Sign in to your secure account',
+            isOtpStep
+                ? 'Enter the code we just sent you'
+                : 'Sign in to your secure account',
             style: TextStyle(color: AppColors.textTertiary, fontSize: 15),
           ),
         ],
@@ -289,87 +440,144 @@ class _OtpStepIcon extends StatelessWidget {
   const _OtpStepIcon();
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 64,
-      height: 64,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primaryLight],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.35),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+  Widget build(BuildContext context) => Container(
+    width: 64, height: 64,
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [AppColors.primary, AppColors.primaryLight],
       ),
-      child: const Center(child: Text('🔐', style: TextStyle(fontSize: 28))),
-    );
-  }
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: [
+        BoxShadow(
+          color: AppColors.primary.withOpacity(0.35),
+          blurRadius: 20, offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: const Center(child: Text('🔐', style: TextStyle(fontSize: 28))),
+  );
 }
 
 class _Footer extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          'New to SAFEE MEET? ',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-        ),
-        GestureDetector(
-          onTap: () => context.push(AppRoutes.register),
-          child: Text(
-            'Create Account',
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Text('New to SAFEE MEET? ',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+      GestureDetector(
+        onTap: () => context.push(AppRoutes.register),
+        child: Text('Create Account',
             style: TextStyle(
-              color: AppColors.primary,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+                color: AppColors.primary, fontSize: 14,
+                fontWeight: FontWeight.w700)),
+      ),
+    ],
+  );
 }
 
 class _SocialButton extends StatelessWidget {
-  final String label;
-  final Widget icon;
+  final String      label;
+  final Widget      icon;
   final VoidCallback? onPressed;
 
   const _SocialButton({
-    required this.label,
-    required this.icon,
-    this.onPressed,
+    required this.label, required this.icon, this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onPressed,
+    icon:      icon,
+    label:     Text(label,
+        style: GoogleFonts.inter(
+            color: AppColors.textPrimary, fontSize: 14,
+            fontWeight: FontWeight.w700)),
+    style: OutlinedButton.styleFrom(
+      backgroundColor: Colors.white,
+      side:  BorderSide(color: AppColors.border),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
+  );
+}
+
+// ── Phone Input with +91 prefix ───────────────────────────────────────────────
+class _PhoneInput extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode?             focusNode;
+  final ValueChanged<String>?  onChanged;
+
+  const _PhoneInput({
+    required this.controller,
+    this.focusNode,
+    this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: icon,
-      label: Text(
-        label,
-        style: GoogleFonts.inter(
-          color: AppColors.textPrimary,
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Mobile Number',
+            style: GoogleFonts.inter(
+                fontSize: 13, fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color:        Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border:       Border.all(color: AppColors.border, width: 1.5),
+          ),
+          child: Row(children: [
+            // Country code prefix
+            Container(
+              padding:    const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(color: AppColors.border, width: 1.5),
+                ),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('🇮🇳', style: const TextStyle(fontSize: 18)),
+                const SizedBox(width: 6),
+                Text('+91',
+                    style: GoogleFonts.inter(
+                        fontSize: 15, fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
+              ]),
+            ),
+            // Number input
+            Expanded(
+              child: TextField(
+                controller:      controller,
+                focusNode:       focusNode,
+                onChanged:       onChanged,
+                keyboardType:    TextInputType.phone,
+                style: GoogleFonts.inter(
+                    fontSize: 15, color: AppColors.textPrimary),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                decoration: InputDecoration(
+                  hintText: '98765 43210',
+                  hintStyle: TextStyle(color: AppColors.textTertiary),
+                  border:         InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 16),
+                ),
+              ),
+            ),
+          ]),
         ),
-      ),
-      style: OutlinedButton.styleFrom(
-        backgroundColor: Colors.white,
-        side: BorderSide(color: AppColors.border),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
+        const SizedBox(height: 6),
+        Text('Enter 10-digit mobile number',
+            style: TextStyle(
+                color: AppColors.textTertiary, fontSize: 12)),
+      ],
     );
   }
 }
@@ -377,7 +585,7 @@ class _SocialButton extends StatelessWidget {
 class _GoogleLogoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final rect  = Rect.fromLTWH(0, 0, size.width, size.height);
     final paint = Paint()..style = PaintingStyle.fill;
 
     paint.color = const Color(0xFF4285F4);
@@ -394,5 +602,5 @@ class _GoogleLogoPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }

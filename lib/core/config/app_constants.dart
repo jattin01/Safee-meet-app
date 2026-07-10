@@ -1,6 +1,6 @@
 abstract final class AppConstants {
   // ── API ──────────────────────────────────────────────────────────────────
-  static const String baseUrl = 'https://api.safeemeet.com/v1';
+  static const String baseUrl = 'http://168.144.112.102:8080/api';
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
 

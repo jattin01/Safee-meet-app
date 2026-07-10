@@ -6,6 +6,8 @@ class ProfileEntity extends Equatable {
   final String safeePIN;
   final String? avatarUrl;
   final String? coverUrl;
+  final String? phone;
+  final String? email;
   final int trustScore;
   final String verificationLevel;
   final String subscriptionPlan;
@@ -15,6 +17,11 @@ class ProfileEntity extends Equatable {
   final List<String> badges;
   final String? bio;
   final String? city;
+  final String? status;
+  final DateTime? createdAt;
+
+  /// Number of unique members who have searched this user's Safee PIN/QR.
+  final int pinSearchCount;
 
   const ProfileEntity({
     required this.id,
@@ -22,6 +29,8 @@ class ProfileEntity extends Equatable {
     required this.safeePIN,
     this.avatarUrl,
     this.coverUrl,
+    this.phone,
+    this.email,
     required this.trustScore,
     required this.verificationLevel,
     required this.subscriptionPlan,
@@ -31,6 +40,9 @@ class ProfileEntity extends Equatable {
     required this.badges,
     this.bio,
     this.city,
+    this.status,
+    this.createdAt,
+    this.pinSearchCount = 0,
   });
 
   String get initials {
@@ -40,7 +52,19 @@ class ProfileEntity extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, name, safeePIN, trustScore, verificationLevel, subscriptionPlan];
+  List<Object?> get props => [
+        id,
+        name,
+        safeePIN,
+        phone,
+        email,
+        trustScore,
+        verificationLevel,
+        subscriptionPlan,
+        status,
+        createdAt,
+        pinSearchCount,
+      ];
 }
 
 class ReviewEntity extends Equatable {

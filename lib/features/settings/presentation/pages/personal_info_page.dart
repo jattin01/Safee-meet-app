@@ -1,130 +1,224 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
-import '../../../../core/shared/widgets/primary_button.dart';
+import '../../../profile/domain/entities/profile_entity.dart';
+import '../../../profile/presentation/cubit/current_user_cubit.dart';
 
-// PROTOTYPE MODE: this page renders mock data only — there is no API
-// wiring or backend connectivity. Re-connect it to the profile endpoint
-// before shipping.
-class PersonalInfoPage extends StatefulWidget {
+class PersonalInfoPage extends StatelessWidget {
   const PersonalInfoPage({super.key});
 
   @override
-  State<PersonalInfoPage> createState() => _PersonalInfoPageState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => sl<CurrentUserCubit>()..load(),
+      child: const _PersonalInfoView(),
+    );
+  }
 }
 
-class _PersonalInfoPageState extends State<PersonalInfoPage> {
-  final _nameCtrl = TextEditingController(text: 'Alex Johnson');
-  final _emailCtrl = TextEditingController(text: 'alex.johnson@email.com');
-  final _phoneCtrl = TextEditingController(text: '+1 (555) 123-4567');
-  bool _editing = false;
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _phoneCtrl.dispose();
-    super.dispose();
-  }
+class _PersonalInfoView extends StatelessWidget {
+  const _PersonalInfoView();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBg,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const DarkScreenHeader(title: 'Personal Information'),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+      body: BlocBuilder<CurrentUserCubit, CurrentUserState>(
+        builder: (context, state) {
+          if (state.status == CurrentUserStatus.loading &&
+              state.profile == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (state.status == CurrentUserStatus.error &&
+              state.profile == null) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      state.errorMessage ??
+                          'Unable to load personal information.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.textSecondary),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => context
+                          .read<CurrentUserCubit>()
+                          .load(forceRefresh: true),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final profile = state.profile!;
+
+          return RefreshIndicator(
+            onRefresh: () =>
+                context.read<CurrentUserCubit>().load(forceRefresh: true),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Center(
+                  const DarkScreenHeader(title: 'Personal Information'),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Container(
-                              width: 76,
-                              height: 76,
-                              decoration: BoxDecoration(
-                                color: AppColors.blue,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Icon(Icons.person, color: Colors.white70, size: 38),
-                            ),
-                            Positioned(
-                              right: -4,
-                              bottom: -4,
-                              child: Container(
-                                width: 28,
-                                height: 28,
+                        Center(
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 76,
+                                height: 76,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
+                                  color: AppColors.blue,
+                                  borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: const Icon(Icons.edit, color: Colors.white, size: 13),
+                                child: profile.avatarUrl != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Image.network(
+                                          profile.avatarUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              _AvatarFallback(profile: profile),
+                                        ),
+                                      )
+                                    : _AvatarFallback(profile: profile),
                               ),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Profile data is synced from your account',
+                                style: TextStyle(
+                                  color: AppColors.textTertiary,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        AppListCard(
+                          children: [
+                            _InfoRow(
+                              icon: Icons.person_outline,
+                              label: 'Full Name',
+                              value: profile.name,
+                            ),
+                            _InfoRow(
+                              icon: Icons.email_outlined,
+                              label: 'Email Address',
+                              value: profile.email ?? 'Not available',
+                            ),
+                            _InfoRow(
+                              icon: Icons.phone_outlined,
+                              label: 'Mobile Number',
+                              value: profile.phone ?? 'Not available',
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        Text('Tap to change photo', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                        const SizedBox(height: 20),
+                        AppListCard(
+                          header: 'ACCOUNT INFO',
+                          children: [
+                            _PlainRow(
+                                label: 'SAFEE PIN',
+                                value: '#${profile.safeePIN}'),
+                            _PlainRow(
+                              label: 'Member Since',
+                              value: _memberSince(profile),
+                            ),
+                            _PlainRow(
+                              label: 'Account Status',
+                              value: _accountStatus(profile),
+                              valueColor: _accountStatusColor(profile),
+                              valueIcon: _accountStatusIcon(profile),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  AppListCard(
-                    children: _editing
-                        ? [
-                            _EditableRow(
-                              icon: Icons.person_outline,
-                              label: 'Full Name',
-                              controller: _nameCtrl,
-                              textCapitalization: TextCapitalization.words,
-                            ),
-                            _EditableRow(
-                              icon: Icons.email_outlined,
-                              label: 'Email Address',
-                              controller: _emailCtrl,
-                              keyboardType: TextInputType.emailAddress,
-                            ),
-                            _EditableRow(
-                              icon: Icons.phone_outlined,
-                              label: 'Mobile Number',
-                              controller: _phoneCtrl,
-                              keyboardType: TextInputType.phone,
-                              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s()]'))],
-                            ),
-                          ]
-                        : [
-                            _InfoRow(icon: Icons.person_outline, label: 'Full Name', value: _nameCtrl.text),
-                            _InfoRow(icon: Icons.email_outlined, label: 'Email Address', value: _emailCtrl.text),
-                            _InfoRow(icon: Icons.phone_outlined, label: 'Mobile Number', value: _phoneCtrl.text),
-                          ],
-                  ),
-                  const SizedBox(height: 20),
-                  AppListCard(header: 'ACCOUNT INFO', children: [
-                    _PlainRow(label: 'SAFEE PIN', value: '#SM-7821'),
-                    _PlainRow(label: 'Member Since', value: 'May 2024'),
-                    _PlainRow(label: 'Account Status', value: 'Active', valueColor: AppColors.success, valueIcon: Icons.check),
-                  ]),
-                  const SizedBox(height: 24),
-                  PrimaryButton(
-                    label: _editing ? 'Save Changes' : 'Edit Information',
-                    onPressed: () => setState(() => _editing = !_editing),
                   ),
                 ],
               ),
             ),
-          ],
+          );
+        },
+      ),
+    );
+  }
+
+  String _memberSince(ProfileEntity profile) {
+    final createdAt = profile.createdAt;
+    if (createdAt == null) return 'Not available';
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[createdAt.month - 1]} ${createdAt.year}';
+  }
+
+  String _accountStatus(ProfileEntity profile) => switch (profile.status) {
+        'active' => 'Active',
+        'pending' => 'Pending',
+        'suspended' => 'Suspended',
+        'blocked' => 'Blocked',
+        _ => 'Unknown',
+      };
+
+  Color _accountStatusColor(ProfileEntity profile) => switch (profile.status) {
+        'active' => AppColors.success,
+        'pending' => AppColors.warning,
+        'suspended' || 'blocked' => AppColors.error,
+        _ => AppColors.textSecondary,
+      };
+
+  IconData? _accountStatusIcon(ProfileEntity profile) =>
+      switch (profile.status) {
+        'active' => Icons.check,
+        'pending' => Icons.schedule,
+        'suspended' || 'blocked' => Icons.block,
+        _ => null,
+      };
+}
+
+class _AvatarFallback extends StatelessWidget {
+  final ProfileEntity profile;
+  const _AvatarFallback({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        profile.initials,
+        style: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 28,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -135,7 +229,8 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  const _InfoRow({required this.icon, required this.label, required this.value});
+  const _InfoRow(
+      {required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -149,63 +244,17 @@ class _InfoRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                Text(label,
+                    style: const TextStyle(
+                        color: AppColors.textTertiary, fontSize: 12)),
                 const SizedBox(height: 3),
-                Text(value,
-                    style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EditableRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final TextEditingController controller;
-  final TextInputType? keyboardType;
-  final TextCapitalization textCapitalization;
-  final List<TextInputFormatter>? inputFormatters;
-
-  const _EditableRow({
-    required this.icon,
-    required this.label,
-    required this.controller,
-    this.keyboardType,
-    this.textCapitalization = TextCapitalization.none,
-    this.inputFormatters,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Icon(icon, color: AppColors.textTertiary, size: 19),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Text(label, style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                ),
-                TextField(
-                  controller: controller,
-                  keyboardType: keyboardType,
-                  textCapitalization: textCapitalization,
-                  inputFormatters: inputFormatters,
-                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700),
-                  decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 4)),
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -222,31 +271,42 @@ class _PlainRow extends StatelessWidget {
   final Color? valueColor;
   final IconData? valueIcon;
 
-  const _PlainRow({required this.label, required this.value, this.valueColor, this.valueIcon});
+  const _PlainRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+    this.valueIcon,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final displayColor = valueColor ?? AppColors.textPrimary;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-          Row(
-            children: [
-              Text(
-                value,
-                style: GoogleFonts.inter(
-                  color: valueColor ?? AppColors.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
-              if (valueIcon != null) ...[
-                const SizedBox(width: 4),
-                Icon(valueIcon, color: valueColor, size: 14),
-              ],
-            ],
+            ),
+          ),
+          if (valueIcon != null) ...[
+            Icon(valueIcon, color: displayColor, size: 14),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              color: displayColor,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

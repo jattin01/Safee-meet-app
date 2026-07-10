@@ -5,5 +5,8 @@ import '../entities/member_entity.dart';
 abstract class MemberSearchRepository {
   Future<Either<Failure, MemberEntity>> searchByPIN(String pin);
   Future<Either<Failure, MemberEntity>> searchByQR(String qrCode);
-  Future<Either<Failure, List<String>>> getRecentSearches();
+
+  /// Members previously found via PIN/QR search, most recent first.
+  /// Tracked server-side, so this survives app reinstalls.
+  Future<Either<Failure, List<MemberEntity>>> getRecentSearches();
 }

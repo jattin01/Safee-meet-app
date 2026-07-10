@@ -1,13 +1,14 @@
 import 'package:dartz/dartz.dart';
 import '../../../../core/shared/failures/failures.dart';
-import '../entities/user_entity.dart';
 import '../repositories/auth_repository.dart';
 
+/// @deprecated — OTP is now verified by the provider (Firebase) before calling the backend.
+/// Kept for backward compatibility with existing UI code.
 class VerifyOtpUseCase {
   final AuthRepository _repository;
-  VerifyOtpUseCase(this._repository);
+  const VerifyOtpUseCase(this._repository);
 
-  Future<Either<Failure, UserEntity>> call({
+  Future<Either<Failure, void>> call({
     required String phone,
     required String otp,
   }) {
@@ -16,6 +17,8 @@ class VerifyOtpUseCase {
         const Left(ValidationFailure('OTP must be a 6-digit number')),
       );
     }
-    return _repository.verifyOtp(phone: phone, otp: otp);
+    // OTP verification now handled by provider at datasource level.
+    // After OTP verify, frontend gets a Firebase ID token and calls login().
+    return _repository.sendOtp(phone);
   }
 }

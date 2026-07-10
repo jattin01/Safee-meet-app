@@ -31,6 +31,9 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyDlEZJ-EbfGPUvZX2Dsc-4X7Ej-iyGXMjQ" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -41,6 +44,8 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <!-- mobile_scanner: QR code scanning on the Member Search page -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>

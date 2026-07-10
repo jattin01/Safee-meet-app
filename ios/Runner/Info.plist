@@ -45,5 +45,34 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>SafeeMeet needs camera access to take identity verification selfies, share photos in meeting chats, and scan member QR codes.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SafeeMeet needs photo library access so you can attach identity documents and photos.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SafeeMeet uses your location to share live location during an active meeting for safety verification.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.606194809150-k359vuuo6la3k48mo5q5nf39ck949i2j</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-606194809150-ios-44e0c2b9d212ad5c78546f</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

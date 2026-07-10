@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CLIENT_ID</key>
+	<string>606194809150-k359vuuo6la3k48mo5q5nf39ck949i2j.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.606194809150-k359vuuo6la3k48mo5q5nf39ck949i2j</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>606194809150-qpvt0kf2mts7p2iclgcm39hhas4u8259.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyDzR-hJTshAO7fJF4G1huZ4khqi3XmhWLI</string>
 	<key>GCM_SENDER_ID</key>
@@ -9,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>solutionbowl.com.safeeMeet</string>
+	<string>solutionbowl.com.safeemeet</string>
 	<key>PROJECT_ID</key>
 	<string>safee-meet</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:606194809150:ios:4d7daa5973a94d0978546f</string>
+	<string>1:606194809150:ios:44e0c2b9d212ad5c78546f</string>
 </dict>
 </plist>

@@ -15,6 +15,7 @@ abstract final class MockMeetings {
       purpose: MeetingPurpose.coffee,
       location: 'Downtown Café, 42nd St',
       status: MeetingStatus.scheduled,
+      isHost: true,
     ),
     MeetingEntity(
       id: 'm2',
@@ -25,6 +26,7 @@ abstract final class MockMeetings {
       purpose: MeetingPurpose.business,
       location: 'City Business Center',
       status: MeetingStatus.enRoute,
+      isHost: true,
     ),
     MeetingEntity(
       id: 'm3',
@@ -35,6 +37,7 @@ abstract final class MockMeetings {
       purpose: MeetingPurpose.property,
       location: 'Maple Street Listing',
       status: MeetingStatus.completed,
+      isHost: true,
     ),
     MeetingEntity(
       id: 'm4',
@@ -45,6 +48,7 @@ abstract final class MockMeetings {
       purpose: MeetingPurpose.coffee,
       location: 'Downtown Café, 42nd St',
       status: MeetingStatus.completed,
+      isHost: true,
     ),
   ];
 

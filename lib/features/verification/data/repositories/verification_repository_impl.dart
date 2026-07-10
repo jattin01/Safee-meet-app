@@ -10,8 +10,15 @@ class VerificationRepositoryImpl implements VerificationRepository {
   final VerificationRemoteDataSource _remote;
   VerificationRepositoryImpl(this._remote);
 
+  VerificationStep _parseStep(String? raw) =>
+      VerificationStep.values.firstWhere(
+        (s) => s.name == raw,
+        orElse: () => VerificationStep.uploadId,
+      );
+
   @override
-  Future<Either<Failure, VerificationStatusEntity>> getVerificationStatus() async {
+  Future<Either<Failure, VerificationStatusEntity>>
+      getVerificationStatus() async {
     try {
       final data = await _remote.getVerificationStatus();
       return Right(_parseStatus(data));
@@ -72,30 +79,33 @@ class VerificationRepositoryImpl implements VerificationRepository {
       );
     }).toList();
     return VerificationStatusEntity(
-      trustScore: (d['trustScore'] as num).toInt(),
+      trustScore: (d['trustScore'] as num?)?.toInt() ?? 0,
       verificationLevel: d['verificationLevel'] as String? ?? 'none',
       level1Complete: d['level1Complete'] as bool? ?? false,
       level2Complete: d['level2Complete'] as bool? ?? false,
       professionalComplete: d['professionalComplete'] as bool? ?? false,
-      safetyMetricMeetings: (d['safetyMetricMeetings'] as num?)?.toDouble() ?? 0,
-      safetyMetricResponsiveness: (d['safetyMetricResponsiveness'] as num?)?.toDouble() ?? 0,
+      kycStatus: d['kycStatus'] as String? ?? 'not_started',
+      currentStep: _parseStep(d['currentStep'] as String?),
+      rejectionReason: d['rejectionReason'] as String?,
+      safetyMetricMeetings:
+          (d['safetyMetricMeetings'] as num?)?.toDouble() ?? 0,
+      safetyMetricResponsiveness:
+          (d['safetyMetricResponsiveness'] as num?)?.toDouble() ?? 0,
       safetyMetricReviews: (d['safetyMetricReviews'] as num?)?.toDouble() ?? 0,
       recentReviews: reviews,
     );
   }
 
   VerificationEntity _parseProgress(Map<String, dynamic> d) {
-    final stepStr = d['currentStep'] as String? ?? 'uploadId';
-    final step = VerificationStep.values.firstWhere(
-      (s) => s.name == stepStr,
-      orElse: () => VerificationStep.uploadId,
-    );
     return VerificationEntity(
       idFrontUrl: d['idFrontUrl'] as String?,
       idBackUrl: d['idBackUrl'] as String?,
       selfieUrl: d['selfieUrl'] as String?,
-      currentStep: step,
-      status: d['status'] as String? ?? 'pending',
+      hasIdFront: d['hasIdFront'] as bool? ?? false,
+      hasIdBack: d['hasIdBack'] as bool? ?? false,
+      hasSelfie: d['hasSelfie'] as bool? ?? false,
+      currentStep: _parseStep(d['currentStep'] as String?),
+      status: d['status'] as String? ?? 'not_started',
       rejectionReason: d['rejectionReason'] as String?,
     );
   }

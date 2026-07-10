@@ -1,55 +1,57 @@
 import 'package:equatable/equatable.dart';
 
 class UserEntity extends Equatable {
-  final String id;
-  final String name;
-  final String email;
-  final String phone;
-  final String safeePin;
-  final int trustScore;
-  final String verificationLevel; // 'none' | 'level1' | 'level2' | 'professional'
-  final String plan; // 'free' | 'basic' | 'premium' | 'professional'
+  final String  id;
+  final String  safeeId;
+  final String  displayName;
   final String? avatarUrl;
-  final double safetyRating;
-  final int meetingsCompleted;
+  final String  accountType;
+  final String  authProvider;
+  final String  status;
+  final int     trustScore;
+  final String  trustTier;
+  final bool    isChatEnabled;
+  final bool    isMeetingEnabled;
+  final bool    isSosEnabled;
+  final String? emailVerifiedAt;
+  final String? phoneVerifiedAt;
+  final String? lastLoginAt;
+  final String? createdAt;
 
   const UserEntity({
     required this.id,
-    required this.name,
-    required this.email,
-    required this.phone,
-    required this.safeePin,
-    required this.trustScore,
-    required this.verificationLevel,
-    required this.plan,
+    required this.safeeId,
+    required this.displayName,
     this.avatarUrl,
-    required this.safetyRating,
-    required this.meetingsCompleted,
+    required this.accountType,
+    required this.authProvider,
+    required this.status,
+    required this.trustScore,
+    required this.trustTier,
+    required this.isChatEnabled,
+    required this.isMeetingEnabled,
+    required this.isSosEnabled,
+    this.emailVerifiedAt,
+    this.phoneVerifiedAt,
+    this.lastLoginAt,
+    this.createdAt,
   });
 
   String get initials {
-    final parts = name.trim().split(' ');
+    final parts = displayName.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    if (parts.isNotEmpty) return parts[0][0].toUpperCase();
+    if (parts.isNotEmpty && parts[0].isNotEmpty) return parts[0][0].toUpperCase();
     return '?';
   }
 
-  bool get isLevel1Verified =>
-      verificationLevel == 'level1' ||
-      verificationLevel == 'level2' ||
-      verificationLevel == 'professional';
-
-  bool get isLevel2Verified =>
-      verificationLevel == 'level2' ||
-      verificationLevel == 'professional';
-
-  bool get isProfessionalVerified =>
-      verificationLevel == 'professional';
+  bool get isVerified => emailVerifiedAt != null || phoneVerifiedAt != null;
 
   @override
   List<Object?> get props => [
-        id, name, email, phone, safeePin,
-        trustScore, verificationLevel, plan,
-        avatarUrl, safetyRating, meetingsCompleted,
+        id, safeeId, displayName, avatarUrl,
+        accountType, authProvider, status,
+        trustScore, trustTier,
+        isChatEnabled, isMeetingEnabled, isSosEnabled,
+        emailVerifiedAt, phoneVerifiedAt, lastLoginAt, createdAt,
       ];
 }

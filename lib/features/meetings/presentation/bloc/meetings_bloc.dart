@@ -26,13 +26,19 @@ class MeetingScheduleRequested extends MeetingsEvent {
   final DateTime scheduledAt;
   final MeetingPurpose purpose;
   final String location;
+  final double? latitude;
+  final double? longitude;
   final String? notes;
+  final String? itemOrService;
   const MeetingScheduleRequested({
     required this.partnerId,
     required this.scheduledAt,
     required this.purpose,
     required this.location,
+    this.latitude,
+    this.longitude,
     this.notes,
+    this.itemOrService,
   });
   @override
   List<Object?> get props => [partnerId, scheduledAt, purpose, location];
@@ -49,6 +55,20 @@ class MeetingStatusUpdateRequested extends MeetingsEvent {
 class MeetingEndRequested extends MeetingsEvent {
   final String meetingId;
   const MeetingEndRequested(this.meetingId);
+  @override
+  List<Object?> get props => [meetingId];
+}
+
+class MeetingApproveRequested extends MeetingsEvent {
+  final String meetingId;
+  const MeetingApproveRequested(this.meetingId);
+  @override
+  List<Object?> get props => [meetingId];
+}
+
+class MeetingDenyRequested extends MeetingsEvent {
+  final String meetingId;
+  const MeetingDenyRequested(this.meetingId);
   @override
   List<Object?> get props => [meetingId];
 }
@@ -110,6 +130,8 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
     on<MeetingScheduleRequested>(_onSchedule);
     on<MeetingStatusUpdateRequested>(_onStatusUpdate);
     on<MeetingEndRequested>(_onEnd);
+    on<MeetingApproveRequested>(_onApprove);
+    on<MeetingDenyRequested>(_onDeny);
   }
 
   Future<void> _onList(MeetingsLoadRequested _, Emitter<MeetingsState> emit) async {
@@ -140,7 +162,10 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
       scheduledAt: event.scheduledAt,
       purpose: event.purpose,
       location: event.location,
+      latitude: event.latitude,
+      longitude: event.longitude,
       notes: event.notes,
+      itemOrService: event.itemOrService,
     );
     result.fold(
       (f) => emit(MeetingsError(f.message)),
@@ -167,6 +192,38 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
     result.fold(
       (f) => emit(MeetingsError(f.message)),
       (_) => emit(const MeetingEnded()),
+    );
+  }
+
+  Future<void> _onApprove(
+    MeetingApproveRequested event,
+    Emitter<MeetingsState> emit,
+  ) async {
+    final result = await _repository.approveMeeting(event.meetingId);
+    await result.fold(
+      (f) async => emit(MeetingsError(f.message)),
+      (_) => _reloadList(emit),
+    );
+  }
+
+  Future<void> _onDeny(
+    MeetingDenyRequested event,
+    Emitter<MeetingsState> emit,
+  ) async {
+    final result = await _repository.denyMeeting(event.meetingId);
+    await result.fold(
+      (f) async => emit(MeetingsError(f.message)),
+      (_) => _reloadList(emit),
+    );
+  }
+
+  // Refreshes the full list after approve/deny so the card moves out of
+  // the Requests tab immediately, without a manual pull-to-refresh.
+  Future<void> _reloadList(Emitter<MeetingsState> emit) async {
+    final result = await _repository.getMeetings();
+    result.fold(
+      (f) => emit(MeetingsError(f.message)),
+      (meetings) => emit(MeetingsListLoaded(meetings)),
     );
   }
 }

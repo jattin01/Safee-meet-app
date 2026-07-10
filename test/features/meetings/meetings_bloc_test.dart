@@ -19,6 +19,7 @@ final _meeting = MeetingEntity(
   purpose: MeetingPurpose.coffee,
   location: 'Central Park Cafe',
   status: MeetingStatus.scheduled,
+  isHost: true,
 );
 
 void main() {

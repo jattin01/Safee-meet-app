@@ -27,6 +27,8 @@ void main() {
 
   setUp(() {
     repository = MockMemberSearchRepository();
+    when(() => repository.getRecentSearches())
+        .thenAnswer((_) async => const Right([]));
   });
 
   MemberSearchBloc _bloc() => MemberSearchBloc(repository);
@@ -76,6 +78,52 @@ void main() {
       seed: () => MemberSearchFound(_member),
       act: (bloc) => bloc.add(const MemberSearchReset()),
       expect: () => [const MemberSearchInitial()],
+    );
+  });
+
+  group('RecentSearchesRequested', () {
+    blocTest<MemberSearchBloc, MemberSearchState>(
+      'loads previously-searched members into the current state',
+      build: _bloc,
+      setUp: () {
+        when(() => repository.getRecentSearches())
+            .thenAnswer((_) async => Right([_member]));
+      },
+      act: (bloc) => bloc.add(const RecentSearchesRequested()),
+      expect: () => [
+        MemberSearchInitial(recentSearches: [_member]),
+      ],
+    );
+  });
+
+  group('RecentMemberSelected', () {
+    blocTest<MemberSearchBloc, MemberSearchState>(
+      'emits MemberSearchFound directly, without calling the search API',
+      build: _bloc,
+      act: (bloc) => bloc.add(RecentMemberSelected(_member)),
+      verify: (_) {
+        verifyNever(() => repository.searchByPIN(any()));
+        verifyNever(() => repository.searchByQR(any()));
+      },
+      expect: () => [MemberSearchFound(_member)],
+    );
+  });
+
+  group('PINSearchRequested recentSearches refresh', () {
+    blocTest<MemberSearchBloc, MemberSearchState>(
+      'carries the refreshed recent list on the Found state after a search',
+      build: _bloc,
+      setUp: () {
+        when(() => repository.searchByPIN(any()))
+            .thenAnswer((_) async => Right(_member));
+        when(() => repository.getRecentSearches())
+            .thenAnswer((_) async => Right([_member]));
+      },
+      act: (bloc) => bloc.add(const PINSearchRequested('SM-XYZ789')),
+      expect: () => [
+        const MemberSearchLoading(),
+        MemberSearchFound(_member, recentSearches: [_member]),
+      ],
     );
   });
 }

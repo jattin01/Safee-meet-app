@@ -4,9 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
-import '../../../../core/services/fcm_service.dart';
 import '../../../../core/services/hive_service.dart';
-import '../../../../core/services/secure_storage_service.dart';
+import '../../../../core/storage/auth_session_manager.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -58,16 +57,11 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   }
 
   Future<void> _navigate() async {
-    final hive = sl<HiveService>();
-    final storage = sl<SecureStorageService>();
-    final onboarded = hive.isOnboarded;
-    final authed = await storage.isAuthenticated();
+    final hive    = sl<HiveService>();
+    final session = sl<AuthSessionManager>();
 
-    // Refresh FCM token for returning users so notifications are always
-    // delivered to the correct device, even without a fresh login.
-    if (authed) {
-      sl<FcmService>().refreshTokenIfLoggedIn();
-    }
+    final onboarded = hive.isOnboarded;
+    final authed    = await session.isAuthenticated();
 
     if (!mounted) return;
     if (!onboarded) {

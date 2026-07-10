@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-enum MeetingStatus { scheduled, enRoute, arrived, completed, cancelled }
+enum MeetingStatus { scheduled, enRoute, arrived, completed, cancelled, pendingApproval, declined }
 enum MeetingPurpose {
   coffee,
   marketplace,
@@ -8,6 +8,7 @@ enum MeetingPurpose {
   business,
   freelance,
   social,
+  dating,
   other,
 }
 
@@ -26,6 +27,8 @@ extension MeetingPurposeLabel on MeetingPurpose {
         return 'Freelance';
       case MeetingPurpose.social:
         return 'Social';
+      case MeetingPurpose.dating:
+        return 'Dating';
       case MeetingPurpose.other:
         return 'Other';
     }
@@ -46,6 +49,7 @@ class MeetingEntity extends Equatable {
   final double? partnerLat;
   final double? partnerLng;
   final Duration? timeElapsed;
+  final bool isHost;
 
   const MeetingEntity({
     required this.id,
@@ -61,6 +65,7 @@ class MeetingEntity extends Equatable {
     this.partnerLat,
     this.partnerLng,
     this.timeElapsed,
+    required this.isHost,
   });
 
   String get partnerInitials {
@@ -82,5 +87,6 @@ class MeetingEntity extends Equatable {
         status,
         partnerLat,
         partnerLng,
+        isHost,
       ];
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -7,8 +9,10 @@ import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/dashboard/presentation/pages/home_page.dart';
 import '../../features/meetings/presentation/pages/active_meeting_page.dart';
+import '../../features/meetings/presentation/pages/live_location_page.dart';
 import '../../features/meetings/presentation/pages/meeting_setup_page.dart';
 import '../../features/meetings/presentation/pages/meetings_list_page.dart';
+import '../../features/member_search/domain/entities/member_entity.dart';
 import '../../features/member_search/presentation/pages/member_search_page.dart';
 import '../../features/messaging/domain/entities/message_entity.dart';
 import '../../features/messaging/presentation/pages/chat_page.dart';
@@ -18,6 +22,7 @@ import '../../features/notifications/presentation/pages/notifications_page.dart'
 import '../../features/onboarding/presentation/pages/onboarding_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/reviews_page.dart';
+import '../../features/profile/presentation/cubit/current_user_cubit.dart';
 import '../../features/settings/presentation/pages/change_password_page.dart';
 import '../../features/settings/presentation/pages/emergency_contacts_page.dart';
 import '../../features/settings/presentation/pages/personal_info_page.dart';
@@ -30,8 +35,10 @@ import '../../features/subscription/presentation/pages/subscription_page.dart';
 import '../../features/verification/presentation/pages/verification_page.dart';
 import '../../features/verification/presentation/pages/verification_status_page.dart';
 import '../dependency_injection/injection_container.dart';
+import '../services/fcm_service.dart';
 import '../services/secure_storage_service.dart';
 import 'app_routes.dart';
+import '../../features/verification/presentation/bloc/verification_bloc.dart';
 
 class AppRouter {
   final SecureStorageService _storage;
@@ -57,12 +64,18 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.register,
-        builder: (_, __) => const RegisterPage(),
+        builder: (_, __) => BlocProvider(
+          create: (_) => sl<AuthBloc>(),
+          child: const RegisterPage(),
+        ),
       ),
 
       // ── Shell (bottom nav) ────────────────────────────────────────────────
       StatefulShellRoute.indexedStack(
-        builder: (_, __, shell) => AppShellPage(navigationShell: shell),
+        builder: (_, __, shell) => BlocProvider(
+          create: (_) => sl<CurrentUserCubit>()..load(),
+          child: AppShellPage(navigationShell: shell),
+        ),
         branches: [
           StatefulShellBranch(
             routes: [
@@ -127,26 +140,40 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.verification,
-        builder: (_, __) => const VerificationPage(),
+        builder: (_, __) => BlocProvider(
+          create: (_) => sl<VerificationBloc>(),
+          child: const VerificationPage(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.verificationStatus,
-        builder: (_, __) => const VerificationStatusPage(),
+        builder: (_, __) => BlocProvider(
+          create: (_) => sl<VerificationBloc>(),
+          child: const VerificationStatusPage(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.meetings,
-        builder: (_, __) => const MeetingsListPage(),
+        builder: (_, state) => MeetingsListPage(
+          initialTab: state.uri.queryParameters['tab'],
+        ),
       ),
       GoRoute(
         path: AppRoutes.meetingSetup,
         builder: (_, state) {
           final memberId = state.uri.queryParameters['memberId'];
-          return MeetingSetupPage(partnerId: memberId);
+          final partner = state.extra is MemberEntity ? state.extra as MemberEntity : null;
+          return MeetingSetupPage(partnerId: memberId, partner: partner);
         },
       ),
       GoRoute(
         path: '${AppRoutes.activeMeeting}/:id',
-        builder: (_, state) => ActiveMeetingPage(meetingId: state.pathParameters['id']!),
+        builder: (_, state) =>
+            ActiveMeetingPage(meetingId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: AppRoutes.liveLocation,
+        builder: (_, __) => const LiveLocationPage(),
       ),
       GoRoute(
         path: AppRoutes.sos,
@@ -202,28 +229,37 @@ class AppRouter {
     ),
   );
 
-  // PROTOTYPE MODE: the auth guard is disabled so every screen is reachable
-  // without a real login/register network call (login_page.dart and
-  // register_page.dart currently skip AuthBloc entirely, so no access token
-  // is ever saved). Restore the checks below once those pages are wired
-  // back up to AuthBloc and validation is re-enabled.
   Future<String?> _guard(BuildContext context, GoRouterState state) async {
+    final isAuth = await _storage.isAuthenticated();
+
+    // Fire-and-forget: turns on push notifications (permission request,
+    // token registration, tap-navigation listeners) the moment we know the
+    // user is authenticated. initialize() is idempotent, so re-running it
+    // on every navigation is harmless.
+    if (isAuth) {
+      unawaited(sl<FcmService>().initialize());
+    }
+
+    final preAuthRoutes = {
+      AppRoutes.splash,
+      AppRoutes.onboarding,
+      AppRoutes.login,
+      AppRoutes.register,
+    };
+
+    final isPreAuth = preAuthRoutes.contains(state.matchedLocation);
+
+    // Not authenticated → send to login (except pre-auth screens)
+    if (!isAuth && !isPreAuth) return AppRoutes.login;
+
+    // Authenticated → block access to login/register screens
+    if (isAuth &&
+        isPreAuth &&
+        state.matchedLocation != AppRoutes.splash &&
+        state.matchedLocation != AppRoutes.onboarding) {
+      return AppRoutes.home;
+    }
+
     return null;
-    // final isAuth = await _storage.isAuthenticated();
-    // final isPreAuth = [
-    //   AppRoutes.splash,
-    //   AppRoutes.onboarding,
-    //   AppRoutes.login,
-    //   AppRoutes.register,
-    // ].contains(state.matchedLocation);
-    //
-    // if (!isAuth && !isPreAuth) return AppRoutes.login;
-    // if (isAuth &&
-    //     isPreAuth &&
-    //     state.matchedLocation != AppRoutes.splash &&
-    //     state.matchedLocation != AppRoutes.onboarding) {
-    //   return AppRoutes.home;
-    // }
-    // return null;
   }
 }

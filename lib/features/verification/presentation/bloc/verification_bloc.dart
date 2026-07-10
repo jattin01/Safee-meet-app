@@ -15,6 +15,10 @@ class VerificationStatusRequested extends VerificationEvent {
   const VerificationStatusRequested();
 }
 
+class VerificationProgressRequested extends VerificationEvent {
+  const VerificationProgressRequested();
+}
+
 class IdDocumentUploaded extends VerificationEvent {
   final File front;
   final File back;
@@ -52,6 +56,13 @@ class VerificationStatusLoaded extends VerificationState {
   List<Object?> get props => [status];
 }
 
+class VerificationProgressLoaded extends VerificationState {
+  final VerificationEntity progress;
+  const VerificationProgressLoaded(this.progress);
+  @override
+  List<Object?> get props => [progress];
+}
+
 class VerificationUploading extends VerificationState {
   const VerificationUploading();
 }
@@ -76,6 +87,7 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
 
   VerificationBloc(this._repository) : super(const VerificationInitial()) {
     on<VerificationStatusRequested>(_onStatusRequested);
+    on<VerificationProgressRequested>(_onProgressRequested);
     on<IdDocumentUploaded>(_onIdUploaded);
     on<SelfieUploaded>(_onSelfieUploaded);
   }
@@ -89,6 +101,18 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
     result.fold(
       (f) => emit(VerificationError(f.message)),
       (s) => emit(VerificationStatusLoaded(s)),
+    );
+  }
+
+  Future<void> _onProgressRequested(
+    VerificationProgressRequested _,
+    Emitter<VerificationState> emit,
+  ) async {
+    emit(const VerificationLoading());
+    final result = await _repository.getVerificationProgress();
+    result.fold(
+      (f) => emit(VerificationError(f.message)),
+      (p) => emit(VerificationProgressLoaded(p)),
     );
   }
 
