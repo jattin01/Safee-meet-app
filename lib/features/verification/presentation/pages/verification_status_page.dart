@@ -170,40 +170,43 @@ class _TrustScoreCard extends StatelessWidget {
       child: Column(
         children: [
           SizedBox(
-            width: 200,
-            height: 200,
+            width: 100,
+            height: 100,
             child: Stack(
               alignment: Alignment.center,
               children: [
-                CircularProgressIndicator(
-                  value: (status.trustScore / 100).clamp(0.0, 1.0),
-                  strokeWidth: 8,
-                  backgroundColor: Colors.white.withOpacity(0.1),
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                SizedBox.expand(
+                  child: CircularProgressIndicator(
+                    value: (status.trustScore / 100).clamp(0.0, 1.0),
+                    strokeWidth: 12,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor: Colors.white.withOpacity(0.1),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  ),
                 ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${status.trustScore}',
-                      style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 48,
-                          fontWeight: FontWeight.w800),
-                    ),
-                    Text(
-                      'TRUST SCORE',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textTertiary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                  ],
+                // A lone Text as the Stack's only other child is centered by
+                // `alignment: Alignment.center` on its own — no sibling
+                // (like the label below) competing for vertical space, so
+                // the number itself sits dead-center in the ring.
+                Text(
+                  '${status.trustScore}',
+                  style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 40,
+                      fontWeight: FontWeight.w800),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'TRUST SCORE',
+            style: GoogleFonts.inter(
+              color: AppColors.textTertiary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
             ),
           ),
           const SizedBox(height: 14),
@@ -317,6 +320,8 @@ class _StatusBanner extends StatelessWidget {
                 'pending' =>
                   'We have everything we need. Check back soon for the result.',
                 'draft' => 'Upload the remaining items to submit for review.',
+                'rejected' =>
+                  'Your submission did not pass review. Please upload your documents again.',
                 _ =>
                   'Complete Level 1 verification to strengthen your trust profile.',
               };
@@ -624,6 +629,7 @@ class _ActionCard extends StatelessWidget {
     final buttonLabel = switch (status.kycStatus) {
       'approved' => 'Back to Profile',
       'pending' => 'Refresh Status',
+      'rejected' => 'Upload Again',
       _ => 'Complete Verification',
     };
 
@@ -644,11 +650,14 @@ class _ActionCard extends StatelessWidget {
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           Text(
-            status.kycStatus == 'approved'
-                ? 'Your identity badge is already active.'
-                : status.kycStatus == 'pending'
-                    ? 'We recommend checking back after a short while.'
-                    : 'Finish or resubmit your Level 1 verification to build trust.',
+            switch (status.kycStatus) {
+              'approved' => 'Your identity badge is already active.',
+              'pending' => 'We recommend checking back after a short while.',
+              'rejected' =>
+                'Review the reason above, then resubmit your documents.',
+              _ =>
+                'Finish or resubmit your Level 1 verification to build trust.',
+            },
             style: const TextStyle(
                 color: AppColors.textSecondary, fontSize: 13, height: 1.4),
           ),

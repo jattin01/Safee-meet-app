@@ -5,10 +5,12 @@ import '../entities/verification_entity.dart';
 
 abstract class VerificationRepository {
   Future<Either<Failure, VerificationStatusEntity>> getVerificationStatus();
-  Future<Either<Failure, void>> uploadIdDocument({
-    required File frontImage,
-    required File backImage,
+  Future<Either<Failure, VerificationSubmitResult>> submitVerification({
+    required File faceIdImage,
+    required File nationalIdFrontImage,
+    required File nationalIdBackImage,
+    required String nationalIdNumber,
+    required String nationalIdCountry,
   });
-  Future<Either<Failure, void>> uploadSelfie(File selfie);
   Future<Either<Failure, VerificationEntity>> getVerificationProgress();
 }

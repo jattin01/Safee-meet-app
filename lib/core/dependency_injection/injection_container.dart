@@ -5,6 +5,7 @@ import 'package:get_it/get_it.dart';
 
 import '../routes/app_router.dart';
 import '../services/api_client.dart';
+import '../services/stripe_payment_service.dart';
 import '../services/fcm_service.dart';
 import '../services/google_auth_service.dart';
 import '../services/hive_service.dart';
@@ -72,6 +73,19 @@ import '../../features/messaging/presentation/bloc/messaging_bloc.dart';
 import '../../features/meetings/data/repositories/meetings_repository_impl.dart';
 import '../../features/meetings/domain/repositories/meetings_repository.dart';
 import '../../features/meetings/presentation/bloc/meetings_bloc.dart';
+
+// Meetings — Emergency Share
+import '../../features/meetings/data/remote_data_sources/emergency_share_remote_data_source.dart';
+import '../../features/meetings/data/repositories/emergency_share_repository_impl.dart';
+import '../../features/meetings/domain/repositories/emergency_share_repository.dart';
+import '../../features/meetings/presentation/bloc/emergency_share_bloc.dart';
+
+// Subscription
+import '../../features/subscription/data/remote_data_sources/subscription_remote_data_source.dart';
+import '../../features/subscription/data/repositories/subscription_repository_impl.dart';
+import '../../features/subscription/domain/repositories/subscription_repository.dart';
+import '../../features/subscription/domain/use_cases/get_subscription_plans_use_case.dart';
+import '../../features/subscription/presentation/bloc/subscription_bloc.dart';
 
 // SOS
 import '../../features/sos/presentation/bloc/sos_bloc.dart';
@@ -179,7 +193,7 @@ Future<void> configureDependencies() async {
     () => VerificationRemoteDataSourceImpl(sl()),
   );
   sl.registerLazySingleton<VerificationRepository>(
-    () => VerificationRepositoryImpl(sl()),
+    () => VerificationRepositoryImpl(sl(), sl()),
   );
   sl.registerFactory(() => VerificationBloc(sl()));
 
@@ -234,6 +248,15 @@ Future<void> configureDependencies() async {
   );
   sl.registerFactory(() => MeetingsBloc(sl()));
 
+  // ── Meetings — Emergency Share ────────────────────────────────────────────
+  sl.registerLazySingleton<EmergencyShareRemoteDataSource>(
+    () => EmergencyShareRemoteDataSourceImpl(sl()),
+  );
+  sl.registerLazySingleton<EmergencyShareRepository>(
+    () => EmergencyShareRepositoryImpl(sl()),
+  );
+  sl.registerFactory(() => EmergencyShareBloc(sl()));
+
   // ── SOS ───────────────────────────────────────────────────────────────────
   sl.registerFactory(() => SosBloc(sl(), sl()));
 
@@ -246,4 +269,15 @@ Future<void> configureDependencies() async {
 
   // ── GPS Tracking ──────────────────────────────────────────────────────────
   sl.registerFactory(() => GpsTrackingBloc(sl()));
+
+  // ── Subscription ──────────────────────────────────────────────────────────
+  sl.registerLazySingleton<SubscriptionRemoteDataSource>(
+    () => SubscriptionRemoteDataSourceImpl(sl()),
+  );
+  sl.registerLazySingleton<SubscriptionRepository>(
+    () => SubscriptionRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton(() => GetSubscriptionPlansUseCase(sl()));
+  sl.registerLazySingleton(() => StripePaymentService());
+  sl.registerFactory(() => SubscriptionBloc(sl(), sl(), sl()));
 }

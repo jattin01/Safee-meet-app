@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/config/app_constants.dart';
@@ -37,6 +40,14 @@ void main() async {
     systemNavigationBarColor: Color(0xFF0F172A),
     systemNavigationBarIconBrightness: Brightness.light,
   ));
+
+  // Stripe (TEST mode only — see AppConstants.stripePublishableKey).
+  // Not awaited: this talks to the native Stripe SDK over a platform
+  // channel, and payments aren't needed until the user reaches the
+  // Subscription screen — it must not be able to stall app startup/splash
+  // if that native call is ever slow.
+  Stripe.publishableKey = AppConstants.stripePublishableKey;
+  unawaited(Stripe.instance.applySettings());
 
   // Hive
   await Hive.initFlutter();

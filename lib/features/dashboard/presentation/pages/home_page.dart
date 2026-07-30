@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/widgets/app_logo_widget.dart';
 import '../../../../core/shared/widgets/section_header.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
+import '../../../verification/domain/repositories/verification_repository.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -534,10 +536,41 @@ class _QuickActionTile extends StatelessWidget {
   final _QuickAction action;
   const _QuickActionTile({required this.action});
 
+  // Statuses that mean documents are already uploaded — go straight to the
+  // Verification (status) screen instead of the upload wizard. 'rejected'
+  // still lands there so the user sees the rejection reason and an
+  // "Upload Again" option, rather than re-asking for documents up front.
+  static const _submittedStatuses = ['pending', 'approved', 'rejected'];
+
+  Future<void> _onVerifyTap(BuildContext context) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final result = await sl<VerificationRepository>().getVerificationStatus();
+
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+
+    final alreadySubmitted = result.fold(
+      (_) => false,
+      (status) => _submittedStatuses.contains(status.kycStatus),
+    );
+
+    if (!context.mounted) return;
+    context.push(
+      alreadySubmitted ? AppRoutes.verificationStatus : AppRoutes.verification,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push(action.route),
+      onTap: () => action.label == 'Verify'
+          ? _onVerifyTap(context)
+          : context.push(action.route),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
@@ -598,15 +631,6 @@ class _SafetyCenter extends StatelessWidget {
             title: 'Emergency SOS',
             subtitle: 'Tap to activate an emergency alert',
             onTap: () => context.push(AppRoutes.sos),
-          ),
-          const _RowDivider(),
-          _SafetyRow(
-            icon: Icons.location_on,
-            iconColor: AppColors.success,
-            iconBg: AppColors.success.withOpacity(0.1),
-            title: 'Live Location',
-            subtitle: 'Share your location in real time',
-            onTap: () => context.push(AppRoutes.liveLocation),
           ),
           const _RowDivider(),
           _SafetyRow(
@@ -705,53 +729,57 @@ class _MeetingSyncCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.cardBg,
-              borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.meetings),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.event_note, color: AppColors.blue),
             ),
-            child: const Icon(Icons.event_note, color: AppColors.blue),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Meeting history sync',
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Meeting history sync',
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  profile.totalMeetings > 0
-                      ? 'You have ${profile.totalMeetings} meetings recorded. Detailed history will appear here as dashboard data becomes available.'
-                      : 'No live meeting history is available from the current profile API yet.',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    height: 1.45,
+                  const SizedBox(height: 4),
+                  Text(
+                    profile.totalMeetings > 0
+                        ? 'You have ${profile.totalMeetings} meetings recorded. Detailed history will appear here as dashboard data becomes available.'
+                        : 'No live meeting history is available from the current profile API yet.',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      height: 1.45,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+            const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+          ],
+        ),
       ),
     );
   }

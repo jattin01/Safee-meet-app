@@ -115,9 +115,9 @@ class GpsTrackingBloc extends Bloc<GpsEvent, GpsState> {
     // Broadcast to server
     if (_activeMeetingId != null) {
       try {
-        await _api.dio.post('/meetings/$_activeMeetingId/location', data: {
-          'lat': event.position.latitude,
-          'lng': event.position.longitude,
+        await _api.dio.post('/v1/meetings/$_activeMeetingId/location', data: {
+          'latitude': event.position.latitude,
+          'longitude': event.position.longitude,
         });
       } catch (_) {}
     }

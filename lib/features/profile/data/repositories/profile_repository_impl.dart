@@ -78,7 +78,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
         phone: d['phone'] as String? ?? phone,
         email: d['email'] as String?,
         trustScore: (d['trustScore'] as num?)?.toInt() ?? 0,
-        verificationLevel: d['trustTier'] as String? ?? 'none',
+        verificationLevel: _resolveVerificationLevel(d),
         pinSearchCount: (d['pinSearchCount'] as num?)?.toInt() ?? 0,
         subscriptionPlan: 'free',
         rating: 0,
@@ -90,6 +90,20 @@ class ProfileRepositoryImpl implements ProfileRepository {
             ? DateTime.tryParse(d['createdAt'] as String)
             : null,
       );
+
+  // `trustTier` is derived server-side from the legacy kyc_status/trust_tier
+  // columns, which the new /verification/submit flow never updates — so it
+  // stays stuck on 'none' even after approval. `verificationStatus` +
+  // `verificationLevel` reflect the live UserVerification row instead.
+  String _resolveVerificationLevel(Map<String, dynamic> d) {
+    if (d['verificationStatus'] != 'approved') return 'none';
+    return switch ((d['verificationLevel'] as num?)?.toInt()) {
+      1 => 'low',
+      2 => 'medium',
+      3 => 'high',
+      _ => 'none',
+    };
+  }
 
   ReviewEntity _parseReview(Map<String, dynamic> d) => ReviewEntity(
         id: d['id'] as String,

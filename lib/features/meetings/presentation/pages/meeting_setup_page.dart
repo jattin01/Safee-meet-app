@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
+import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/field_input.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
@@ -184,7 +185,10 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Meeting created successfully.')),
             );
-            context.pop();
+            // You're the host of a newly scheduled meeting, so it lands in
+            // "Upcoming" (pending the guest's approval) — not "Requests",
+            // which only lists incoming requests where you're the guest.
+            context.go('${AppRoutes.meetings}?tab=upcoming');
           } else if (state is MeetingsError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),

@@ -1,32 +1,21 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
+import '../bloc/sos_bloc.dart';
 
-// PROTOTYPE MODE: this page renders mock data only — there is no SosBloc
-// wiring or backend connectivity. Re-connect it to SosBloc (SosHoldStarted /
-// SosHoldReleased / SosActivated / SosCancelled) before shipping.
 class SosPage extends StatefulWidget {
-  const SosPage({super.key});
+  final String? meetingId;
+  const SosPage({super.key, this.meetingId});
 
   @override
   State<SosPage> createState() => _SosPageState();
 }
 
-class _Contact {
-  final String name;
-  final String emoji;
-  const _Contact(this.name, this.emoji);
-}
-
 class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
-
-  double _holdProgress = 0.0;
-  bool _activated = false;
-  Timer? _holdTimer;
 
   @override
   void initState() {
@@ -34,46 +23,45 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
     _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
       ..repeat(reverse: true);
     _pulseAnim = Tween<double>(begin: 1.0, end: 1.1).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    context.read<SosBloc>().add(const SosLoadRequested());
   }
 
   @override
   void dispose() {
     _pulseCtrl.dispose();
-    _holdTimer?.cancel();
     super.dispose();
-  }
-
-  void _startHold() {
-    _holdTimer?.cancel();
-    _holdTimer = Timer.periodic(const Duration(milliseconds: 40), (t) {
-      setState(() => _holdProgress += 40 / 2000);
-      if (_holdProgress >= 1.0) {
-        t.cancel();
-        setState(() {
-          _activated = true;
-          _holdProgress = 0;
-        });
-      }
-    });
-  }
-
-  void _releaseHold() {
-    _holdTimer?.cancel();
-    if (!_activated) setState(() => _holdProgress = 0);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _activated ? const Color(0xFF1A0508) : AppColors.darkBg,
-      body: SafeArea(
-        child: _activated ? _ActivatedView(onCancel: () => context.pop()) : _IdleView(
-          progress: _holdProgress,
-          pulseAnim: _pulseAnim,
-          onHoldStart: _startHold,
-          onHoldEnd: _releaseHold,
-        ),
-      ),
+    return BlocConsumer<SosBloc, SosState>(
+      listener: (context, state) {
+        if (state is SosDone) context.pop();
+      },
+      builder: (context, state) {
+        final activated = state is SosActivatedState;
+        return Scaffold(
+          backgroundColor: activated ? const Color(0xFF1A0508) : AppColors.darkBg,
+          body: SafeArea(
+            child: activated
+                ? _ActivatedView(
+                    state: state,
+                    onCancel: () =>
+                        context.read<SosBloc>().add(const SosCancelled()),
+                  )
+                : _IdleView(
+                    progress: state is SosHolding ? state.progress : 0.0,
+                    contactCount: state is SosInitial ? state.contacts.length : 0,
+                    pulseAnim: _pulseAnim,
+                    onHoldStart: () => context
+                        .read<SosBloc>()
+                        .add(SosHoldStarted(meetingId: widget.meetingId)),
+                    onHoldEnd: () =>
+                        context.read<SosBloc>().add(const SosHoldReleased()),
+                  ),
+          ),
+        );
+      },
     );
   }
 }
@@ -139,12 +127,14 @@ class _SosBadge extends StatelessWidget {
 
 class _IdleView extends StatelessWidget {
   final double progress;
+  final int contactCount;
   final Animation<double> pulseAnim;
   final VoidCallback onHoldStart;
   final VoidCallback onHoldEnd;
 
   const _IdleView({
     required this.progress,
+    required this.contactCount,
     required this.pulseAnim,
     required this.onHoldStart,
     required this.onHoldEnd,
@@ -237,20 +227,22 @@ class _IdleView extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
-            children: const [
-              _InfoRow(
+            children: [
+              const _InfoRow(
                 icon: Icons.location_on,
                 title: 'GPS Location Shared',
                 subtitle: 'Real-time location sent to contacts',
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               _InfoRow(
                 icon: Icons.phone_in_talk,
                 title: 'Emergency Contacts Alerted',
-                subtitle: '3 trusted contacts notified instantly',
+                subtitle: contactCount > 0
+                    ? '$contactCount trusted contact${contactCount == 1 ? '' : 's'} will be notified instantly'
+                    : 'No trusted contacts on file yet',
               ),
-              SizedBox(height: 12),
-              _InfoRow(
+              const SizedBox(height: 12),
+              const _InfoRow(
                 icon: Icons.check_circle_outline,
                 title: 'Incident Report Created',
                 subtitle: 'Timestamped record automatically saved',
@@ -305,14 +297,19 @@ class _InfoRow extends StatelessWidget {
 }
 
 class _ActivatedView extends StatelessWidget {
+  final SosActivatedState state;
   final VoidCallback onCancel;
-  const _ActivatedView({required this.onCancel});
+  const _ActivatedView({required this.state, required this.onCancel});
 
-  static const _contacts = [
-    _Contact('Mom', '👩'),
-    _Contact('Jake', '👦'),
-    _Contact('Emergency Services', '🚨'),
-  ];
+  String get _locationLabel {
+    final lat = state.lat;
+    final lng = state.lng;
+    if (lat == null || lng == null) return 'Locating…';
+    final latHemi = lat >= 0 ? 'N' : 'S';
+    final lngHemi = lng >= 0 ? 'E' : 'W';
+    return 'GPS: ${lat.abs().toStringAsFixed(4)}° $latHemi, '
+        '${lng.abs().toStringAsFixed(4)}° $lngHemi';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -367,7 +364,21 @@ class _ActivatedView extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               children: [
-                ..._contacts.map((c) => _ContactRow(contact: c)),
+                if (state.contacts.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'No trusted contacts on file yet.',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  )
+                else
+                  ...state.contacts.map((c) => _ContactRow(contact: c)),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -377,12 +388,12 @@ class _ActivatedView extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.location_on_outlined, color: AppColors.textTertiary, size: 18),
+                      const Icon(Icons.location_on_outlined, color: Colors.white70, size: 18),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'GPS: 40.7589° N, 73.9851° W',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          _locationLabel,
+                          style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ),
                       Text('Sharing', style: GoogleFonts.inter(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w700)),
@@ -420,7 +431,7 @@ class _ActivatedView extends StatelessWidget {
 }
 
 class _ContactRow extends StatelessWidget {
-  final _Contact contact;
+  final SosContactEntity contact;
   const _ContactRow({required this.contact});
 
   @override
@@ -434,19 +445,30 @@ class _ContactRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle, color: AppColors.success, size: 18),
+          Icon(
+            contact.notified ? Icons.check_circle : Icons.radio_button_unchecked,
+            color: contact.notified ? AppColors.success : Colors.white54,
+            size: 18,
+          ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              '${contact.name} ${contact.emoji}',
-              style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  contact.name,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(contact.phone, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
             ),
           ),
           Row(
             children: [
-              Text('Notified', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+              Text(contact.notified ? 'Notified' : 'Pending', style: const TextStyle(color: Colors.white70, fontSize: 13)),
               const SizedBox(width: 4),
-              Icon(Icons.check, color: AppColors.textTertiary, size: 14),
+              Icon(contact.notified ? Icons.check : Icons.schedule, color: Colors.white70, size: 14),
             ],
           ),
         ],

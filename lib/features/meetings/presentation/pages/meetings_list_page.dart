@@ -39,7 +39,11 @@ class _MeetingsListViewState extends State<_MeetingsListView>
   @override
   void initState() {
     super.initState();
-    final startIndex = widget.initialTab == 'requests' ? 1 : 0;
+    final startIndex = switch (widget.initialTab) {
+      'requests' => 1,
+      'past' => 2,
+      'upcoming' || _ => 0,
+    };
     _tabs = TabController(length: 3, vsync: this, initialIndex: startIndex);
   }
 
@@ -123,6 +127,7 @@ class _MeetingsListViewState extends State<_MeetingsListView>
                       emptySubtitle: 'Plan a safe meetup with someone in your network.',
                       emptyIcon: Icons.calendar_today_outlined,
                       showEmptyAction: true,
+                      clickable: true,
                     ),
                     _MeetingsList(
                       meetings: requests,
@@ -164,6 +169,7 @@ class _MeetingsList extends StatelessWidget {
   final IconData emptyIcon;
   final bool showActions;
   final bool showEmptyAction;
+  final bool clickable;
 
   const _MeetingsList({
     required this.meetings,
@@ -173,6 +179,7 @@ class _MeetingsList extends StatelessWidget {
     required this.emptyIcon,
     this.showActions = false,
     this.showEmptyAction = false,
+    this.clickable = false,
   });
 
   @override
@@ -196,6 +203,7 @@ class _MeetingsList extends StatelessWidget {
         itemBuilder: (context, i) => _MeetingCard(
           meeting: meetings[i],
           showActions: showActions,
+          clickable: clickable,
         ),
       ),
     );
@@ -205,7 +213,27 @@ class _MeetingsList extends StatelessWidget {
 class _MeetingCard extends StatelessWidget {
   final MeetingEntity meeting;
   final bool showActions;
-  const _MeetingCard({required this.meeting, this.showActions = false});
+  final bool clickable;
+  const _MeetingCard({
+    required this.meeting,
+    this.showActions = false,
+    this.clickable = false,
+  });
+
+  void _onTap(BuildContext context) {
+    if (meeting.status != MeetingStatus.scheduled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            "This meeting isn't ready yet. Please wait for approval before accessing it.",
+          ),
+        ),
+      );
+      return;
+    }
+    context.push('${AppRoutes.liveLocation}/${meeting.id}');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +241,7 @@ class _MeetingCard extends StatelessWidget {
     final statusLabel = _statusLabel(meeting.status);
 
     return GestureDetector(
-      onTap: () => context.push('${AppRoutes.activeMeeting}/${meeting.id}'),
+      onTap: clickable ? () => _onTap(context) : null,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(

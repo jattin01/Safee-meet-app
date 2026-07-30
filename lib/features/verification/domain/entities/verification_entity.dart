@@ -86,6 +86,53 @@ class VerificationStatusEntity extends Equatable {
       ];
 }
 
+class VerificationSubmitEntity extends Equatable {
+  final int id;
+  final String userId;
+  final String faceIdImage;
+  final String nationalIdFrontImage;
+  final String nationalIdBackImage;
+  final String nationalIdNumber;
+  final String nationalIdCountry;
+  final int verificationLevel;
+  final String status;
+
+  const VerificationSubmitEntity({
+    required this.id,
+    required this.userId,
+    required this.faceIdImage,
+    required this.nationalIdFrontImage,
+    required this.nationalIdBackImage,
+    required this.nationalIdNumber,
+    required this.nationalIdCountry,
+    required this.verificationLevel,
+    required this.status,
+  });
+
+  @override
+  List<Object?> get props => [
+        id,
+        userId,
+        faceIdImage,
+        nationalIdFrontImage,
+        nationalIdBackImage,
+        nationalIdNumber,
+        nationalIdCountry,
+        verificationLevel,
+        status,
+      ];
+}
+
+class VerificationSubmitResult extends Equatable {
+  final String message;
+  final VerificationSubmitEntity data;
+
+  const VerificationSubmitResult({required this.message, required this.data});
+
+  @override
+  List<Object?> get props => [message, data];
+}
+
 class ReviewSummaryEntity extends Equatable {
   final String authorName;
   final double rating;

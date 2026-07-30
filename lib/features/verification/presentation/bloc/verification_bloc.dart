@@ -19,19 +19,29 @@ class VerificationProgressRequested extends VerificationEvent {
   const VerificationProgressRequested();
 }
 
-class IdDocumentUploaded extends VerificationEvent {
-  final File front;
-  final File back;
-  const IdDocumentUploaded({required this.front, required this.back});
-  @override
-  List<Object?> get props => [front, back];
-}
+class VerificationSubmitted extends VerificationEvent {
+  final File faceIdImage;
+  final File nationalIdFrontImage;
+  final File nationalIdBackImage;
+  final String nationalIdNumber;
+  final String nationalIdCountry;
 
-class SelfieUploaded extends VerificationEvent {
-  final File selfie;
-  const SelfieUploaded(this.selfie);
+  const VerificationSubmitted({
+    required this.faceIdImage,
+    required this.nationalIdFrontImage,
+    required this.nationalIdBackImage,
+    required this.nationalIdNumber,
+    required this.nationalIdCountry,
+  });
+
   @override
-  List<Object?> get props => [selfie];
+  List<Object?> get props => [
+        faceIdImage,
+        nationalIdFrontImage,
+        nationalIdBackImage,
+        nationalIdNumber,
+        nationalIdCountry,
+      ];
 }
 
 // ── States ────────────────────────────────────────────────────────────────────
@@ -68,10 +78,11 @@ class VerificationUploading extends VerificationState {
 }
 
 class VerificationUploadSuccess extends VerificationState {
-  final VerificationStep nextStep;
-  const VerificationUploadSuccess(this.nextStep);
+  final String message;
+  final VerificationSubmitEntity data;
+  const VerificationUploadSuccess({required this.message, required this.data});
   @override
-  List<Object?> get props => [nextStep];
+  List<Object?> get props => [message, data];
 }
 
 class VerificationError extends VerificationState {
@@ -88,8 +99,7 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
   VerificationBloc(this._repository) : super(const VerificationInitial()) {
     on<VerificationStatusRequested>(_onStatusRequested);
     on<VerificationProgressRequested>(_onProgressRequested);
-    on<IdDocumentUploaded>(_onIdUploaded);
-    on<SelfieUploaded>(_onSelfieUploaded);
+    on<VerificationSubmitted>(_onSubmitted);
   }
 
   Future<void> _onStatusRequested(
@@ -116,30 +126,21 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
     );
   }
 
-  Future<void> _onIdUploaded(
-    IdDocumentUploaded event,
+  Future<void> _onSubmitted(
+    VerificationSubmitted event,
     Emitter<VerificationState> emit,
   ) async {
     emit(const VerificationUploading());
-    final result = await _repository.uploadIdDocument(
-      frontImage: event.front,
-      backImage: event.back,
+    final result = await _repository.submitVerification(
+      faceIdImage: event.faceIdImage,
+      nationalIdFrontImage: event.nationalIdFrontImage,
+      nationalIdBackImage: event.nationalIdBackImage,
+      nationalIdNumber: event.nationalIdNumber,
+      nationalIdCountry: event.nationalIdCountry,
     );
     result.fold(
       (f) => emit(VerificationError(f.message)),
-      (_) => emit(const VerificationUploadSuccess(VerificationStep.selfie)),
-    );
-  }
-
-  Future<void> _onSelfieUploaded(
-    SelfieUploaded event,
-    Emitter<VerificationState> emit,
-  ) async {
-    emit(const VerificationUploading());
-    final result = await _repository.uploadSelfie(event.selfie);
-    result.fold(
-      (f) => emit(VerificationError(f.message)),
-      (_) => emit(const VerificationUploadSuccess(VerificationStep.processing)),
+      (r) => emit(VerificationUploadSuccess(message: r.message, data: r.data)),
     );
   }
 }

@@ -7,10 +7,13 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
+import '../../../../core/shared/widgets/field_input.dart';
 import '../../../../core/shared/widgets/info_banner.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../../domain/entities/verification_entity.dart';
 import '../bloc/verification_bloc.dart';
+
+const _nationalIdCountry = 'india';
 
 enum _Step { uploadId, selfie, processing, complete }
 
@@ -27,14 +30,13 @@ class _VerificationPageState extends State<VerificationPage> {
   File? _idBack;
   File? _selfie;
   VerificationEntity? _progress;
+  String? _submittedStatus;
   final _picker = ImagePicker();
+  final _nationalIdNumberController = TextEditingController();
 
   static const _stepLabels = ['Upload ID', 'Selfie', 'Processing', 'Complete'];
 
   int get _stepIndex => _step.index;
-  bool get _hasFront => _idFront != null || (_progress?.hasIdFront ?? false);
-  bool get _hasBack => _idBack != null || (_progress?.hasIdBack ?? false);
-  bool get _hasSelfie => _selfie != null || (_progress?.hasSelfie ?? false);
 
   @override
   void initState() {
@@ -46,8 +48,19 @@ class _VerificationPageState extends State<VerificationPage> {
     });
   }
 
+  @override
+  void dispose() {
+    _nationalIdNumberController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickImage(ImageSource source, _ImageType type) async {
-    final xFile = await _picker.pickImage(source: source, imageQuality: 85);
+    final xFile = await _picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
     if (xFile == null || !mounted) return;
     final file = File(xFile.path);
     setState(() {
@@ -87,31 +100,40 @@ class _VerificationPageState extends State<VerificationPage> {
 
   void _submitIdDocuments() {
     if (_idFront == null || _idBack == null) {
-      if (_hasFront && _hasBack) {
-        setState(() => _step = _Step.selfie);
-        return;
-      }
       _showMessage('Please upload both sides of your ID before continuing.',
           error: true);
       return;
     }
+    if (_nationalIdNumberController.text.trim().isEmpty) {
+      _showMessage('Please enter your National ID number before continuing.',
+          error: true);
+      return;
+    }
 
-    context.read<VerificationBloc>().add(
-          IdDocumentUploaded(front: _idFront!, back: _idBack!),
-        );
+    setState(() => _step = _Step.selfie);
   }
 
   void _submitSelfie() {
+    if (_idFront == null || _idBack == null) {
+      _showMessage('Please upload both sides of your ID before continuing.',
+          error: true);
+      setState(() => _step = _Step.uploadId);
+      return;
+    }
     if (_selfie == null) {
-      if (_hasSelfie) {
-        setState(() => _step = _Step.processing);
-        return;
-      }
       _showMessage('Please capture a selfie before submitting.', error: true);
       return;
     }
 
-    context.read<VerificationBloc>().add(SelfieUploaded(_selfie!));
+    context.read<VerificationBloc>().add(
+          VerificationSubmitted(
+            faceIdImage: _selfie!,
+            nationalIdFrontImage: _idFront!,
+            nationalIdBackImage: _idBack!,
+            nationalIdNumber: _nationalIdNumberController.text.trim(),
+            nationalIdCountry: _nationalIdCountry,
+          ),
+        );
   }
 
   @override
@@ -123,9 +145,11 @@ class _VerificationPageState extends State<VerificationPage> {
         }
 
         if (state is VerificationUploadSuccess) {
-          context
-              .read<VerificationBloc>()
-              .add(const VerificationProgressRequested());
+          _showMessage(state.message);
+          setState(() {
+            _submittedStatus = state.data.status;
+            _step = _Step.processing;
+          });
         }
 
         if (state is VerificationError) {
@@ -179,7 +203,8 @@ class _VerificationPageState extends State<VerificationPage> {
           rejectionReason: _progress?.status == 'rejected'
               ? _progress?.rejectionReason
               : null,
-          isSubmitting: isUploading,
+          isSubmitting: false,
+          nationalIdNumberController: _nationalIdNumberController,
           onPickFront: () => _pickImage(ImageSource.gallery, _ImageType.front),
           onPickBack: () => _pickImage(ImageSource.gallery, _ImageType.back),
           onContinue: _submitIdDocuments,
@@ -194,7 +219,7 @@ class _VerificationPageState extends State<VerificationPage> {
         );
       case _Step.processing:
         return _ProcessingStep(
-          status: _progress?.status ?? 'pending',
+          status: _submittedStatus ?? _progress?.status ?? 'pending',
           onRefresh: () => context
               .read<VerificationBloc>()
               .add(const VerificationProgressRequested()),
@@ -329,6 +354,7 @@ class _UploadIdStep extends StatelessWidget {
   final bool hasServerBack;
   final String? rejectionReason;
   final bool isSubmitting;
+  final TextEditingController nationalIdNumberController;
   final VoidCallback onPickFront;
   final VoidCallback onPickBack;
   final VoidCallback onContinue;
@@ -340,6 +366,7 @@ class _UploadIdStep extends StatelessWidget {
     required this.hasServerBack,
     required this.rejectionReason,
     required this.isSubmitting,
+    required this.nationalIdNumberController,
     required this.onPickFront,
     required this.onPickBack,
     required this.onContinue,
@@ -391,6 +418,14 @@ class _UploadIdStep extends StatelessWidget {
           file: back,
           uploadedOnServer: hasServerBack,
           onTap: onPickBack,
+        ),
+        const SizedBox(height: 20),
+        FieldInput(
+          label: 'National ID Number',
+          hint: 'Enter your National ID number',
+          controller: nationalIdNumberController,
+          prefixIcon: Icons.badge_outlined,
+          keyboardType: TextInputType.text,
         ),
         const SizedBox(height: 20),
         const InfoBanner(
@@ -457,7 +492,9 @@ class _SelfieStep extends StatelessWidget {
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(20),
                   child: Image.file(selfie!,
-                      fit: BoxFit.cover, width: double.infinity),
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      cacheWidth: 800),
                 )
               : Stack(
                   alignment: Alignment.center,

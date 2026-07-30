@@ -96,6 +96,9 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
+  # Payments (Stripe — subscription checkout, test mode only for now)
+  flutter_stripe: ^11.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

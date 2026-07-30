@@ -47,6 +47,7 @@ class _ActiveMeetingPageState extends State<ActiveMeetingPage> {
   Widget build(BuildContext context) {
     final meeting = MockMeetings.byId(widget.meetingId);
     return _MeetingView(
+      meetingId: widget.meetingId,
       meeting: meeting,
       status: _status,
       elapsed: _elapsed,
@@ -84,6 +85,7 @@ class _ActiveMeetingPageState extends State<ActiveMeetingPage> {
 }
 
 class _MeetingView extends StatelessWidget {
+  final String meetingId;
   final MeetingEntity meeting;
   final MeetingStatus status;
   final Duration elapsed;
@@ -91,6 +93,7 @@ class _MeetingView extends StatelessWidget {
   final VoidCallback onEnd;
 
   const _MeetingView({
+    required this.meetingId,
     required this.meeting,
     required this.status,
     required this.elapsed,
@@ -109,6 +112,15 @@ class _MeetingView extends StatelessWidget {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.share_location_outlined, color: AppColors.textSecondary),
+            tooltip: 'Emergency Share',
+            // Use the real meeting id this page was opened with — `meeting`
+            // itself comes from MockMeetings and its id doesn't match any
+            // real backend record.
+            onPressed: () =>
+                context.push('${AppRoutes.emergencyShare}/$meetingId'),
+          ),
           IconButton(
             icon: const Icon(Icons.warning_amber_rounded, color: AppColors.primary),
             onPressed: () => context.push(AppRoutes.sos),

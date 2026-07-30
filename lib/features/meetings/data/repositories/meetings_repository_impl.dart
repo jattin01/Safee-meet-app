@@ -162,11 +162,11 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
       orElse: () => MeetingPurpose.other,
     );
 
-    final meetingDate = d['meeting_date'] as String?;
-    final meetingTime = d['meeting_time'] as String?;
-    final scheduledAt = meetingDate != null
-        ? DateTime.tryParse('$meetingDate ${meetingTime ?? '00:00:00'}') ?? DateTime.now()
-        : DateTime.tryParse(d['scheduled_start_at'] as String? ?? '') ?? DateTime.now();
+    final scheduledAt = _parseScheduledAt(
+      d['meeting_date'] as String?,
+      d['meeting_time'] as String?,
+      d['scheduled_start_at'] as String?,
+    );
 
     return MeetingEntity(
       id: d['id'].toString(),
@@ -183,6 +183,30 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
       partnerLng: _toDouble(d['longitude']),
       isHost: isHost,
     );
+  }
+
+  // `meeting_date` is a full ISO datetime at UTC midnight (e.g.
+  // "2026-08-01T00:00:00.000000Z"), not a bare date — concatenating it
+  // directly with `meeting_time` ("15:30:00") produced an invalid string
+  // that DateTime.tryParse silently rejected, so every meeting fell back to
+  // DateTime.now(). Parse the date and time components separately instead.
+  DateTime _parseScheduledAt(
+    String? meetingDate,
+    String? meetingTime,
+    String? scheduledStartAt,
+  ) {
+    if (meetingDate != null) {
+      final datePart = DateTime.tryParse(meetingDate);
+      if (datePart != null) {
+        final timeSegments = (meetingTime ?? '00:00:00').split(':');
+        final hour = int.tryParse(timeSegments.elementAtOrNull(0) ?? '') ?? 0;
+        final minute = int.tryParse(timeSegments.elementAtOrNull(1) ?? '') ?? 0;
+        final second = int.tryParse(timeSegments.elementAtOrNull(2) ?? '') ?? 0;
+        return DateTime(
+            datePart.year, datePart.month, datePart.day, hour, minute, second);
+      }
+    }
+    return DateTime.tryParse(scheduledStartAt ?? '') ?? DateTime.now();
   }
 
   MeetingStatus _parseStatus(String status, bool hasArrived) {

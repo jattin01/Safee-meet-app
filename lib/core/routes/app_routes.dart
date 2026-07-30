@@ -27,6 +27,7 @@ abstract final class AppRoutes {
   static const String meetings = '/meetings';
   static const String activeMeeting = '/meetings/active';
   static const String liveLocation = '/live-location';
+  static const String emergencyShare = '/meetings/emergency-share';
   static const String sos = '/sos';
   static const String subscription = '/subscription';
   static const String notifications = '/notifications';

@@ -8,7 +8,9 @@ import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/dashboard/presentation/pages/home_page.dart';
+import '../../features/meetings/presentation/bloc/emergency_share_bloc.dart';
 import '../../features/meetings/presentation/pages/active_meeting_page.dart';
+import '../../features/meetings/presentation/pages/emergency_share_page.dart';
 import '../../features/meetings/presentation/pages/live_location_page.dart';
 import '../../features/meetings/presentation/pages/meeting_setup_page.dart';
 import '../../features/meetings/presentation/pages/meetings_list_page.dart';
@@ -29,6 +31,8 @@ import '../../features/settings/presentation/pages/personal_info_page.dart';
 import '../../features/settings/presentation/pages/policy_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/shell/presentation/pages/app_shell_page.dart';
+import '../../features/gps_tracking/presentation/bloc/gps_tracking_bloc.dart';
+import '../../features/sos/presentation/bloc/sos_bloc.dart';
 import '../../features/sos/presentation/pages/sos_page.dart';
 import '../../features/splash/presentation/pages/splash_page.dart';
 import '../../features/subscription/presentation/pages/subscription_page.dart';
@@ -38,6 +42,7 @@ import '../dependency_injection/injection_container.dart';
 import '../services/fcm_service.dart';
 import '../services/secure_storage_service.dart';
 import 'app_routes.dart';
+import 'route_observer.dart';
 import '../../features/verification/presentation/bloc/verification_bloc.dart';
 
 class AppRouter {
@@ -48,6 +53,7 @@ class AppRouter {
     initialLocation: AppRoutes.splash,
     debugLogDiagnostics: false,
     redirect: _guard,
+    observers: [appRouteObserver],
     routes: [
       // ── Pre-auth ─────────────────────────────────────────────────────────
       GoRoute(
@@ -176,10 +182,42 @@ class AppRouter {
         builder: (_, __) => const LiveLocationPage(),
       ),
       GoRoute(
+        path: '${AppRoutes.liveLocation}/:id',
+        builder: (_, state) => MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => sl<EmergencyShareBloc>()),
+            BlocProvider(create: (_) => sl<GpsTrackingBloc>()),
+          ],
+          child: LiveLocationPage(meetingId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '${AppRoutes.emergencyShare}/:id',
+        builder: (_, state) => BlocProvider(
+          create: (_) => sl<EmergencyShareBloc>(),
+          child: EmergencySharePage(meetingId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
         path: AppRoutes.sos,
         pageBuilder: (_, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: const SosPage(),
+          child: BlocProvider(
+            create: (_) => sl<SosBloc>(),
+            child: const SosPage(),
+          ),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+        ),
+      ),
+      GoRoute(
+        path: '${AppRoutes.sos}/:id',
+        pageBuilder: (_, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: BlocProvider(
+            create: (_) => sl<SosBloc>(),
+            child: SosPage(meetingId: state.pathParameters['id']),
+          ),
           transitionsBuilder: (_, anim, __, child) =>
               FadeTransition(opacity: anim, child: child),
         ),

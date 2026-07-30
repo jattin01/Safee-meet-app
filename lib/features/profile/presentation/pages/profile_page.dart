@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -32,7 +33,22 @@ Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
       eyeStyle: const QrEyeStyle(color: Color(0xFF000000)),
       dataModuleStyle: const QrDataModuleStyle(color: Color(0xFF000000)),
     );
-    final imageData = await painter.toImageData(600);
+
+    // Paint onto an explicit white background ourselves — QrPainter only
+    // draws the black modules and leaves everything else transparent, which
+    // several share targets composite against black, making the code look
+    // like a solid black square once shared.
+    const size = 600.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawRect(
+      const Rect.fromLTWH(0, 0, size, size),
+      Paint()..color = Colors.white,
+    );
+    painter.paint(canvas, const Size(size, size));
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(size.toInt(), size.toInt());
+    final imageData = await image.toByteData(format: ui.ImageByteFormat.png);
     final bytes = imageData!.buffer.asUint8List();
     final dir = await getTemporaryDirectory();
     final file = await File('${dir.path}/safee_pin_qr.png').writeAsBytes(bytes);
@@ -148,7 +164,7 @@ class _ProfileView extends StatelessWidget {
                           icon: Icons.ios_share,
                           iconColor: AppColors.primary,
                           label: 'Share Safee PIN & Scanner',
-                          subtitle: 'Send your PIN and QR code together',
+                          subtitle: 'Send your PIN and QR code',
                           onTap: () => _shareSafeePinAndScanner(
                               context, profile?.safeePIN),
                         ),

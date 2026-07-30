@@ -145,25 +145,33 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                         ),
                       ] else if (state is MemberSearchError) ...[
                         const SizedBox(height: 24),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.error.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                                color: AppColors.error.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(children: [
-                            Icon(Icons.error_outline,
-                                color: AppColors.error, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(state.message,
-                                  style: TextStyle(
-                                      color: AppColors.error, fontSize: 14)),
-                            ),
-                          ]),
-                        ),
+                        state.upgradeRequired
+                            ? _UpgradeLimitCard(
+                                message: state.message,
+                                onTap: () =>
+                                    context.push(AppRoutes.subscription),
+                              )
+                            : Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: AppColors.error
+                                          .withValues(alpha: 0.3)),
+                                ),
+                                child: Row(children: [
+                                  Icon(Icons.error_outline,
+                                      color: AppColors.error, size: 20),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(state.message,
+                                        style: TextStyle(
+                                            color: AppColors.error,
+                                            fontSize: 14)),
+                                  ),
+                                ]),
+                              ),
                       ],
 
                       const SizedBox(height: 28),
@@ -312,6 +320,41 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
 }
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
+
+class _UpgradeLimitCard extends StatelessWidget {
+  final String message;
+  final VoidCallback onTap;
+  const _UpgradeLimitCard({required this.message, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.error.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+          ),
+          child: Row(children: [
+            Icon(Icons.error_outline, color: AppColors.error, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(message,
+                  style: TextStyle(color: AppColors.error, fontSize: 14)),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: AppColors.error, size: 20),
+          ]),
+        ),
+      ),
+    );
+  }
+}
 
 class _HintCard extends StatelessWidget {
   final IconData icon;

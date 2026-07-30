@@ -32,20 +32,15 @@ abstract final class AppConstants {
 
   // ── Subscription Prices ──────────────────────────────────────────────────
   static const String freePriceMonthly = '\$0';
-  static const String basicPriceMonthly = '\$9.99';
-  static const String premiumPriceMonthly = '\$19.99';
-  static const String professionalPriceMonthly = '\$39.99';
-  static const String basicPriceYearly = '\$6.99';
-  static const String premiumPriceYearly = '\$13.99';
-  static const String professionalPriceYearly = '\$27.99';
-  // Numeric equivalents for in-app calculations
-  static const double basicMonthlyPrice = 9.99;
-  static const double premiumMonthlyPrice = 19.99;
-  static const double professionalMonthlyPrice = 39.99;
-  static const double basicYearlyPrice = 83.88; // 6.99 * 12
-  static const double premiumYearlyPrice = 167.88; // 13.99 * 12
-  static const double professionalYearlyPrice = 335.88; // 27.99 * 12
 
+  // ── Stripe ───────────────────────────────────────────────────────────────
+  // TEST-MODE publishable key only (pk_test_...). Safe to embed client-side —
+  // it cannot move money or read sensitive data on its own, unlike the
+  // secret key (which lives server-side only, never here). Must be swapped
+  // for the matching pk_live_... key — from the SAME Stripe account as the
+  // backend's live secret key — before this app is used for real charges.
+  static const String stripePublishableKey =
+      'pk_test_51TsnbMBhFiphlmD9lIlrcqzede2CHVzRDhUtCG5akNPQGIRE5Gwavmt4Tk00zD01ef8MBZ9fJNdSDJNiPkWFXWkV00MrCh3c8O';
   // ── Emergency ────────────────────────────────────────────────────────────
   static const int maxEmergencyContacts = 5;
   static const int sosCountdownSeconds = 5;

@@ -1,154 +1,195 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
-import '../../../../core/config/app_constants.dart';
+import '../../../../core/dependency_injection/injection_container.dart';
+import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
+import '../../domain/entities/subscription_plan_entity.dart';
+import '../bloc/subscription_bloc.dart';
+import '../bloc/subscription_event.dart';
+import '../bloc/subscription_state.dart';
 
-// PROTOTYPE MODE: this page renders mock plan data only — there is no
-// payment/billing integration. The "Get <Plan>" button is a placeholder
-// (pops the page) until real checkout is wired up.
-class SubscriptionPage extends StatefulWidget {
+// Prices, features and plan branding come from GET /v1/subscriptions/plans.
+// Checkout (POST /v1/subscriptions/subscribe + Stripe's native Payment
+// Sheet) is wired up for Stripe TEST mode only — see
+// AppConstants.stripePublishableKey.
+class SubscriptionPage extends StatelessWidget {
   const SubscriptionPage({super.key});
 
   @override
-  State<SubscriptionPage> createState() => _SubscriptionPageState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => sl<SubscriptionBloc>()..add(const SubscriptionPlansRequested()),
+      child: const _SubscriptionView(),
+    );
+  }
 }
 
-class _SubscriptionPageState extends State<SubscriptionPage> {
+class _SubscriptionView extends StatefulWidget {
+  const _SubscriptionView();
+
+  @override
+  State<_SubscriptionView> createState() => _SubscriptionViewState();
+}
+
+class _SubscriptionViewState extends State<_SubscriptionView> {
   bool _yearly = false;
-  String _selected = 'premium';
+  int? _selectedId;
 
-  static const _plans = [
-    _Plan(
-      id: 'free',
-      name: 'Free Trial',
-      tagline: 'Get started safely',
-      icon: Icons.shield_outlined,
-      emoji: null,
-      color: AppColors.textTertiary,
-      iconBg: Color(0xFFF1F5F9),
-      monthlyPrice: 0.0,
-      yearlyPrice: 0.0,
-      features: [
-        'Identity Registration',
-        'Level 1 Verification',
-        'SAFEE PIN Search',
-        'Basic Safety Tips',
-        'Community Guidelines Access',
-        'Limited Meeting History',
-      ],
-    ),
-    _Plan(
-      id: 'basic',
-      name: 'Basic',
-      tagline: 'Essential safety',
-      icon: Icons.star_outline,
-      emoji: null,
-      color: AppColors.blue,
-      iconBg: Color(0xFFDCEBFF),
-      monthlyPrice: AppConstants.basicMonthlyPrice,
-      yearlyPrice: AppConstants.basicYearlyPrice,
-      features: [
-        'Everything in Free',
-        'Verified Badge Display',
-        'Unlimited PIN Search',
-        'Priority Support',
-        'QR Code Generation',
-      ],
-    ),
-    _Plan(
-      id: 'premium',
-      name: 'Premium',
-      tagline: 'Maximum trust & safety',
-      icon: Icons.bolt,
-      emoji: null,
-      color: AppColors.primary,
-      iconBg: Color(0xFFFFE1E6),
-      monthlyPrice: AppConstants.premiumMonthlyPrice,
-      yearlyPrice: AppConstants.premiumYearlyPrice,
-      popular: true,
-      features: [
-        'Everything in Basic',
-        'Background Verification',
-        'Trust Score Calculation',
-        'Safety Score Analytics',
-        'Premium Badge',
-        'Priority Visibility',
-        'Trusted Contact Alerts',
-      ],
-    ),
-    _Plan(
-      id: 'professional',
-      name: 'Professional',
-      tagline: 'For businesses & pros',
-      icon: null,
-      emoji: '👑',
-      color: AppColors.warning,
-      iconBg: Color(0xFFFCEFC7),
-      monthlyPrice: AppConstants.professionalMonthlyPrice,
-      yearlyPrice: AppConstants.professionalYearlyPrice,
-      features: [
-        'Everything in Premium',
-        'Professional Verification',
-        'Business Listing',
-        'API Access',
-        'Dedicated Account Manager',
-        'Custom Integrations',
-      ],
-    ),
-  ];
+  void _ensureSelection(List<SubscriptionPlanEntity> plans) {
+    if (_selectedId != null && plans.any((p) => p.id == _selectedId)) return;
+    if (plans.isEmpty) return;
+    final popular = plans.firstWhere(
+      (p) => p.slug == 'premium',
+      orElse: () => plans.first,
+    );
+    _selectedId = popular.id;
+  }
 
-  _Plan get _selectedPlan => _plans.firstWhere((p) => p.id == _selected);
+  void _handleSubscribe(BuildContext context, SubscriptionPlanEntity plan) {
+    final billingCycle = _yearly ? 'yearly' : 'monthly';
+
+    context.read<SubscriptionBloc>().add(
+          SubscribeRequested(
+            planSlug: plan.slug,
+            billingCycle: billingCycle,
+            // Paid plans require some payment method on file before the
+            // subscription can be created — the real, visible checkout step
+            // (where a tester enters/confirms a card) is Stripe's Payment
+            // Sheet, presented next from the bloc once we have the
+            // PaymentIntent client secret. TEST mode only.
+            stripeTestPaymentMethodId:
+                plan.monthlyPrice == 0 ? null : 'pm_card_visa',
+          ),
+        );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBg,
-      body: SingleChildScrollView(
+      body: BlocConsumer<SubscriptionBloc, SubscriptionState>(
+        listenWhen: (previous, current) =>
+            current is SubscriptionLoaded &&
+            (previous is! SubscriptionLoaded ||
+                previous.checkoutStatus != current.checkoutStatus ||
+                previous.checkoutErrorMessage != current.checkoutErrorMessage),
+        listener: (context, state) {
+          if (state is! SubscriptionLoaded) return;
+          if (state.checkoutStatus == CheckoutStatus.success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Subscription activated successfully.')),
+            );
+            context.go(AppRoutes.subscription);
+          } else if (state.checkoutErrorMessage != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.checkoutErrorMessage!)),
+            );
+            context.go(AppRoutes.subscription);
+          }
+        },
+        builder: (context, state) {
+          if (state is SubscriptionLoading || state is SubscriptionInitial) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (state is SubscriptionError) {
+            return _SubscriptionErrorState(
+              message: state.message,
+              onRetry: () => context
+                  .read<SubscriptionBloc>()
+                  .add(const SubscriptionPlansRequested()),
+            );
+          }
+
+          final loaded = state as SubscriptionLoaded;
+          final plans = loaded.plans;
+          _ensureSelection(plans);
+          final selectedPlan = plans.firstWhere(
+            (p) => p.id == _selectedId,
+            orElse: () => plans.first,
+          );
+          final isProcessing = loaded.checkoutStatus == CheckoutStatus.processing;
+
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DarkScreenHeader(
+                  title: 'Choose Your Plan',
+                  titleFontSize: 21,
+                  childGap: 20,
+                  child: _PlanToggle(
+                    yearly: _yearly,
+                    onChanged: (v) => setState(() => _yearly = v),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ...plans.map((p) => _PlanCard(
+                            plan: p,
+                            yearly: _yearly,
+                            selected: _selectedId == p.id,
+                            onSelect: () => setState(() => _selectedId = p.id),
+                          )),
+                      const SizedBox(height: 12),
+                      PrimaryButton(
+                        label: selectedPlan.monthlyPrice == 0
+                            ? 'Continue with Free'
+                            : 'Get ${selectedPlan.name} — \$${selectedPlan.price(_yearly).toStringAsFixed(2)}/mo',
+                        isLoading: isProcessing,
+                        onPressed: isProcessing
+                            ? null
+                            : () => _handleSubscribe(context, selectedPlan),
+                      ),
+                      const SizedBox(height: 14),
+                      Center(
+                        child: Text(
+                          'Cancel anytime. No hidden fees.',
+                          style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SubscriptionErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _SubscriptionErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            DarkScreenHeader(
-              title: 'Choose Your Plan',
-              titleFontSize: 21,
-              childGap: 20,
-              child: _PlanToggle(
-                yearly: _yearly,
-                onChanged: (v) => setState(() => _yearly = v),
-              ),
+            const Icon(Icons.cloud_off, color: AppColors.textTertiary, size: 44),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ..._plans.map((p) => _PlanCard(
-                        plan: p,
-                        yearly: _yearly,
-                        selected: _selected == p.id,
-                        onSelect: () => setState(() => _selected = p.id),
-                      )),
-                  const SizedBox(height: 12),
-                  _FeatureComparison(),
-                  const SizedBox(height: 24),
-                  PrimaryButton(
-                    label: _selected == 'free'
-                        ? 'Continue with Free'
-                        : 'Get ${_selectedPlan.name} — \$${_selectedPlan.price(_yearly).toStringAsFixed(2)}/mo',
-                    onPressed: () => context.pop(),
-                  ),
-                  const SizedBox(height: 14),
-                  Center(
-                    child: Text(
-                      'Cancel anytime. No hidden fees.',
-                      style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),
@@ -205,38 +246,33 @@ class _PlanToggle extends StatelessWidget {
   }
 }
 
-class _Plan {
-  final String id;
-  final String name;
-  final String tagline;
-  final IconData? icon;
-  final String? emoji;
-  final Color color;
-  final Color iconBg;
-  final double monthlyPrice;
-  final double yearlyPrice;
-  final List<String> features;
-  final bool popular;
+/// Maps the backend's FontAwesome slug (e.g. "fa-crown") to a Material icon,
+/// since the app doesn't bundle a FontAwesome icon font. `null` means the
+/// caller should render [_emojiFor] instead.
+IconData? _iconFor(String icon) {
+  switch (icon) {
+    case 'fa-shield-halved':
+      return Icons.shield_outlined;
+    case 'fa-star':
+      return Icons.star_outline;
+    case 'fa-briefcase':
+      return Icons.business_center_outlined;
+    case 'fa-crown':
+      return null;
+    default:
+      return Icons.shield_outlined;
+  }
+}
 
-  const _Plan({
-    required this.id,
-    required this.name,
-    required this.tagline,
-    required this.icon,
-    required this.emoji,
-    required this.color,
-    required this.iconBg,
-    required this.monthlyPrice,
-    required this.yearlyPrice,
-    required this.features,
-    this.popular = false,
-  });
+String? _emojiFor(String icon) => icon == 'fa-crown' ? '👑' : null;
 
-  double price(bool yearly) => yearly ? yearlyPrice / 12 : monthlyPrice;
+Color _colorFromHex(String hex) {
+  final cleaned = hex.replaceFirst('#', '');
+  return Color(int.parse('FF$cleaned', radix: 16));
 }
 
 class _PlanCard extends StatelessWidget {
-  final _Plan plan;
+  final SubscriptionPlanEntity plan;
   final bool yearly;
   final bool selected;
   final VoidCallback onSelect;
@@ -252,6 +288,10 @@ class _PlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final visibleFeatures = selected ? plan.features : plan.features.take(3).toList();
     final moreCount = plan.features.length - 3;
+    final color = _colorFromHex(plan.color);
+    final icon = _iconFor(plan.icon);
+    final emoji = _emojiFor(plan.icon);
+    final popular = plan.slug == 'premium';
 
     return GestureDetector(
       onTap: onSelect,
@@ -260,13 +300,13 @@ class _PlanCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: selected ? plan.color : AppColors.border, width: selected ? 2 : 1),
+          border: Border.all(color: selected ? color : AppColors.border, width: selected ? 2 : 1),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (plan.popular)
+            if (popular)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -301,32 +341,25 @@ class _PlanCard extends StatelessWidget {
                       Container(
                         width: 44,
                         height: 44,
-                        decoration: BoxDecoration(color: plan.iconBg, shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
                         child: Center(
-                          child: plan.icon != null
-                              ? Icon(plan.icon, color: plan.color, size: 22)
-                              : Text(plan.emoji!, style: const TextStyle(fontSize: 20)),
+                          child: icon != null
+                              ? Icon(icon, color: color, size: 22)
+                              : Text(emoji ?? '⭐', style: const TextStyle(fontSize: 20)),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(plan.name,
-                                style: GoogleFonts.inter(
-                                    color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 2),
-                            Text(plan.tagline, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                          ],
-                        ),
+                        child: Text(plan.name,
+                            style: GoogleFonts.inter(
+                                color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w800)),
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
                             plan.monthlyPrice == 0 ? '\$0' : '\$${plan.price(yearly).toStringAsFixed(2)}',
-                            style: GoogleFonts.inter(color: plan.color, fontSize: 20, fontWeight: FontWeight.w800),
+                            style: GoogleFonts.inter(color: color, fontSize: 20, fontWeight: FontWeight.w800),
                           ),
                           Text('per month', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
                         ],
@@ -338,7 +371,7 @@ class _PlanCard extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           children: [
-                            Icon(Icons.check, color: plan.color, size: 16),
+                            Icon(Icons.check, color: color, size: 16),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(f,
@@ -351,102 +384,13 @@ class _PlanCard extends StatelessWidget {
                   if (!selected && moreCount > 0)
                     Text(
                       '+$moreCount more features',
-                      style: GoogleFonts.inter(color: plan.color, fontSize: 13, fontWeight: FontWeight.w700),
+                      style: GoogleFonts.inter(color: color, fontSize: 13, fontWeight: FontWeight.w700),
                     ),
                 ],
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _FeatureComparison extends StatelessWidget {
-  static const _rows = [
-    _CompareRow('Verification', ['Level 1', 'Level 1', 'Level 2']),
-    _CompareRow('PIN Search', ['5/mo', 'Unlimited', 'Unlimited']),
-    _CompareRow('Background Check', [null, null, '✓']),
-    _CompareRow('Trust Score', [null, null, '✓']),
-    _CompareRow('Live Location', [null, '✓', '✓']),
-    _CompareRow('SOS Protection', ['✓', '✓', '✓']),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Feature Comparison',
-            style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 19, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 14),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(
-                  children: [
-                    const Expanded(flex: 3, child: SizedBox()),
-                    for (final label in const ['Free', 'Basic', 'Pro'])
-                      Expanded(
-                        child: Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              ..._rows.map((row) => _ComparisonRow(row: row)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CompareRow {
-  final String label;
-  final List<String?> values;
-  const _CompareRow(this.label, this.values);
-}
-
-class _ComparisonRow extends StatelessWidget {
-  final _CompareRow row;
-  const _ComparisonRow({required this.row});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.borderLight))),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: Text(row.label,
-                style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
-          ),
-          ...row.values.map((v) => Expanded(
-                child: Center(
-                  child: v == null
-                      ? Container(width: 14, height: 2, color: AppColors.border)
-                      : v == '✓'
-                          ? Icon(Icons.check, color: AppColors.success, size: 18)
-                          : Text(v, style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                ),
-              )),
-        ],
       ),
     );
   }

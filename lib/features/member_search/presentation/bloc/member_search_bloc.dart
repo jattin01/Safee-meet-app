@@ -72,9 +72,17 @@ class MemberSearchFound extends MemberSearchState {
 
 class MemberSearchError extends MemberSearchState {
   final String message;
-  const MemberSearchError(this.message, {super.recentSearches});
+  // True for 403s from the search endpoint (monthly PIN-search limit reached
+  // or subscription expired) — both mean "go upgrade your plan", so the UI
+  // makes this specific error tappable straight to the plans screen.
+  final bool upgradeRequired;
+  const MemberSearchError(
+    this.message, {
+    this.upgradeRequired = false,
+    super.recentSearches,
+  });
   @override
-  List<Object?> get props => [message, ...super.props];
+  List<Object?> get props => [message, upgradeRequired, ...super.props];
 }
 
 // ── BLoC ───────────────────────────────────────────────────────────────────
@@ -117,7 +125,11 @@ class MemberSearchBloc extends Bloc<MemberSearchEvent, MemberSearchState> {
   Future<void> _emitResult(Either<Failure, MemberEntity> result,
       Emitter<MemberSearchState> emit) async {
     await result.fold(
-      (f) async => emit(MemberSearchError(f.message, recentSearches: _recent)),
+      (f) async => emit(MemberSearchError(
+        f.message,
+        upgradeRequired: f is ServerFailure && f.statusCode == 403,
+        recentSearches: _recent,
+      )),
       (m) async {
         final refreshed = await _repository.getRecentSearches();
         refreshed.fold((_) {}, (list) => _recent = list);
