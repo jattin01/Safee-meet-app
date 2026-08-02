@@ -50,6 +50,21 @@ class SubscriptionPlanModel {
   static double _toDouble(dynamic v) =>
       v is String ? double.parse(v) : (v as num).toDouble();
 
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'slug': slug,
+        'monthly_price': monthlyPrice,
+        'yearly_price': yearlyPrice,
+        'trial_days': trialDays,
+        'pin_search_limit': pinSearchLimit,
+        'features': features,
+        'icon': icon,
+        'color': color,
+        'sort_order': sortOrder,
+        'is_active': isActive,
+      };
+
   SubscriptionPlanEntity toEntity() => SubscriptionPlanEntity(
         id: id,
         name: name,

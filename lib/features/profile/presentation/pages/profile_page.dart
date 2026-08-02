@@ -5,16 +5,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
+import '../../../../core/shared/utils/verification_gate.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
+import '../../../subscription/domain/entities/current_subscription_entity.dart';
+import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../../domain/entities/profile_entity.dart';
 import '../bloc/profile_bloc.dart';
+import '../cubit/reviews_cubit.dart';
 
 /// Renders the Safee PIN as a QR PNG and shares it together with the PIN
 /// text through a single OS share sheet.
@@ -57,7 +63,8 @@ Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
     final box = context.findRenderObject() as RenderBox?;
     await Share.shareXFiles(
       [XFile(file.path)],
-      text: 'My Safee PIN is $pin. Scan the attached QR code to verify me on SafeeMeet.',
+      text:
+          'My Safee PIN is $pin. Scan the attached QR code to verify me on SafeeMeet.',
       subject: 'My Safee PIN & Scanner',
       sharePositionOrigin:
           box != null ? (box.localToGlobal(Offset.zero) & box.size) : null,
@@ -65,7 +72,8 @@ Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
   } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to share right now. Please try again.')),
+        const SnackBar(
+            content: Text('Unable to share right now. Please try again.')),
       );
     }
   }
@@ -76,8 +84,16 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<ProfileBloc>()..add(const ProfileLoadRequested()),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (_) => sl<ProfileBloc>()..add(const ProfileLoadRequested()),
+        ),
+        // Backs the review stats (rating/count) and the review preview
+        // card below — both come from GET /v1/reviews, not from the
+        // /v1/auth/me-backed ProfileBloc.
+        BlocProvider(create: (_) => sl<ReviewsCubit>()..load()),
+      ],
       child: const _ProfileView(),
     );
   }
@@ -85,6 +101,20 @@ class ProfilePage extends StatelessWidget {
 
 class _ProfileView extends StatelessWidget {
   const _ProfileView();
+
+  Future<void> _refresh(BuildContext context) {
+    final profileBloc = context.read<ProfileBloc>();
+    // Set the listener up before dispatching, so it can't miss the emission.
+    final profileDone = profileBloc.stream
+        .firstWhere((s) => s is ProfileLoaded || s is ProfileError);
+    profileBloc.add(const ProfileLoadRequested());
+
+    return Future.wait([
+      profileDone,
+      context.read<ReviewsCubit>().load(forceRefresh: true),
+      context.read<CurrentSubscriptionCubit>().load(forceRefresh: true),
+    ]);
+  }
 
   String? _verificationLabel(String? level) => switch (level) {
         'high' => 'Level 3 Verified',
@@ -94,141 +124,138 @@ class _ProfileView extends StatelessWidget {
         _ => null,
       };
 
-  String _planLabel(String? plan) => switch (plan) {
-        'premium' => 'Premium plan',
-        'pro' => 'Pro plan',
-        _ => 'Free plan',
-      };
+  String _membershipSubtitle(CurrentSubscriptionState state) {
+    switch (state.status) {
+      case CurrentSubscriptionStatus.initial:
+      case CurrentSubscriptionStatus.loading:
+        return 'Loading plan…';
+      case CurrentSubscriptionStatus.error:
+        return 'View billing details';
+      case CurrentSubscriptionStatus.loaded:
+        final sub = state.subscription;
+        return sub == null ? 'Free plan' : '${sub.planLabel} plan';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ProfileBloc, ProfileState>(
       builder: (context, state) {
         final profile = state is ProfileLoaded ? state.profile : null;
-        return Scaffold(
-          backgroundColor: AppColors.lightBg,
-          body: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DarkScreenHeader(
-                  title: 'My Profile',
-                  centerTitle: true,
-                  titleFontSize: 18,
-                  trailing: GestureDetector(
-                    onTap: () => context.push(AppRoutes.settings),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          shape: BoxShape.circle),
-                      child: const Icon(Icons.settings_outlined,
-                          color: Colors.white, size: 20),
+        return BlocBuilder<ReviewsCubit, ReviewsState>(
+          builder: (context, reviewsState) => _buildScaffold(
+              context, profile, state is ProfileLoading, reviewsState),
+        );
+      },
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context,
+    ProfileEntity? profile,
+    bool profileLoading,
+    ReviewsState reviewsState,
+  ) {
+    final summary = reviewsState.summary;
+    return Scaffold(
+      backgroundColor: AppColors.lightBg,
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => _refresh(context),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DarkScreenHeader(
+                title: 'My Profile',
+                titleFontSize: 18,
+                child: profileLoading
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: CircularProgressIndicator(color: Colors.white54),
+                      )
+                    : _ProfileAvatarSection(profile: profile),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                    20, 20, 20, context.bottomSafePadding(32)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _PinCard(pin: profile?.safeePIN),
+                    const SizedBox(height: 16),
+                    _StatsRow(
+                      trustScore: profile?.trustScore ?? 0,
+                      rating: summary?.averageRating ?? 0,
+                      totalMeetings: profile?.totalMeetings ?? 0,
                     ),
-                  ),
-                  child: state is ProfileLoading
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child:
-                              CircularProgressIndicator(color: Colors.white54),
-                        )
-                      : _ProfileAvatarSection(profile: profile),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _PinCard(pin: profile?.safeePIN),
-                      const SizedBox(height: 16),
-                      _StatsRow(
-                        trustScore: profile?.trustScore ?? 0,
-                        rating: profile?.rating ?? 0,
-                        totalMeetings: profile?.totalMeetings ?? 0,
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: () => openVerificationScreen(context),
+                      child: _TrustScoreRow(
+                        score: profile?.trustScore ?? 0,
+                        level: profile?.verificationLevel ?? 'none',
                       ),
-                      const SizedBox(height: 16),
-                      GestureDetector(
-                        onTap: () => context.push(AppRoutes.verificationStatus),
-                        child: _TrustScoreRow(
-                          score: profile?.trustScore ?? 0,
-                          level: profile?.verificationLevel ?? 'none',
-                        ),
+                    ),
+                    const SizedBox(height: 16),
+                    BlocBuilder<CurrentSubscriptionCubit,
+                        CurrentSubscriptionState>(
+                      builder: (context, subState) =>
+                          _CurrentPlanCard(state: subState),
+                    ),
+                    const SizedBox(height: 16),
+                    AppListCard(children: [
+                      _NavTile(
+                        icon: Icons.ios_share,
+                        iconColor: AppColors.primary,
+                        label: 'Share Safee PIN & Scanner',
+                        subtitle: 'Send your PIN and QR code',
+                        onTap: () {
+                          if (!requireVerification(context)) return;
+                          _shareSafeePinAndScanner(context, profile?.safeePIN);
+                        },
                       ),
-                      const SizedBox(height: 16),
-                      _CurrentPlanCard(
-                          plan: profile?.subscriptionPlan ?? 'free'),
-                      const SizedBox(height: 16),
-                      AppListCard(children: [
-                        _NavTile(
-                          icon: Icons.ios_share,
-                          iconColor: AppColors.primary,
-                          label: 'Share Safee PIN & Scanner',
-                          subtitle: 'Send your PIN and QR code',
-                          onTap: () => _shareSafeePinAndScanner(
-                              context, profile?.safeePIN),
-                        ),
-                        _NavTile(
-                          icon: Icons.shield,
-                          iconColor: AppColors.success,
-                          label: 'Verification Status',
-                          subtitle:
-                              _verificationLabel(profile?.verificationLevel),
-                          onTap: () =>
-                              context.push(AppRoutes.verificationStatus),
-                        ),
-                        _NavTile(
-                          icon: Icons.star,
-                          iconColor: AppColors.warning,
-                          label: 'Reviews & Ratings',
-                          subtitle: profile != null
-                              ? '${profile.totalReviews} reviews · ${profile.rating.toStringAsFixed(1)} avg'
-                              : null,
-                          onTap: () => context.push(AppRoutes.reviews),
-                        ),
-                        _NavTile(
+                      _NavTile(
+                        icon: Icons.shield,
+                        iconColor: AppColors.success,
+                        label: 'Verification Status',
+                        subtitle:
+                            _verificationLabel(profile?.verificationLevel),
+                        onTap: () => openVerificationScreen(context),
+                      ),
+                      _NavTile(
+                        icon: Icons.star,
+                        iconColor: AppColors.warning,
+                        label: 'Reviews & Ratings',
+                        subtitle: summary != null
+                            ? '${summary.totalReviews} reviews · ${summary.averageRating.toStringAsFixed(1)} avg'
+                            : (reviewsState.status == ReviewsStatus.error
+                                ? null
+                                : 'Loading…'),
+                        onTap: () {
+                          if (!requireVerification(context)) return;
+                          context.push(AppRoutes.reviews);
+                        },
+                      ),
+                      BlocBuilder<CurrentSubscriptionCubit,
+                          CurrentSubscriptionState>(
+                        builder: (context, subState) => _NavTile(
                           icon: Icons.workspace_premium,
                           iconColor: AppColors.purple,
                           label: 'Membership & Billing',
-                          subtitle: _planLabel(profile?.subscriptionPlan),
+                          subtitle: _membershipSubtitle(subState),
                           onTap: () => context.push(AppRoutes.subscription),
                         ),
-                        _NavTile(
-                          icon: Icons.settings,
-                          iconColor: AppColors.textSecondary,
-                          label: 'Settings & Privacy',
-                          onTap: () => context.push(AppRoutes.settings),
-                        ),
-                      ]),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Reviews',
-                              style: GoogleFonts.inter(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w800)),
-                          GestureDetector(
-                            onTap: () => context.push(AppRoutes.reviews),
-                            child: Text('See all',
-                                style: GoogleFonts.inter(
-                                    color: AppColors.primary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700)),
-                          ),
-                        ],
                       ),
-                      const SizedBox(height: 12),
-                      const _ReviewPreview(),
-                    ],
-                  ),
+                    ]),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -291,11 +318,13 @@ class _ProfileAvatarSection extends StatelessWidget {
         const SizedBox(height: 4),
         if (email != null)
           Text(email,
-              style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+              style:
+                  const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
         if (phone != null) ...[
           const SizedBox(height: 2),
           Text(phone,
-              style: const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+              style:
+                  const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
         ],
         const SizedBox(height: 14),
         Row(
@@ -559,14 +588,39 @@ class _TrustScoreRow extends StatelessWidget {
 }
 
 class _CurrentPlanCard extends StatelessWidget {
-  final String plan;
-  const _CurrentPlanCard({this.plan = 'free'});
+  final CurrentSubscriptionState state;
+  const _CurrentPlanCard({required this.state});
+
+  static String _formatDate(DateTime d) => DateFormat('MMM d, yyyy').format(d);
+
+  String? _subtitleFor(CurrentSubscriptionEntity sub) {
+    if (sub.isCancelled && sub.renewsAt != null) {
+      return 'Access ends ${_formatDate(sub.renewsAt!)}';
+    }
+    if (sub.isTrialing && sub.hasTrial) {
+      return sub.renewsAt != null
+          ? 'Trial · ${sub.trialDays}d · ends ${_formatDate(sub.renewsAt!)}'
+          : 'Trial · ${sub.trialDays} days';
+    }
+    if (sub.hasActiveAccess && sub.renewsAt != null) {
+      final cadence = sub.billingCycle == 'yearly' ? 'yr' : 'mo';
+      return '\$${sub.price.toStringAsFixed(2)}/$cadence · Renews ${_formatDate(sub.renewsAt!)}';
+    }
+    if (!sub.hasActiveAccess) return sub.statusLabel;
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isPremium = plan == 'premium' || plan == 'pro';
-    final label =
-        isPremium ? plan[0].toUpperCase() + plan.substring(1) : 'Free';
+    final sub = state.subscription;
+    final isLoading = state.status == CurrentSubscriptionStatus.loading &&
+        !state.hasLoadedOnce;
+    final label = isLoading ? '—' : (sub?.planLabel ?? 'Free');
+    final hasPaidAccess = sub?.hasActiveAccess ?? false;
+    final subtitle = isLoading
+        ? 'Loading plan…'
+        : (sub != null ? _subtitleFor(sub) : "You're on the Free plan");
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -603,25 +657,47 @@ class _CurrentPlanCard extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 17,
                         fontWeight: FontWeight.w800)),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          color: AppColors.textTertiary, fontSize: 11)),
+                ],
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () => context.push(AppRoutes.subscription),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                    colors: [AppColors.primary, AppColors.primaryLight]),
-                borderRadius: BorderRadius.circular(20),
+          // No plan above the user's current one — there's nothing left to
+          // upgrade to, so the Upgrade/Manage CTA is hidden entirely and
+          // only the plan itself (already rendered above) is shown.
+          if (!state.isOnHighestPlan)
+            GestureDetector(
+              onTap: () => context.push(AppRoutes.subscription),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      colors: [AppColors.primary, AppColors.primaryLight]),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(hasPaidAccess ? 'Manage' : 'Upgrade',
+                    style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700)),
               ),
-              child: Text('Upgrade',
-                  style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700)),
+            )
+          else
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child:
+                  const Icon(Icons.check, color: AppColors.success, size: 18),
             ),
-          ),
         ],
       ),
     );
@@ -685,63 +761,3 @@ class _NavTile extends StatelessWidget {
   }
 }
 
-class _ReviewPreview extends StatelessWidget {
-  const _ReviewPreview();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: const BoxDecoration(
-                    color: Color(0xFFDCEBFF), shape: BoxShape.circle),
-                child: const Center(
-                    child: Text('😊', style: TextStyle(fontSize: 16))),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Sarah M.',
-                        style: GoogleFonts.inter(
-                            color: AppColors.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700)),
-                    Row(
-                      children: List.generate(
-                          5,
-                          (i) => const Icon(Icons.star,
-                              color: AppColors.warning, size: 13)),
-                    ),
-                  ],
-                ),
-              ),
-              Text('Jun 9',
-                  style:
-                      TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Alex was incredibly professional and trustworthy. Felt completely safe during our meeting.',
-            style: TextStyle(
-                color: AppColors.textSecondary, fontSize: 13, height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
-}

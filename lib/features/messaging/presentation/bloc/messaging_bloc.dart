@@ -82,8 +82,16 @@ class SendAttachmentMessage extends MessagingEvent {
   });
 
   @override
-  List<Object?> get props =>
-      [roomId, receiverId, filePath, attachmentType, fileName, fileSize, mimeType, retryTempId];
+  List<Object?> get props => [
+        roomId,
+        receiverId,
+        filePath,
+        attachmentType,
+        fileName,
+        fileSize,
+        mimeType,
+        retryTempId
+      ];
 }
 
 class MarkChatRead extends MessagingEvent {
@@ -164,7 +172,8 @@ class _PresenceChanged extends MessagingEvent {
 class _AttachmentProgressUpdated extends MessagingEvent {
   final String tempId;
   final double progress;
-  const _AttachmentProgressUpdated({required this.tempId, required this.progress});
+  const _AttachmentProgressUpdated(
+      {required this.tempId, required this.progress});
   @override
   List<Object?> get props => [tempId, progress];
 }
@@ -377,9 +386,10 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     }
 
     _convSub = _repository.conversationsStream(uid).listen(
-      (list) => add(_ConversationsUpdated(list)),
-      onError: (_) => add(const _ConversationsError('Failed to load conversations')),
-    );
+          (list) => add(_ConversationsUpdated(list)),
+          onError: (_) =>
+              add(const _ConversationsError('Failed to load conversations')),
+        );
   }
 
   void _onConversationsUpdated(
@@ -400,7 +410,9 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     FetchUsers _,
     Emitter<MessagingState> emit,
   ) async {
-    emit(const MessagingLoading());
+    // Skip the full-screen loading state on a pull-to-refresh — only the
+    // very first load should blank the screen while it fetches.
+    if (state is! UsersLoaded) emit(const MessagingLoading());
     final uid = await _session.getUserId();
     if (uid == null) {
       emit(const MessagingError('Not signed in'));
@@ -517,8 +529,8 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
         : AppConstants.maxDocumentSizeBytes;
     if (event.fileSize > maxSize) return;
 
-    final tempId = event.retryTempId ??
-        'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final tempId =
+        event.retryTempId ?? 'temp_${DateTime.now().millisecondsSinceEpoch}';
 
     final displayContent = event.attachmentType == MessageType.image
         ? (event.caption?.isNotEmpty == true ? event.caption! : '📷 Photo')
@@ -545,9 +557,8 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     // Add new message or replace existing (retry)
     final List<MessageEntity> updatedMessages;
     if (event.retryTempId != null) {
-      updatedMessages = current.messages
-          .map((m) => m.id == tempId ? optimistic : m)
-          .toList();
+      updatedMessages =
+          current.messages.map((m) => m.id == tempId ? optimistic : m).toList();
     } else {
       updatedMessages = [...current.messages, optimistic];
     }
@@ -655,9 +666,8 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     final current = state as ChatState;
 
     final uid = current.currentUserId;
-    final typeStr = pendingEvent.attachmentType == MessageType.image
-        ? 'image'
-        : 'document';
+    final typeStr =
+        pendingEvent.attachmentType == MessageType.image ? 'image' : 'document';
     final displayContent = pendingEvent.attachmentType == MessageType.image
         ? (pendingEvent.caption?.isNotEmpty == true
             ? pendingEvent.caption!
@@ -768,9 +778,8 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
     if (state is! ChatState) return;
     final current = state as ChatState;
 
-    final streamKeys = event.messages
-        .map((m) => '${m.senderId}:${m.content}')
-        .toSet();
+    final streamKeys =
+        event.messages.map((m) => '${m.senderId}:${m.content}').toSet();
 
     // Keep pending temps that haven't arrived from Firestore yet
     final pendingTemps = current.messages
@@ -826,12 +835,11 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
 
   void _subscribeToMessages(String roomId) {
     _msgSub?.cancel();
-    _msgSub = _repository
-        .messageStreamWithLimit(roomId, _messageStreamLimit)
-        .listen(
-          (msgs) => add(_StreamBatchReceived(msgs)),
-          onError: (_) {},
-        );
+    _msgSub =
+        _repository.messageStreamWithLimit(roomId, _messageStreamLimit).listen(
+              (msgs) => add(_StreamBatchReceived(msgs)),
+              onError: (_) {},
+            );
   }
 
   void _subscribeToTyping(String roomId, String partnerUid) {
@@ -872,9 +880,7 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
   @override
   Future<void> close() async {
     if (_typingRoomId != null) {
-      _repository
-          .setTyping(roomId: _typingRoomId!, isTyping: false)
-          .ignore();
+      _repository.setTyping(roomId: _typingRoomId!, isTyping: false).ignore();
     }
     await _convSub?.cancel();
     await _msgSub?.cancel();

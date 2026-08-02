@@ -37,6 +37,11 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
     return BlocConsumer<SosBloc, SosState>(
       listener: (context, state) {
         if (state is SosDone) context.pop();
+        if (state is SosError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(state.message)),
+          );
+        }
       },
       builder: (context, state) {
         final activated = state is SosActivatedState;
@@ -51,7 +56,11 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
                   )
                 : _IdleView(
                     progress: state is SosHolding ? state.progress : 0.0,
-                    contactCount: state is SosInitial ? state.contacts.length : 0,
+                    contactCount: switch (state) {
+                      SosInitial(:final contacts) => contacts.length,
+                      SosError(:final contacts) => contacts.length,
+                      _ => 0,
+                    },
                     pulseAnim: _pulseAnim,
                     onHoldStart: () => context
                         .read<SosBloc>()

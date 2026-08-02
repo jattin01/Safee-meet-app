@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_colors.dart';
-import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/verification_gate.dart';
 import '../../../../core/shared/widgets/app_logo_widget.dart';
 import '../../../../core/shared/widgets/section_header.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
-import '../../../verification/domain/repositories/verification_repository.dart';
+import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -65,11 +65,18 @@ class HomePage extends StatelessWidget {
                         SectionHeader(
                           title: 'Meeting Activity',
                           actionLabel: 'See all',
-                          onAction: () => context.push(AppRoutes.meetings),
+                          onAction: () {
+                            if (!requireVerification(context)) return;
+                            context.push(AppRoutes.meetings);
+                          },
                         ),
                         _MeetingSyncCard(profile: profile),
                         const SizedBox(height: 24),
-                        _UpgradeCard(plan: profile.subscriptionPlan),
+                        BlocBuilder<CurrentSubscriptionCubit,
+                            CurrentSubscriptionState>(
+                          builder: (context, subState) =>
+                              _UpgradeCard(state: subState),
+                        ),
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -500,7 +507,7 @@ class _QuickActions extends StatelessWidget {
       icon: Icons.qr_code_scanner,
       label: 'Scan QR',
       color: AppColors.purple,
-      route: AppRoutes.memberSearch,
+      route: '${AppRoutes.memberSearch}?tab=qr',
     ),
     _QuickAction(
       icon: Icons.event_outlined,
@@ -536,41 +543,19 @@ class _QuickActionTile extends StatelessWidget {
   final _QuickAction action;
   const _QuickActionTile({required this.action});
 
-  // Statuses that mean documents are already uploaded — go straight to the
-  // Verification (status) screen instead of the upload wizard. 'rejected'
-  // still lands there so the user sees the rejection reason and an
-  // "Upload Again" option, rather than re-asking for documents up front.
-  static const _submittedStatuses = ['pending', 'approved', 'rejected'];
-
-  Future<void> _onVerifyTap(BuildContext context) async {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    final result = await sl<VerificationRepository>().getVerificationStatus();
-
-    if (!context.mounted) return;
-    Navigator.of(context, rootNavigator: true).pop();
-
-    final alreadySubmitted = result.fold(
-      (_) => false,
-      (status) => _submittedStatuses.contains(status.kycStatus),
-    );
-
-    if (!context.mounted) return;
-    context.push(
-      alreadySubmitted ? AppRoutes.verificationStatus : AppRoutes.verification,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => action.label == 'Verify'
-          ? _onVerifyTap(context)
-          : context.push(action.route),
+      onTap: () {
+        if (action.label == 'Verify') {
+          openVerificationScreen(context);
+          return;
+        }
+        // Search / Scan QR / Meeting all lead to verification-gated
+        // features — Verify itself must stay reachable regardless.
+        if (!requireVerification(context)) return;
+        context.push(action.route);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
@@ -630,7 +615,10 @@ class _SafetyCenter extends StatelessWidget {
             iconBg: AppColors.primary.withOpacity(0.1),
             title: 'Emergency SOS',
             subtitle: 'Tap to activate an emergency alert',
-            onTap: () => context.push(AppRoutes.sos),
+            onTap: () {
+              if (!requireVerification(context)) return;
+              context.push(AppRoutes.sos);
+            },
           ),
           const _RowDivider(),
           _SafetyRow(
@@ -730,7 +718,10 @@ class _MeetingSyncCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push(AppRoutes.meetings),
+      onTap: () {
+        if (!requireVerification(context)) return;
+        context.push(AppRoutes.meetings);
+      },
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -777,7 +768,8 @@ class _MeetingSyncCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+            const Icon(Icons.chevron_right,
+                color: AppColors.textTertiary, size: 20),
           ],
         ),
       ),
@@ -786,15 +778,35 @@ class _MeetingSyncCard extends StatelessWidget {
 }
 
 class _UpgradeCard extends StatelessWidget {
-  final String plan;
-  const _UpgradeCard({required this.plan});
+  final CurrentSubscriptionState state;
+  const _UpgradeCard({required this.state});
 
   @override
   Widget build(BuildContext context) {
-    final isFree = plan == 'free';
+    final sub = state.subscription;
+    final hasPaidAccess = sub?.hasActiveAccess ?? false;
+    final isFree = !hasPaidAccess;
+    // Already on the highest-tier plan (by sortOrder, cross-checked against
+    // the live plan catalog) — there's nothing left to upgrade to, so no
+    // upgrade CTA is shown at all, just the plan itself.
+    final isHighestPlan = state.isOnHighestPlan;
+    final planName = sub?.planLabel ?? 'Free';
+
+    final String title;
+    final String subtitle;
+    if (isHighestPlan) {
+      title = '$planName Plan';
+      subtitle = "You're on our top plan — all features unlocked";
+    } else if (isFree) {
+      title = 'Free Plan';
+      subtitle = 'Unlock more trust and safety features';
+    } else {
+      title = '$planName Plan';
+      subtitle = 'Review billing and subscription details';
+    }
 
     return GestureDetector(
-      onTap: () => context.push(AppRoutes.subscription),
+      onTap: isHighestPlan ? null : () => context.push(AppRoutes.subscription),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -810,8 +822,11 @@ class _UpgradeCard extends StatelessWidget {
                 color: AppColors.primary,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child:
-                  const Icon(Icons.trending_up, color: Colors.white, size: 22),
+              child: Icon(
+                isHighestPlan ? Icons.workspace_premium : Icons.trending_up,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -819,7 +834,7 @@ class _UpgradeCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isFree ? 'Upgrade to Premium' : 'Manage Your Plan',
+                    title,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 15,
@@ -828,15 +843,14 @@ class _UpgradeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isFree
-                        ? 'Unlock more trust and safety features'
-                        : 'Review billing and subscription details',
+                    subtitle,
                     style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.white60, size: 22),
+            if (!isHighestPlan)
+              const Icon(Icons.chevron_right, color: Colors.white60, size: 22),
           ],
         ),
       ),

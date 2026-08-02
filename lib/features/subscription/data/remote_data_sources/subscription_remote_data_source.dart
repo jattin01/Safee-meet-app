@@ -1,4 +1,6 @@
 import '../../../../core/services/api_client.dart';
+import '../models/current_subscription_model.dart';
+import '../models/subscription_comparison_model.dart';
 import '../models/subscription_plan_model.dart';
 
 abstract class SubscriptionRemoteDataSource {
@@ -8,6 +10,11 @@ abstract class SubscriptionRemoteDataSource {
     required String billingCycle,
     String? stripePaymentMethodId,
   });
+  Future<SubscriptionComparisonModel> getComparison();
+
+  /// Returns `null` when the account has no subscription row at all yet
+  /// (i.e. it's on the implicit free tier) — the caller maps a 404 to this.
+  Future<CurrentSubscriptionModel?> getCurrentSubscription();
 }
 
 class SubscriptionRemoteDataSourceImpl implements SubscriptionRemoteDataSource {
@@ -36,5 +43,20 @@ class SubscriptionRemoteDataSourceImpl implements SubscriptionRemoteDataSource {
         'stripe_payment_method_id': stripePaymentMethodId,
     });
     return response.data as Map<String, dynamic>;
+  }
+
+  @override
+  Future<SubscriptionComparisonModel> getComparison() async {
+    final response = await _api.dio.get('/v1/subscriptions/comparison');
+    return SubscriptionComparisonModel.fromJson(
+        response.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<CurrentSubscriptionModel?> getCurrentSubscription() async {
+    final response = await _api.dio.get('/v1/subscriptions/current');
+    final data = response.data;
+    if (data == null || (data is Map && data.isEmpty)) return null;
+    return CurrentSubscriptionModel.fromJson(data as Map<String, dynamic>);
   }
 }

@@ -4,6 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../config/app_colors.dart';
 import '../../config/app_constants.dart';
 
+/// A single real `TextField` (transparent, stacked over the visible boxes)
+/// backs all the digits. This — rather than one `TextField` per box — is
+/// what lets the OS's SMS/one-time-code autofill suggestion target the
+/// field at all; autofill can't target a widget that doesn't exist.
 class OtpInputWidget extends StatefulWidget {
   final ValueChanged<String> onCompleted;
   final VoidCallback? onResend;
@@ -23,60 +27,51 @@ class OtpInputWidget extends StatefulWidget {
 }
 
 class _OtpInputWidgetState extends State<OtpInputWidget> {
-  late final List<TextEditingController> _controllers;
-  late final List<FocusNode> _focusNodes;
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  String _value = '';
+  bool _completedFired = false;
 
   @override
   void initState() {
     super.initState();
-    _controllers = List.generate(widget.length, (_) => TextEditingController());
-    _focusNodes = List.generate(widget.length, (_) => FocusNode());
+    _controller = TextEditingController();
+    _focusNode = FocusNode();
+    // Auto-focus so the keyboard (and the OS's one-time-code suggestion,
+    // where supported) appears the moment this step is shown.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+    _focusNode.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    for (final c in _controllers) {
-      c.dispose();
-    }
-    for (final f in _focusNodes) {
-      f.dispose();
-    }
+    _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  void _onChanged(int index, String value) {
-    if (value.length > 1) {
-      final digits = value.replaceAll(RegExp(r'\D'), '');
-      for (int i = 0; i < widget.length && i < digits.length; i++) {
-        _controllers[i].text = digits[i];
+  void _onChanged(String raw) {
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits != raw) {
+      _controller.value = TextEditingValue(
+        text: digits,
+        selection: TextSelection.collapsed(offset: digits.length),
+      );
+    }
+    setState(() => _value = digits);
+    widget.onChanged?.call(digits);
+
+    if (digits.length == widget.length) {
+      if (!_completedFired) {
+        _completedFired = true;
+        HapticFeedback.lightImpact();
+        _focusNode.unfocus();
+        widget.onCompleted(digits);
       }
-      FocusScope.of(context).unfocus();
-      _checkComplete();
-      return;
-    }
-
-    if (value.isNotEmpty && index < widget.length - 1) {
-      _focusNodes[index + 1].requestFocus();
-    }
-    _checkComplete();
-  }
-
-  void _onKeyEvent(int index, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.backspace &&
-        _controllers[index].text.isEmpty &&
-        index > 0) {
-      _focusNodes[index - 1].requestFocus();
-      _controllers[index - 1].clear();
-    }
-  }
-
-  void _checkComplete() {
-    final otp = _controllers.map((c) => c.text).join();
-    widget.onChanged?.call(otp);
-    if (otp.length == widget.length &&
-        otp.split('').every((d) => RegExp(r'\d').hasMatch(d))) {
-      widget.onCompleted(otp);
+    } else {
+      _completedFired = false;
     }
   }
 
@@ -84,51 +79,84 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(widget.length, (i) {
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 5),
-              width: 44,
-              height: 52,
-              decoration: BoxDecoration(
-                color: _controllers[i].text.isNotEmpty
-                    ? AppColors.primary.withOpacity(0.04)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: _controllers[i].text.isNotEmpty
-                      ? AppColors.primary
-                      : AppColors.border,
-                  width: _controllers[i].text.isNotEmpty ? 2 : 1.5,
+        GestureDetector(
+          onTap: () => _focusNode.requestFocus(),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(widget.length, (i) {
+                  final isFilled = i < _value.length;
+                  final isActive =
+                      i == _value.length && _focusNode.hasFocus;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeOut,
+                    margin: const EdgeInsets.symmetric(horizontal: 5),
+                    width: 46,
+                    height: 56,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isFilled
+                          ? AppColors.primary.withOpacity(0.06)
+                          : AppColors.cardBg,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isFilled || isActive
+                            ? AppColors.primary
+                            : AppColors.border,
+                        width: isFilled || isActive ? 2 : 1.5,
+                      ),
+                      boxShadow: isActive
+                          ? [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.18),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: isFilled
+                        ? Text(
+                            _value[i],
+                            style: GoogleFonts.inter(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          )
+                        : (isActive ? const _BlinkingCaret() : null),
+                  );
+                }),
+              ),
+              // Real input sits on top, fully transparent — it captures
+              // taps/typing/autofill; the boxes above are pure display.
+              Opacity(
+                opacity: 0,
+                child: SizedBox(
+                  width: widget.length * 56.0,
+                  height: 56,
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    autofillHints: const [AutofillHints.oneTimeCode],
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    maxLength: widget.length,
+                    showCursor: false,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: _onChanged,
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      border: InputBorder.none,
+                    ),
+                  ),
                 ),
               ),
-              child: KeyboardListener(
-                focusNode: FocusNode(),
-                onKeyEvent: (e) => _onKeyEvent(i, e),
-                child: TextField(
-                  controller: _controllers[i],
-                  focusNode: _focusNodes[i],
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  maxLength: 1,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (v) => _onChanged(i, v),
-                  style: GoogleFonts.inter(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                  ),
-                ),
-              ),
-            );
-          }),
+            ],
+          ),
         ),
         if (widget.onResend != null) ...[
           const SizedBox(height: 16),
@@ -157,6 +185,45 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// A soft blinking caret marking the next box to be filled — replaces the
+/// plain static border highlight with a small motion cue, matching the
+/// blinking-cursor convention users expect from a native text field.
+class _BlinkingCaret extends StatefulWidget {
+  const _BlinkingCaret();
+
+  @override
+  State<_BlinkingCaret> createState() => _BlinkingCaretState();
+}
+
+class _BlinkingCaretState extends State<_BlinkingCaret>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 800),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller.drive(CurveTween(curve: Curves.easeInOut)),
+      child: Container(
+        width: 2,
+        height: 26,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(1),
+        ),
+      ),
     );
   }
 }

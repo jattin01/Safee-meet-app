@@ -73,10 +73,12 @@ class EmergencyContactError extends EmergencyContactState {
 }
 
 // ── BLoC ───────────────────────────────────────────────────────────────────
-class EmergencyContactBloc extends Bloc<EmergencyContactEvent, EmergencyContactState> {
+class EmergencyContactBloc
+    extends Bloc<EmergencyContactEvent, EmergencyContactState> {
   final EmergencyContactRepository _repository;
 
-  EmergencyContactBloc(this._repository) : super(const EmergencyContactInitial()) {
+  EmergencyContactBloc(this._repository)
+      : super(const EmergencyContactInitial()) {
     on<EmergencyContactsLoadRequested>(_onLoad);
     on<EmergencyContactAddRequested>(_onAdd);
     on<EmergencyContactDeleteRequested>(_onDelete);
@@ -93,7 +95,11 @@ class EmergencyContactBloc extends Bloc<EmergencyContactEvent, EmergencyContactS
     EmergencyContactsLoadRequested event,
     Emitter<EmergencyContactState> emit,
   ) async {
-    emit(const EmergencyContactLoading());
+    // Skip the full-screen loading state on a pull-to-refresh — only the
+    // very first load should blank the list while it fetches.
+    if (state is! EmergencyContactLoaded) {
+      emit(const EmergencyContactLoading());
+    }
     final result = await _repository.getContacts();
     result.fold(
       (failure) => emit(EmergencyContactError(failure.message)),
@@ -112,7 +118,8 @@ class EmergencyContactBloc extends Bloc<EmergencyContactEvent, EmergencyContactS
       phoneNumber: event.phoneNumber,
     );
     result.fold(
-      (failure) => emit(EmergencyContactError(failure.message, contacts: _currentContacts)),
+      (failure) => emit(
+          EmergencyContactError(failure.message, contacts: _currentContacts)),
       (contact) => emit(EmergencyContactLoaded([..._currentContacts, contact])),
     );
   }
@@ -125,7 +132,8 @@ class EmergencyContactBloc extends Bloc<EmergencyContactEvent, EmergencyContactS
     emit(EmergencyContactLoaded(previous, isSubmitting: true));
     final result = await _repository.deleteContact(event.contactId);
     result.fold(
-      (failure) => emit(EmergencyContactError(failure.message, contacts: previous)),
+      (failure) =>
+          emit(EmergencyContactError(failure.message, contacts: previous)),
       (_) => emit(EmergencyContactLoaded(
         previous.where((c) => c.id != event.contactId).toList(),
       )),

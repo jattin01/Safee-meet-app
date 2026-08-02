@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../../domain/entities/meeting_entity.dart';
 import '../bloc/meetings_bloc.dart';
@@ -59,104 +60,113 @@ class _MeetingsListViewState extends State<_MeetingsListView>
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<MeetingsBloc, MeetingsState>(
-      listener: (context, state) {
-        if (state is MeetingsError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
-          );
-        }
-        if (state is MeetingsListLoaded) {
-          setState(() => _meetings = state.meetings);
-        }
+    // This screen is reached via context.go(...) from a few flows (finishing
+    // a meeting review, scheduling a meeting, ending a meeting) which clear
+    // the navigation stack, leaving nothing to pop back to — without this,
+    // the system back button/gesture would exit the app instead of doing
+    // anything. Fall back to Home when there's no previous screen.
+    return PopScope(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go(AppRoutes.home);
       },
-      builder: (context, state) {
-        final upcoming = _meetings
-            .where((m) =>
-                m.status == MeetingStatus.scheduled ||
-                m.status == MeetingStatus.enRoute ||
-                m.status == MeetingStatus.arrived ||
-                (m.status == MeetingStatus.pendingApproval && m.isHost))
-            .toList();
-        final requests = _meetings
-            .where((m) =>
-                m.status == MeetingStatus.pendingApproval && !m.isHost)
-            .toList();
-        final past = _meetings
-            .where((m) =>
-                m.status == MeetingStatus.completed ||
-                m.status == MeetingStatus.cancelled ||
-                m.status == MeetingStatus.declined)
-            .toList();
+      child: BlocConsumer<MeetingsBloc, MeetingsState>(
+        listener: (context, state) {
+          if (state is MeetingsError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message)),
+            );
+          }
+          if (state is MeetingsListLoaded) {
+            setState(() => _meetings = state.meetings);
+          }
+        },
+        builder: (context, state) {
+          final upcoming = _meetings
+              .where((m) =>
+                  m.status == MeetingStatus.scheduled ||
+                  m.status == MeetingStatus.enRoute ||
+                  m.status == MeetingStatus.arrived ||
+                  (m.status == MeetingStatus.pendingApproval && m.isHost))
+              .toList();
+          final requests = _meetings
+              .where(
+                  (m) => m.status == MeetingStatus.pendingApproval && !m.isHost)
+              .toList();
+          final past = _meetings
+              .where((m) =>
+                  m.status == MeetingStatus.completed ||
+                  m.status == MeetingStatus.cancelled ||
+                  m.status == MeetingStatus.declined)
+              .toList();
 
-        return Scaffold(
-          backgroundColor: AppColors.lightBg,
-          appBar: AppBar(
+          return Scaffold(
             backgroundColor: AppColors.lightBg,
-            elevation: 0,
-            iconTheme: const IconThemeData(color: AppColors.textPrimary),
-            title: const Text(
-              'My Meetings',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
+            appBar: AppBar(
+              backgroundColor: AppColors.lightBg,
+              elevation: 0,
+              iconTheme: const IconThemeData(color: AppColors.textPrimary),
+              title: const Text(
+                'My Meetings',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              bottom: TabBar(
+                controller: _tabs,
+                indicatorColor: AppColors.primary,
+                labelColor: AppColors.primary,
+                unselectedLabelColor: AppColors.textSecondary,
+                tabs: [
+                  const Tab(text: 'Upcoming'),
+                  Tab(
+                      text: requests.isEmpty
+                          ? 'Requests'
+                          : 'Requests (${requests.length})'),
+                  const Tab(text: 'Past'),
+                ],
               ),
             ),
-            bottom: TabBar(
-              controller: _tabs,
-              indicatorColor: AppColors.primary,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              tabs: [
-                const Tab(text: 'Upcoming'),
-                Tab(text: requests.isEmpty ? 'Requests' : 'Requests (${requests.length})'),
-                const Tab(text: 'Past'),
-              ],
-            ),
-          ),
-          body: state is MeetingsLoading && _meetings.isEmpty
-              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-              : TabBarView(
-                  controller: _tabs,
-                  children: [
-                    _MeetingsList(
-                      meetings: upcoming,
-                      onRefresh: _refresh,
-                      emptyMessage: 'No upcoming meetings',
-                      emptySubtitle: 'Plan a safe meetup with someone in your network.',
-                      emptyIcon: Icons.calendar_today_outlined,
-                      showEmptyAction: true,
-                      clickable: true,
-                    ),
-                    _MeetingsList(
-                      meetings: requests,
-                      onRefresh: _refresh,
-                      emptyMessage: 'No pending requests',
-                      emptySubtitle: 'Meeting requests from others will show up here.',
-                      emptyIcon: Icons.mark_email_unread_outlined,
-                      showActions: true,
-                    ),
-                    _MeetingsList(
-                      meetings: past,
-                      onRefresh: _refresh,
-                      emptyMessage: 'No past meetings',
-                      emptySubtitle: "Meetings you've completed or cancelled will appear here.",
-                      emptyIcon: Icons.history,
-                    ),
-                  ],
-                ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => context.push(AppRoutes.meetingSetup),
-            backgroundColor: AppColors.primary,
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text(
-              'Schedule',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-            ),
-          ),
-        );
-      },
+            body: state is MeetingsLoading && _meetings.isEmpty
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary))
+                : TabBarView(
+                    controller: _tabs,
+                    children: [
+                      _MeetingsList(
+                        meetings: upcoming,
+                        onRefresh: _refresh,
+                        emptyMessage: 'No upcoming meetings',
+                        emptySubtitle:
+                            'Plan a safe meetup with someone in your network.',
+                        emptyIcon: Icons.calendar_today_outlined,
+                        showEmptyAction: true,
+                        clickable: true,
+                      ),
+                      _MeetingsList(
+                        meetings: requests,
+                        onRefresh: _refresh,
+                        emptyMessage: 'No pending requests',
+                        emptySubtitle:
+                            'Meeting requests from others will show up here.',
+                        emptyIcon: Icons.mark_email_unread_outlined,
+                        showActions: true,
+                      ),
+                      _MeetingsList(
+                        meetings: past,
+                        onRefresh: _refresh,
+                        emptyMessage: 'No past meetings',
+                        emptySubtitle:
+                            "Meetings you've completed or cancelled will appear here.",
+                        emptyIcon: Icons.history,
+                      ),
+                    ],
+                  ),
+          );
+        },
+      ),
     );
   }
 }
@@ -197,7 +207,7 @@ class _MeetingsList extends StatelessWidget {
       color: AppColors.primary,
       onRefresh: onRefresh,
       child: ListView.separated(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, context.bottomSafePadding(20)),
         itemCount: meetings.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, i) => _MeetingCard(
@@ -338,12 +348,25 @@ class _MeetingCard extends StatelessWidget {
                   icon: Icons.access_time,
                   label: DateFormat('h:mm a').format(meeting.scheduledAt),
                 ),
-                const Spacer(),
-                _InfoChip(
-                  icon: Icons.location_on_outlined,
-                  label: meeting.location.length > 16
-                      ? '${meeting.location.substring(0, 16)}…'
-                      : meeting.location,
+              ],
+            ),
+            // Own row (rather than crammed alongside the date/time chips) so
+            // the full address gets real width to ellipsize against instead
+            // of being hard-cut to a fixed character count.
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.location_on_outlined,
+                    color: AppColors.textSecondary, size: 14),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    meeting.location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: AppColors.textSecondary, fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -358,7 +381,8 @@ class _MeetingCard extends StatelessWidget {
                           .add(MeetingDenyRequested(meeting.id)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
-                        side: BorderSide(color: AppColors.error.withOpacity(0.4)),
+                        side:
+                            BorderSide(color: AppColors.error.withOpacity(0.4)),
                       ),
                       child: const Text('Deny'),
                     ),

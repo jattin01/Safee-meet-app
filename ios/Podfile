@@ -3,6 +3,29 @@ platform :ios, '15.5'
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
+# didit_sdk native variant — 'core' = ID/passport scan + selfie liveness only,
+# no NFC passport chip reading (keeps the Pod smaller and avoids the extra
+# NFC entitlement/capability setup that variant would require).
+$DiditSdkIosVariant = 'core'
+
+# The native DiditSDK pod isn't on the public CocoaPods trunk, so it must be
+# pinned to its podspec URL explicitly here — the Flutter plugin's own
+# podspec only picks the subspec (Core/AutoDetection/NFC/All) via
+# $DiditSdkIosVariant above, it doesn't know where to fetch DiditSDK itself.
+didit_sdk_ios_pod = case $DiditSdkIosVariant
+                    when 'all'
+                      'DiditSDK/All'
+                    when 'core'
+                      'DiditSDK/Core'
+                    when 'autodetection'
+                      'DiditSDK/AutoDetection'
+                    when 'nfc'
+                      'DiditSDK/NFC'
+                    else
+                      raise "Invalid $DiditSdkIosVariant '#{$DiditSdkIosVariant}'. Supported values: all, core, autodetection, nfc."
+                    end
+didit_sdk_ios_podspec = 'https://raw.githubusercontent.com/didit-protocol/sdk-ios/4.5.3/DiditSDK.podspec'
+
 project 'Runner', {
   'Debug' => :debug,
   'Profile' => :release,
@@ -28,6 +51,8 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
+
+  pod didit_sdk_ios_pod, :podspec => didit_sdk_ios_podspec
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do

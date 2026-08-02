@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data/repositories/profile_repository_impl.dart';
@@ -38,7 +39,17 @@ class CurrentUserState extends Equatable {
 class CurrentUserCubit extends Cubit<CurrentUserState> {
   final ProfileRepository _repository;
 
+  // Only while unverified — polls /v1/auth/me every few seconds so
+  // verification-gated features unlock across the whole app the moment
+  // review completes, without the user logging out, restarting, or manually
+  // refreshing. Stops itself once verified.
+  static const _pollInterval = Duration(seconds: 8);
+  Timer? _pollTimer;
+
   CurrentUserCubit(this._repository) : super(const CurrentUserState());
+
+  bool get isVerified =>
+      state.profile != null && state.profile!.verificationLevel != 'none';
 
   Future<void> load({bool forceRefresh = false}) async {
     if (!forceRefresh &&
@@ -75,5 +86,20 @@ class CurrentUserCubit extends Cubit<CurrentUserState> {
         ),
       ),
     );
+    _scheduleNextPollIfNeeded();
+  }
+
+  void _scheduleNextPollIfNeeded() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    if (!isVerified && !isClosed) {
+      _pollTimer = Timer(_pollInterval, () => load(forceRefresh: true));
+    }
+  }
+
+  @override
+  Future<void> close() {
+    _pollTimer?.cancel();
+    return super.close();
   }
 }

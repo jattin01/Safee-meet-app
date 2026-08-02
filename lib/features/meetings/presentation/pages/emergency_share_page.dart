@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../domain/entities/emergency_share_entity.dart';
 import '../bloc/emergency_share_bloc.dart';
 
@@ -23,6 +24,14 @@ class _EmergencySharePageState extends State<EmergencySharePage> {
     });
   }
 
+  Future<void> _refresh(BuildContext context) {
+    final bloc = context.read<EmergencyShareBloc>();
+    final done = bloc.stream.firstWhere(
+        (s) => s is EmergencyShareLoaded || s is EmergencyShareError);
+    bloc.add(EmergencyShareRequested(widget.meetingId));
+    return done;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -37,7 +46,8 @@ class _EmergencySharePageState extends State<EmergencySharePage> {
       ),
       body: BlocBuilder<EmergencyShareBloc, EmergencyShareState>(
         builder: (context, state) {
-          if (state is EmergencyShareLoading || state is EmergencyShareInitial) {
+          if (state is EmergencyShareLoading ||
+              state is EmergencyShareInitial) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -73,19 +83,28 @@ class _EmergencySharePageState extends State<EmergencySharePage> {
           }
 
           final data = state.data;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _MeetingCard(meeting: data.meeting),
-                const SizedBox(height: 16),
-                _UserCard(title: 'Host', user: data.host, icon: Icons.person),
-                const SizedBox(height: 16),
-                _UserCard(title: 'Guest', user: data.guest, icon: Icons.person_outline),
-                const SizedBox(height: 16),
-                _EmergencyContactsCard(contacts: data.emergencyContacts),
-              ],
+          return RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () => _refresh(context),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                  16, 16, 16, context.bottomSafePadding(16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _MeetingCard(meeting: data.meeting),
+                  const SizedBox(height: 16),
+                  _UserCard(title: 'Host', user: data.host, icon: Icons.person),
+                  const SizedBox(height: 16),
+                  _UserCard(
+                      title: 'Guest',
+                      user: data.guest,
+                      icon: Icons.person_outline),
+                  const SizedBox(height: 16),
+                  _EmergencyContactsCard(contacts: data.emergencyContacts),
+                ],
+              ),
             ),
           );
         },
@@ -156,7 +175,8 @@ class _MeetingCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: AppColors.success.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
@@ -173,14 +193,21 @@ class _MeetingCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _InfoRow(icon: Icons.calendar_today, label: '${meeting.meetingDate} · ${meeting.meetingTime}'),
+          _InfoRow(
+              icon: Icons.calendar_today,
+              label: '${meeting.meetingDate} · ${meeting.meetingTime}'),
           const SizedBox(height: 8),
-          _InfoRow(icon: Icons.location_on_outlined, label: meeting.location.isNotEmpty ? meeting.location : 'Location unavailable'),
+          _InfoRow(
+              icon: Icons.location_on_outlined,
+              label: meeting.location.isNotEmpty
+                  ? meeting.location
+                  : 'Location unavailable'),
           if (meeting.latitude != null && meeting.longitude != null) ...[
             const SizedBox(height: 8),
             _InfoRow(
               icon: Icons.gps_fixed,
-              label: '${meeting.latitude!.toStringAsFixed(4)}° N, ${meeting.longitude!.toStringAsFixed(4)}° E',
+              label:
+                  '${meeting.latitude!.toStringAsFixed(4)}° N, ${meeting.longitude!.toStringAsFixed(4)}° E',
             ),
           ],
           if (meeting.purpose != null && meeting.purpose!.isNotEmpty) ...[
@@ -220,7 +247,8 @@ class _UserCard extends StatelessWidget {
   final String title;
   final EmergencyShareUserEntity user;
   final IconData icon;
-  const _UserCard({required this.title, required this.user, required this.icon});
+  const _UserCard(
+      {required this.title, required this.user, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +290,8 @@ class _UserCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   user.phone ?? 'Phone not available',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                  style:
+                      TextStyle(color: AppColors.textSecondary, fontSize: 13),
                 ),
               ],
             ),
@@ -300,7 +329,8 @@ class _EmergencyContactsCard extends StatelessWidget {
             ...contacts.map((c) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
                       color: AppColors.cardBg,
                       borderRadius: BorderRadius.circular(12),
@@ -319,10 +349,13 @@ class _EmergencyContactsCard extends StatelessWidget {
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              if (c.relationship != null && c.relationship!.isNotEmpty)
+                              if (c.relationship != null &&
+                                  c.relationship!.isNotEmpty)
                                 Text(
                                   c.relationship!,
-                                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                                  style: TextStyle(
+                                      color: AppColors.textTertiary,
+                                      fontSize: 12),
                                 ),
                             ],
                           ),

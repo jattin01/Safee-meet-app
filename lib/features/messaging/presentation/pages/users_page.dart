@@ -51,6 +51,14 @@ class _UsersViewState extends State<_UsersView> {
     context.push('${AppRoutes.chat}/${user.uid}', extra: conversation);
   }
 
+  Future<void> _refresh(BuildContext context) {
+    final bloc = context.read<MessagingBloc>();
+    final done =
+        bloc.stream.firstWhere((s) => s is UsersLoaded || s is MessagingError);
+    bloc.add(const FetchUsers());
+    return done;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,9 +121,8 @@ class _UsersViewState extends State<_UsersView> {
                           color: AppColors.textSecondary, fontSize: 14)),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: () => context
-                        .read<MessagingBloc>()
-                        .add(const FetchUsers()),
+                    onPressed: () =>
+                        context.read<MessagingBloc>().add(const FetchUsers()),
                     child: const Text('Retry'),
                   ),
                 ],
@@ -131,37 +138,60 @@ class _UsersViewState extends State<_UsersView> {
                     .toList();
 
             if (filtered.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.person_search,
-                        color: AppColors.textTertiary, size: 56),
-                    const SizedBox(height: 16),
-                    Text(
-                      _query.isEmpty ? 'No users yet' : 'No results for "$_query"',
-                      style: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 15),
-                    ),
-                    if (_query.isEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Users appear here once they sign in.',
-                        style: TextStyle(
-                            color: AppColors.textTertiary, fontSize: 13),
+              return RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: () => _refresh(context),
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.person_search,
+                                color: AppColors.textTertiary, size: 56),
+                            const SizedBox(height: 16),
+                            Text(
+                              _query.isEmpty
+                                  ? 'No users yet'
+                                  : 'No results for "$_query"',
+                              style: TextStyle(
+                                  color: AppColors.textSecondary, fontSize: 15),
+                            ),
+                            if (_query.isEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Users appear here once they sign in.',
+                                style: TextStyle(
+                                    color: AppColors.textTertiary,
+                                    fontSize: 13),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ],
-                  ],
+                    ),
+                  ),
                 ),
               );
             }
 
-            return ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              itemCount: filtered.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, i) =>
-                  _UserTile(user: filtered[i], onTap: () => _startChat(context, filtered[i])),
+            return RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: () => _refresh(context),
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                itemCount: filtered.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, i) => _UserTile(
+                    user: filtered[i],
+                    onTap: () => _startChat(context, filtered[i])),
+              ),
             );
           }
 
@@ -234,8 +264,7 @@ class _UserTile extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chat_bubble_outline,
-                color: AppColors.primary, size: 20),
+            Icon(Icons.chat_bubble_outline, color: AppColors.primary, size: 20),
           ],
         ),
       ),

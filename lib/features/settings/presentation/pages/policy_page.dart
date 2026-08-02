@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/gradient_header.dart';
 
 class PolicyPage extends StatelessWidget {
@@ -20,7 +21,8 @@ class PolicyPage extends StatelessWidget {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.fromLTRB(
+                  20, 20, 20, context.bottomSafePadding(20)),
               child: SelectableText(
                 isPrivacy ? _privacyContent : _termsContent,
                 style: TextStyle(
@@ -42,7 +44,7 @@ PRIVACY POLICY
 1. INFORMATION WE COLLECT
 We collect information you provide directly to us, such as when you create an account, complete identity verification, schedule meetings, or contact us for support.
 
-Personal Information: name, email address, phone number, profile photo, government ID (for verification), biometric data (face match only).
+Personal Information: name, email address, phone number, profile photo, National ID (for verification), biometric data (face match only).
 
 Usage Information: how you interact with the app, meeting schedules, GPS location data when location sharing is enabled, device information.
 

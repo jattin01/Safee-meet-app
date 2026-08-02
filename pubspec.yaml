@@ -1,7 +1,7 @@
 name: safee_meet
 description: "SAFEE MEET — Trust, Identity Verification & Meeting Protection Platform"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -14,16 +14,13 @@ dependencies:
   flutter_bloc: ^8.1.6
   equatable: ^2.0.5
 
-  # Code Generation (runtime)
-  freezed_annotation: ^2.4.4
-  json_annotation: ^4.9.0
-
   # Dependency Injection
   get_it: ^8.0.2
   injectable: ^2.4.4
 
   # Networking
   dio: ^5.7.0
+  connectivity_plus: ^6.1.0
 
   # Navigation
   go_router: ^14.6.2
@@ -40,7 +37,7 @@ dependencies:
   firebase_messaging: ^15.1.3
   firebase_analytics: ^11.3.3
   firebase_crashlytics: ^4.1.3
-  firebase_auth: ^5.3.1
+  firebase_auth: ^5.7.0
   firebase_storage: ^12.3.3
   cloud_firestore: ^5.4.3
 
@@ -99,18 +96,15 @@ dependencies:
   # Payments (Stripe — subscription checkout, test mode only for now)
   flutter_stripe: ^11.3.0
 
+  # Identity Verification (National ID + facial liveness) — 'core' variant:
+  # no NFC passport reading, ID card/passport scan + selfie liveness only.
+  didit_sdk: ^4.5.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
   flutter_launcher_icons: ^0.14.3
-
-  # Code Generation
-  build_runner: ^2.4.13
-  freezed: 
-  injectable_generator: ^2.6.2
-  json_serializable: ^6.8.0
-  hive_generator: ^2.0.1
 
   # Testing
   bloc_test: ^9.1.7

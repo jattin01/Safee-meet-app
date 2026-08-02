@@ -25,13 +25,13 @@ abstract final class AppRoutes {
   static const String verificationStatus = '/verification/status';
   static const String meetingSetup = '/meetings/setup';
   static const String meetings = '/meetings';
-  static const String activeMeeting = '/meetings/active';
   static const String liveLocation = '/live-location';
   static const String emergencyShare = '/meetings/emergency-share';
   static const String sos = '/sos';
   static const String subscription = '/subscription';
   static const String notifications = '/notifications';
   static const String reviews = '/reviews';
+  static const String addReview = '/meetings/review';
 
   // Settings sub-screens
   static const String personalInfo = '/settings/personal-info';

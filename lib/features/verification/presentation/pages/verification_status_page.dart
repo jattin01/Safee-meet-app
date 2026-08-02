@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../../domain/entities/verification_entity.dart';
@@ -23,6 +24,14 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<VerificationBloc>().add(const VerificationStatusRequested());
     });
+  }
+
+  Future<void> _refresh(BuildContext context) {
+    final bloc = context.read<VerificationBloc>();
+    final done = bloc.stream.firstWhere(
+        (s) => s is VerificationStatusLoaded || s is VerificationError);
+    bloc.add(const VerificationStatusRequested());
+    return done;
   }
 
   @override
@@ -74,68 +83,75 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
         final status = state.status;
         return Scaffold(
           backgroundColor: AppColors.lightBg,
-          body: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DarkScreenHeader(
-                  title: 'Verification Status',
-                  titleFontSize: 21,
-                  childGap: 20,
-                  child: _TrustScoreCard(status: status),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _StatusBanner(status: status),
-                      const SizedBox(height: 16),
-                      _LevelCard(
-                        icon: Icons.shield,
-                        color: status.level1Complete
-                            ? AppColors.success
-                            : AppColors.warning,
-                        title: 'Level 1 Verification',
-                        statusText: _level1Label(status),
-                        badgeLabel:
-                            status.level1Complete ? 'Verified' : 'In Progress',
-                        badgeColor: status.level1Complete
-                            ? AppColors.success
-                            : AppColors.warning,
-                        items: [
-                          _CheckItem('Government ID uploaded',
-                              done: status.currentStep !=
-                                  VerificationStep.uploadId),
-                          _CheckItem('Selfie submitted',
-                              done: status.currentStep ==
-                                      VerificationStep.processing ||
-                                  status.currentStep ==
-                                      VerificationStep.complete),
-                          _CheckItem('Review complete',
-                              done: status.level1Complete),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      const _LockedLevelCard(
-                        title: 'Level 2 Verification',
-                        subtitle:
-                            'Background and enhanced checks can be added later',
-                      ),
-                      const SizedBox(height: 16),
-                      const _LockedLevelCard(
-                        title: 'Professional Verification',
-                        subtitle:
-                            'Business and credentials review is not enabled yet',
-                      ),
-                      const SizedBox(height: 20),
-                      _SafetyScoreBreakdown(status: status),
-                      const SizedBox(height: 24),
-                      _ActionCard(status: status),
-                    ],
+          body: RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () => _refresh(context),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DarkScreenHeader(
+                    title: 'Verification Status',
+                    titleFontSize: 21,
+                    childGap: 20,
+                    child: _TrustScoreCard(status: status),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        20, 24, 20, context.bottomSafePadding(40)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _StatusBanner(status: status),
+                        const SizedBox(height: 16),
+                        _LevelCard(
+                          icon: Icons.shield,
+                          color: status.level1Complete
+                              ? AppColors.success
+                              : AppColors.warning,
+                          title: 'Level 1 Verification',
+                          statusText: _level1Label(status),
+                          badgeLabel: status.level1Complete
+                              ? 'Verified'
+                              : 'In Progress',
+                          badgeColor: status.level1Complete
+                              ? AppColors.success
+                              : AppColors.warning,
+                          items: [
+                            _CheckItem('National ID uploaded',
+                                done: status.currentStep !=
+                                    VerificationStep.uploadId),
+                            _CheckItem('Selfie submitted',
+                                done: status.currentStep ==
+                                        VerificationStep.processing ||
+                                    status.currentStep ==
+                                        VerificationStep.complete),
+                            _CheckItem('Review complete',
+                                done: status.level1Complete),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        const _LockedLevelCard(
+                          title: 'Level 2 Verification',
+                          subtitle:
+                              'Background and enhanced checks can be added later',
+                        ),
+                        const SizedBox(height: 16),
+                        const _LockedLevelCard(
+                          title: 'Professional Verification',
+                          subtitle:
+                              'Business and credentials review is not enabled yet',
+                        ),
+                        const SizedBox(height: 20),
+                        _SafetyScoreBreakdown(status: status),
+                        const SizedBox(height: 24),
+                        _ActionCard(status: status),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

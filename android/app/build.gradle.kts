@@ -48,6 +48,17 @@ android {
             )
         }
     }
+
+    // didit_sdk's org.bouncycastle:bcprov-jdk18on and org.jspecify:jspecify
+    // both bundle an identical-path multi-release JAR manifest entry, which
+    // fails the resource merge step with "2 files found with path
+    // META-INF/versions/9/OSGI-INF/MANIFEST.MF" — take either copy, the
+    // content is interchangeable.
+    packaging {
+        resources {
+            pickFirsts += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
 }
 
 dependencies {
@@ -56,6 +67,16 @@ dependencies {
     // Theme.MaterialComponents (see styles.xml) or Stripe's Android SDK
     // fails to initialize.
     implementation("com.google.android.material:material:1.12.0")
+}
+
+// didit_sdk's native Android SDK pulls in the newer, unified
+// org.bouncycastle:bcprov-jdk18on, which duplicates classes with the older
+// bcprov-jdk15to18 pulled in transitively elsewhere in the dependency graph
+// (Google Play Services/Firebase) — causing a "Duplicate class" build
+// failure. Both provide the same BouncyCastle classes, so drop the older one
+// and let jdk18on win everywhere.
+configurations.all {
+    exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
 }
 
 flutter {

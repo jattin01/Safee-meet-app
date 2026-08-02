@@ -49,6 +49,8 @@
 	<string>SafeeMeet needs camera access to take identity verification selfies, share photos in meeting chats, and scan member QR codes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SafeeMeet needs photo library access so you can attach identity documents and photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SafeeMeet needs microphone access during identity verification to confirm you're a live person.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SafeeMeet uses your location to share live location during an active meeting for safety verification.</string>
 	<key>UIBackgroundModes</key>

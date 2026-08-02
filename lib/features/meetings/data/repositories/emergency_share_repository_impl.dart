@@ -1,6 +1,8 @@
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '../../../../core/services/secure_storage_service.dart';
+import '../../../../core/shared/failures/dio_failure_mapper.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../domain/entities/emergency_share_entity.dart';
 import '../../domain/repositories/emergency_share_repository.dart';
@@ -8,7 +10,8 @@ import '../remote_data_sources/emergency_share_remote_data_source.dart';
 
 class EmergencyShareRepositoryImpl implements EmergencyShareRepository {
   final EmergencyShareRemoteDataSource _remote;
-  EmergencyShareRepositoryImpl(this._remote);
+  final SecureStorageService _storage;
+  EmergencyShareRepositoryImpl(this._remote, this._storage);
 
   @override
   Future<Either<Failure, EmergencyShareEntity>> getEmergencyShare(
@@ -29,7 +32,8 @@ class EmergencyShareRepositoryImpl implements EmergencyShareRepository {
         return const Left(UnknownFailure());
       }
 
-      return Right(_parse(data));
+      final currentUserId = await _storage.getUserId();
+      return Right(_parse(data, currentUserId));
     } on DioException catch (e, st) {
       debugPrint('[EmergencyShare] Request failed for meeting $meetingId: $e');
       debugPrintStack(stackTrace: st);
@@ -41,12 +45,16 @@ class EmergencyShareRepositoryImpl implements EmergencyShareRepository {
     }
   }
 
-  EmergencyShareEntity _parse(Map<String, dynamic> d) {
+  EmergencyShareEntity _parse(Map<String, dynamic> d, String? currentUserId) {
     final meetingJson = d['meeting'] as Map<String, dynamic>? ?? const {};
     final usersJson = d['users'] as Map<String, dynamic>? ?? const {};
     final hostJson = usersJson['host'] as Map<String, dynamic>? ?? const {};
     final guestJson = usersJson['guest'] as Map<String, dynamic>? ?? const {};
     final contactsJson = d['emergency_contacts'] as List<dynamic>? ?? const [];
+
+    final host = _parseUser(hostJson);
+    final guest = _parseUser(guestJson);
+    final isHost = currentUserId != null && currentUserId == host.id;
 
     return EmergencyShareEntity(
       meeting: EmergencyShareMeetingEntity(
@@ -60,8 +68,9 @@ class EmergencyShareRepositoryImpl implements EmergencyShareRepository {
         longitude: _toDouble(meetingJson['longitude']),
         purpose: meetingJson['purpose'] as String?,
       ),
-      host: _parseUser(hostJson),
-      guest: _parseUser(guestJson),
+      host: host,
+      guest: guest,
+      partner: isHost ? guest : host,
       emergencyContacts: contactsJson
           .map((c) => _parseContact(c as Map<String, dynamic>))
           .toList(),
@@ -73,6 +82,8 @@ class EmergencyShareRepositoryImpl implements EmergencyShareRepository {
       id: d['id']?.toString() ?? '',
       name: d['name']?.toString() ?? 'SAFEE User',
       phone: d['phone'] as String?,
+      latitude: _toDouble(d['latitude']),
+      longitude: _toDouble(d['longitude']),
     );
   }
 
@@ -92,20 +103,13 @@ class EmergencyShareRepositoryImpl implements EmergencyShareRepository {
   }
 
   Failure _map(DioException e) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.unknown) {
-      return const NetworkFailure();
+    if (isConnectivityError(e)) return const NetworkFailure();
+    if (e.response?.statusCode == 404) {
+      final responseData = e.response?.data;
+      final message =
+          responseData is Map ? responseData['message'] as String? : null;
+      return ServerFailure(message ?? 'Meeting not found.', statusCode: 404);
     }
-    final status = e.response?.statusCode;
-    final responseData = e.response?.data;
-    final message =
-        responseData is Map ? responseData['message'] as String? : null;
-
-    if (status == 401 || status == 403) return const UnauthorizedFailure();
-    if (status == 404) {
-      return ServerFailure(message ?? 'Meeting not found.', statusCode: status);
-    }
-    return ServerFailure(message ?? 'Server error', statusCode: status);
+    return mapDioException(e);
   }
 }

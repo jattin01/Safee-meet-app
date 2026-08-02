@@ -5,6 +5,7 @@ import 'package:get_it/get_it.dart';
 
 import '../routes/app_router.dart';
 import '../services/api_client.dart';
+import '../services/connectivity_service.dart';
 import '../services/stripe_payment_service.dart';
 import '../services/fcm_service.dart';
 import '../services/google_auth_service.dart';
@@ -81,19 +82,36 @@ import '../../features/meetings/domain/repositories/emergency_share_repository.d
 import '../../features/meetings/presentation/bloc/emergency_share_bloc.dart';
 
 // Subscription
+import '../../features/subscription/data/local_data_sources/subscription_local_data_source.dart';
 import '../../features/subscription/data/remote_data_sources/subscription_remote_data_source.dart';
 import '../../features/subscription/data/repositories/subscription_repository_impl.dart';
 import '../../features/subscription/domain/repositories/subscription_repository.dart';
+import '../../features/subscription/domain/use_cases/get_current_subscription_use_case.dart';
+import '../../features/subscription/domain/use_cases/get_subscription_comparison_use_case.dart';
 import '../../features/subscription/domain/use_cases/get_subscription_plans_use_case.dart';
 import '../../features/subscription/presentation/bloc/subscription_bloc.dart';
+import '../../features/subscription/presentation/cubit/current_subscription_cubit.dart';
+import '../../features/subscription/presentation/cubit/subscription_comparison_cubit.dart';
 
 // SOS
 import '../../features/sos/presentation/bloc/sos_bloc.dart';
 
+// Notifications
+import '../../features/notifications/data/remote_data_sources/notifications_remote_data_source.dart';
+import '../../features/notifications/data/repositories/notifications_repository_impl.dart';
+import '../../features/notifications/domain/repositories/notifications_repository.dart';
+import '../../features/notifications/domain/use_cases/get_notifications_use_case.dart';
+import '../../features/notifications/domain/use_cases/mark_notification_read_use_case.dart';
+import '../../features/notifications/presentation/cubit/notifications_cubit.dart';
+
 // Profile
 import '../../features/profile/data/repositories/profile_repository_impl.dart';
+import '../../features/profile/domain/use_cases/get_reviews_list_use_case.dart';
+import '../../features/profile/domain/use_cases/submit_review_use_case.dart';
 import '../../features/profile/presentation/bloc/profile_bloc.dart';
 import '../../features/profile/presentation/cubit/current_user_cubit.dart';
+import '../../features/profile/presentation/cubit/reviews_cubit.dart';
+import '../../features/profile/presentation/cubit/submit_review_cubit.dart';
 
 // GPS Tracking
 import '../../features/gps_tracking/presentation/bloc/gps_tracking_bloc.dart';
@@ -111,6 +129,7 @@ Future<void> configureDependencies() async {
     () => SecureStorageService(sl()),
   );
   sl.registerLazySingleton<HiveService>(() => HiveService());
+  sl.registerLazySingleton<ConnectivityService>(() => ConnectivityService());
   sl.registerLazySingleton<ApiClient>(() => ApiClient(sl()));
   sl.registerLazySingleton<SocketService>(() => SocketService(sl()));
   sl.registerSingleton<AppRouter>(AppRouter(sl()));
@@ -193,7 +212,7 @@ Future<void> configureDependencies() async {
     () => VerificationRemoteDataSourceImpl(sl()),
   );
   sl.registerLazySingleton<VerificationRepository>(
-    () => VerificationRepositoryImpl(sl(), sl()),
+    () => VerificationRepositoryImpl(sl()),
   );
   sl.registerFactory(() => VerificationBloc(sl()));
 
@@ -253,7 +272,7 @@ Future<void> configureDependencies() async {
     () => EmergencyShareRemoteDataSourceImpl(sl()),
   );
   sl.registerLazySingleton<EmergencyShareRepository>(
-    () => EmergencyShareRepositoryImpl(sl()),
+    () => EmergencyShareRepositoryImpl(sl(), sl()),
   );
   sl.registerFactory(() => EmergencyShareBloc(sl()));
 
@@ -265,7 +284,15 @@ Future<void> configureDependencies() async {
     () => ProfileRepositoryImpl(sl(), sl()),
   );
   sl.registerFactory(() => ProfileBloc(sl()));
-  sl.registerFactory(() => CurrentUserCubit(sl()));
+  // Singleton (not a factory): the verification-gate router guard and every
+  // screen need to read the *same* instance so verification status stays in
+  // sync app-wide — see AppRoutes' restricted-route redirect and
+  // CurrentUserCubit.isVerified.
+  sl.registerLazySingleton(() => CurrentUserCubit(sl()));
+  sl.registerLazySingleton(() => SubmitReviewUseCase(sl()));
+  sl.registerFactory(() => SubmitReviewCubit(sl()));
+  sl.registerLazySingleton(() => GetReviewsListUseCase(sl()));
+  sl.registerFactory(() => ReviewsCubit(sl(), sl(), sl()));
 
   // ── GPS Tracking ──────────────────────────────────────────────────────────
   sl.registerFactory(() => GpsTrackingBloc(sl()));
@@ -274,10 +301,30 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<SubscriptionRemoteDataSource>(
     () => SubscriptionRemoteDataSourceImpl(sl()),
   );
+  sl.registerLazySingleton<SubscriptionLocalDataSource>(
+    () => SubscriptionLocalDataSourceImpl(sl()),
+  );
   sl.registerLazySingleton<SubscriptionRepository>(
-    () => SubscriptionRepositoryImpl(sl()),
+    () => SubscriptionRepositoryImpl(sl(), sl()),
   );
   sl.registerLazySingleton(() => GetSubscriptionPlansUseCase(sl()));
+  sl.registerLazySingleton(() => GetSubscriptionComparisonUseCase(sl()));
+  sl.registerLazySingleton(() => GetCurrentSubscriptionUseCase(sl()));
   sl.registerLazySingleton(() => StripePaymentService());
-  sl.registerFactory(() => SubscriptionBloc(sl(), sl(), sl()));
+  // Singleton (not a factory): the whole app must share one cached
+  // current-subscription state instead of each screen fetching its own.
+  sl.registerLazySingleton(() => CurrentSubscriptionCubit(sl(), sl()));
+  sl.registerFactory(() => SubscriptionBloc(sl(), sl(), sl(), sl()));
+  sl.registerFactory(() => SubscriptionComparisonCubit(sl()));
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  sl.registerLazySingleton<NotificationsRemoteDataSource>(
+    () => NotificationsRemoteDataSourceImpl(sl()),
+  );
+  sl.registerLazySingleton<NotificationsRepository>(
+    () => NotificationsRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton(() => GetNotificationsUseCase(sl()));
+  sl.registerLazySingleton(() => MarkNotificationReadUseCase(sl()));
+  sl.registerFactory(() => NotificationsCubit(sl(), sl()));
 }

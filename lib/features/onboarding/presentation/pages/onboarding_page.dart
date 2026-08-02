@@ -36,7 +36,7 @@ class _OnboardingPageState extends State<OnboardingPage> with TickerProviderStat
       title: 'Verify Identity',
       tagline: 'TRUST, NOT ASSUMPTION',
       subtitle:
-          'Multi-layer identity verification including government ID, facial recognition, and background screening. Real identity. Real trust.',
+          'Multi-layer identity verification including National ID, facial recognition, and background screening. Real identity. Real trust.',
       accentColor: AppColors.blue,
       illustration: _IllustrationType.identity,
     ),

@@ -1,5 +1,7 @@
+import 'package:dartz/dartz.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/shared/failures/failures.dart';
 import '../../domain/entities/meeting_entity.dart';
 import '../../domain/repositories/meetings_repository.dart';
 
@@ -199,10 +201,11 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
     MeetingApproveRequested event,
     Emitter<MeetingsState> emit,
   ) async {
-    final result = await _repository.approveMeeting(event.meetingId);
-    await result.fold(
-      (f) async => emit(MeetingsError(f.message)),
-      (_) => _reloadList(emit),
+    await _optimisticStatusUpdate(
+      emit: emit,
+      meetingId: event.meetingId,
+      optimisticStatus: MeetingStatus.scheduled,
+      action: () => _repository.approveMeeting(event.meetingId),
     );
   }
 
@@ -210,20 +213,39 @@ class MeetingsBloc extends Bloc<MeetingsEvent, MeetingsState> {
     MeetingDenyRequested event,
     Emitter<MeetingsState> emit,
   ) async {
-    final result = await _repository.denyMeeting(event.meetingId);
-    await result.fold(
-      (f) async => emit(MeetingsError(f.message)),
-      (_) => _reloadList(emit),
+    await _optimisticStatusUpdate(
+      emit: emit,
+      meetingId: event.meetingId,
+      optimisticStatus: MeetingStatus.declined,
+      action: () => _repository.denyMeeting(event.meetingId),
     );
   }
 
-  // Refreshes the full list after approve/deny so the card moves out of
-  // the Requests tab immediately, without a manual pull-to-refresh.
-  Future<void> _reloadList(Emitter<MeetingsState> emit) async {
-    final result = await _repository.getMeetings();
+  // Flips the meeting's status in the already-loaded list immediately, so
+  // the card moves to the right tab in the same frame the user taps
+  // Approve/Deny — instead of waiting on a full list refetch. Reverts to
+  // the pre-action list (and surfaces an error) if the request fails.
+  Future<void> _optimisticStatusUpdate({
+    required Emitter<MeetingsState> emit,
+    required String meetingId,
+    required MeetingStatus optimisticStatus,
+    required Future<Either<Failure, void>> Function() action,
+  }) async {
+    final previousState = state;
+    if (previousState is MeetingsListLoaded) {
+      final optimistic = previousState.meetings
+          .map((m) => m.id == meetingId ? m.copyWith(status: optimisticStatus) : m)
+          .toList();
+      emit(MeetingsListLoaded(optimistic));
+    }
+
+    final result = await action();
     result.fold(
-      (f) => emit(MeetingsError(f.message)),
-      (meetings) => emit(MeetingsListLoaded(meetings)),
+      (f) {
+        if (previousState is MeetingsListLoaded) emit(previousState);
+        emit(MeetingsError(f.message));
+      },
+      (_) {},
     );
   }
 }

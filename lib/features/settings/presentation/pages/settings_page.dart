@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
+import '../../../../core/shared/utils/verification_gate.dart';
 import '../../../../core/services/hive_service.dart';
 import '../../../../core/services/secure_storage_service.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
@@ -14,6 +18,20 @@ import '../../../../features/auth/presentation/bloc/auth_event.dart';
 import '../../../../core/services/google_auth_service.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
+import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
+
+Future<void> _openUrl(BuildContext context, String url) async {
+  final uri = Uri.parse(url);
+  if (!await canLaunchUrl(uri)) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open link.')),
+      );
+    }
+    return;
+  }
+  await launchUrl(uri, mode: LaunchMode.platformDefault);
+}
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -22,16 +40,120 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver {
   late bool _locationEnabled;
   late bool _sosAlertsEnabled;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final hive = sl<HiveService>();
     _locationEnabled = hive.isLocationPermGranted;
     _sosAlertsEnabled = hive.isSosAlertsEnabled;
+    _syncLocationPermission();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // User may have changed the permission from device Settings and come back.
+    if (state == AppLifecycleState.resumed) {
+      _syncLocationPermission();
+    }
+  }
+
+  Future<void> _syncLocationPermission() async {
+    final permission = await Geolocator.checkPermission();
+    final granted = permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+    if (!mounted) return;
+    setState(() => _locationEnabled = granted);
+    await sl<HiveService>().setLocationPermGranted(granted);
+  }
+
+  Future<void> _onLocationToggle(bool v) async {
+    if (v) {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        final open = await _confirmOpenSettings(
+          title: 'Location Services Off',
+          message:
+              'Turn on location services on your device to allow SAFEE MEET to access your location.',
+          actionLabel: 'Open Settings',
+        );
+        if (open) await Geolocator.openLocationSettings();
+        await _syncLocationPermission();
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        final open = await _confirmOpenSettings(
+          title: 'Location Permission Blocked',
+          message:
+              'Location access is permanently denied. Enable it from app Settings to continue.',
+          actionLabel: 'Open App Settings',
+        );
+        if (open) await Geolocator.openAppSettings();
+        await _syncLocationPermission();
+        return;
+      }
+
+      final granted = permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
+      if (!mounted) return;
+      setState(() => _locationEnabled = granted);
+      await sl<HiveService>().setLocationPermGranted(granted);
+      if (!granted && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permission was not granted.')),
+        );
+      }
+    } else {
+      final open = await _confirmOpenSettings(
+        title: 'Turn Off Location',
+        message:
+            'Location access can only be revoked from your device Settings. Open Settings now?',
+        actionLabel: 'Open App Settings',
+      );
+      if (open) await Geolocator.openAppSettings();
+      await _syncLocationPermission();
+    }
+  }
+
+  Future<bool> _confirmOpenSettings({
+    required String title,
+    required String message,
+    required String actionLabel,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   @override
@@ -92,7 +214,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: _ProfileMiniCard(profile: profile),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                    padding: EdgeInsets.fromLTRB(
+                        20, 24, 20, context.bottomSafePadding(32)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -119,13 +242,15 @@ class _SettingsPageState extends State<SettingsPage> {
                             onTap: () =>
                                 context.push(AppRoutes.emergencyContacts),
                           ),
-                          _NavTile(
-                            icon: Icons.credit_card,
-                            iconColor: AppColors.warning,
-                            label: 'Subscription & Billing',
-                            subtitle:
-                                'Current plan: ${_planLabel(profile.subscriptionPlan)}',
-                            onTap: () => context.push(AppRoutes.subscription),
+                          BlocBuilder<CurrentSubscriptionCubit,
+                              CurrentSubscriptionState>(
+                            builder: (context, subState) => _NavTile(
+                              icon: Icons.credit_card,
+                              iconColor: AppColors.warning,
+                              label: 'Subscription & Billing',
+                              subtitle: _subscriptionSubtitle(subState),
+                              onTap: () => context.push(AppRoutes.subscription),
+                            ),
                           ),
                         ]),
                         const SizedBox(height: 24),
@@ -138,38 +263,34 @@ class _SettingsPageState extends State<SettingsPage> {
                             label: 'Identity Verification',
                             subtitle:
                                 _verificationLabel(profile.verificationLevel),
-                            onTap: () =>
-                                context.push(AppRoutes.verificationStatus),
+                            onTap: () => openVerificationScreen(context),
                           ),
-                          _NavTile(
-                            icon: Icons.lock_outline,
-                            iconColor: AppColors.purple,
-                            label: 'Change Password',
-                            subtitle: 'Manage password and sign-in security',
-                            onTap: () => context.push(AppRoutes.changePassword),
-                          ),
+                          // _NavTile(
+                          //   icon: Icons.lock_outline,
+                          //   iconColor: AppColors.purple,
+                          //   label: 'Change Password',
+                          //   subtitle: 'Manage password and sign-in security',
+                          //   onTap: () => context.push(AppRoutes.changePassword),
+                          // ),
                           _ToggleTile(
                             icon: Icons.public,
                             iconColor: AppColors.teal,
                             label: 'Location Permissions',
                             subtitle: 'Allow SAFEE MEET to access location',
                             value: _locationEnabled,
-                            onChanged: (v) {
-                              setState(() => _locationEnabled = v);
-                              sl<HiveService>().setLocationPermGranted(v);
-                            },
+                            onChanged: _onLocationToggle,
                           ),
-                          _ToggleTile(
-                            icon: Icons.notifications_none,
-                            iconColor: AppColors.primary,
-                            label: 'SOS Notifications',
-                            subtitle: 'Emergency alert confirmations',
-                            value: _sosAlertsEnabled,
-                            onChanged: (v) {
-                              setState(() => _sosAlertsEnabled = v);
-                              sl<HiveService>().setSosAlertsEnabled(v);
-                            },
-                          ),
+                          // _ToggleTile(
+                          //   icon: Icons.notifications_none,
+                          //   iconColor: AppColors.primary,
+                          //   label: 'SOS Notifications',
+                          //   subtitle: 'Emergency alert confirmations',
+                          //   value: _sosAlertsEnabled,
+                          //   onChanged: (v) {
+                          //     setState(() => _sosAlertsEnabled = v);
+                          //     sl<HiveService>().setSosAlertsEnabled(v);
+                          //   },
+                          // ),
                         ]),
                         const SizedBox(height: 24),
                         const _Label('LEGAL'),
@@ -179,15 +300,15 @@ class _SettingsPageState extends State<SettingsPage> {
                             icon: Icons.shield_outlined,
                             iconColor: AppColors.textSecondary,
                             label: 'Privacy Policy',
-                            onTap: () => context
-                                .push('${AppRoutes.policy}?type=privacy'),
+                            onTap: () => _openUrl(context,
+                                'https://safeemeet.testingenv.co.in/privacy-policy'),
                           ),
                           _NavTile(
                             icon: Icons.shield_outlined,
                             iconColor: AppColors.textSecondary,
                             label: 'Terms of Service',
-                            onTap: () =>
-                                context.push('${AppRoutes.policy}?type=terms'),
+                            onTap: () => _openUrl(context,
+                                'https://safeemeet.testingenv.co.in/terms-and-conditions'),
                           ),
                         ]),
                         const SizedBox(height: 24),
@@ -260,12 +381,24 @@ class _SettingsPageState extends State<SettingsPage> {
           profile.email ?? profile.phone!
       ].where((value) => value.trim().isNotEmpty).join(' · ');
 
-  String _planLabel(String plan) => switch (plan) {
-        'premium' => 'Premium',
-        'pro' => 'Pro',
-        'basic' => 'Basic',
-        _ => 'Free',
-      };
+  String _subscriptionSubtitle(CurrentSubscriptionState state) {
+    switch (state.status) {
+      case CurrentSubscriptionStatus.initial:
+      case CurrentSubscriptionStatus.loading:
+        return 'Loading plan…';
+      case CurrentSubscriptionStatus.error:
+        return 'Manage your subscription';
+      case CurrentSubscriptionStatus.loaded:
+        final sub = state.subscription;
+        if (sub == null) return 'Current plan: Free';
+        final suffix = sub.isCancelled
+            ? ' (Cancelled)'
+            : sub.isTrialing
+                ? ' (Trial)'
+                : '';
+        return 'Current plan: ${sub.planLabel}$suffix';
+    }
+  }
 
   String _verificationLabel(String level) => switch (level) {
         'high' => 'Level 3 Verified',

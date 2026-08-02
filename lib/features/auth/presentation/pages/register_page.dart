@@ -9,7 +9,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/app_logo_widget.dart';
+import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/widgets/field_input.dart';
 import '../../../../core/shared/widgets/info_banner.dart';
 import '../../../../core/shared/widgets/otp_input_widget.dart';
@@ -215,13 +217,8 @@ class _RegisterPageState extends State<RegisterPage> {
       if (mounted) {
         setState(() { _sendingEmailOtp = false; _step++; });
         if (devOtp != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('[DEV] Email OTP: $devOtp'),
-              backgroundColor: AppColors.primary,
-              duration: const Duration(seconds: 10),
-            ),
-          );
+          AppSnackbar.info(context, '[DEV] Email OTP: $devOtp',
+              duration: const Duration(seconds: 10));
         }
       }
     } on DioException catch (e) {
@@ -262,9 +259,7 @@ class _RegisterPageState extends State<RegisterPage> {
   // ── Backend: Register ─────────────────────────────────────────────────────
   void _submitRegistration(BuildContext context) {
     if (_firebaseIdToken == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Phone verification required.')),
-      );
+      AppSnackbar.error(context, 'Phone verification required.');
       return;
     }
 
@@ -314,16 +309,9 @@ class _RegisterPageState extends State<RegisterPage> {
           context.go(AppRoutes.dashboardHome);
         } else if (state is UserNotRegistered) {
           // Shouldn't happen on register, but handle gracefully
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
-          );
+          AppSnackbar.error(context, state.message);
         } else if (state is AuthFailureState) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          AppSnackbar.error(context, state.message);
         }
       },
       child: Scaffold(
@@ -340,7 +328,8 @@ class _RegisterPageState extends State<RegisterPage> {
                 onBack:      _onBack,
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                padding: EdgeInsets.fromLTRB(
+                    24, 28, 24, context.bottomSafePadding(32)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -760,7 +749,8 @@ class _TypeSelectionScreenState extends State<_TypeSelectionScreen> {
           ),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+              padding: EdgeInsets.fromLTRB(
+                  24, 32, 24, context.bottomSafePadding(24)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

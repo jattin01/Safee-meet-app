@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../messaging/domain/entities/message_entity.dart';
 import '../../domain/entities/member_entity.dart';
@@ -17,31 +19,39 @@ class MemberSearchPage extends StatelessWidget {
   /// caller via [Navigator.pop] instead of pushing to Create Meeting —
   /// used when this page is opened to pick a meeting partner.
   final bool pickerMode;
-  const MemberSearchPage({super.key, this.pickerMode = false});
+
+  /// Which tab to open on ('qr' opens the QR Scanner tab directly; anything
+  /// else, including null, defaults to the Safee PIN tab).
+  final String? initialTab;
+  const MemberSearchPage({super.key, this.pickerMode = false, this.initialTab});
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) =>
           sl<MemberSearchBloc>()..add(const RecentSearchesRequested()),
-      child: _MemberSearchView(pickerMode: pickerMode),
+      child: _MemberSearchView(pickerMode: pickerMode, initialTab: initialTab),
     );
   }
 }
 
 class _MemberSearchView extends StatefulWidget {
   final bool pickerMode;
-  const _MemberSearchView({required this.pickerMode});
+  final String? initialTab;
+  const _MemberSearchView({required this.pickerMode, this.initialTab});
 
   @override
   State<_MemberSearchView> createState() => _MemberSearchViewState();
 }
 
 class _MemberSearchViewState extends State<_MemberSearchView> {
-  int _activeTab = 0;
+  late int _activeTab = widget.initialTab == 'qr' ? 1 : 0;
   final _pinCtrl = TextEditingController();
   final _scannerController = MobileScannerController();
+  final _imagePicker = ImagePicker();
   bool _qrHandled = false;
+  bool _resolvingGalleryImage = false;
+  final _resultSectionKey = GlobalKey();
 
   @override
   void dispose() {
@@ -69,8 +79,67 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     context.read<MemberSearchBloc>().add(const MemberSearchReset());
   }
 
+  // Mirrors the camera path (_onQrDetect): decodes the picked image and, if
+  // it contains a valid code, dispatches the exact same QRSearchRequested
+  // event — so the backend's subscription/search-limit validation applies
+  // identically regardless of how the QR was captured.
+  Future<void> _pickFromGallery() async {
+    if (_qrHandled || _resolvingGalleryImage) return;
+
+    final picked = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+
+    setState(() => _resolvingGalleryImage = true);
+    try {
+      final result = await _scannerController.analyzeImage(picked.path);
+      final barcodes = result?.barcodes ?? const [];
+      final code =
+          barcodes.isNotEmpty ? barcodes.first.rawValue?.trim() : null;
+
+      if (!mounted) return;
+      if (code == null || code.isEmpty) {
+        setState(() => _resolvingGalleryImage = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('No valid QR code found in the selected image.')),
+        );
+        return;
+      }
+
+      setState(() {
+        _qrHandled = true;
+        _resolvingGalleryImage = false;
+      });
+      context.read<MemberSearchBloc>().add(QRSearchRequested(code));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _resolvingGalleryImage = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No valid QR code found in the selected image.')),
+      );
+    }
+  }
+
   void _selectRecent(MemberEntity member) {
     context.read<MemberSearchBloc>().add(RecentMemberSelected(member));
+  }
+
+  // The result/error card renders below "Recently Searched", whose height
+  // varies with the list, so it can land off-screen after a search — scroll
+  // it into view once the bloc settles on a result, regardless of whether
+  // the search came from the PIN field or the QR/gallery scanner.
+  void _scrollToResult() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final resultContext = _resultSectionKey.currentContext;
+      if (resultContext == null) return;
+      Scrollable.ensureVisible(
+        resultContext,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+        alignment: 0.1,
+      );
+    });
   }
 
   void _openChat(BuildContext ctx, MemberEntity member) {
@@ -100,7 +169,14 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.lightBg,
-      body: BlocBuilder<MemberSearchBloc, MemberSearchState>(
+      body: BlocConsumer<MemberSearchBloc, MemberSearchState>(
+        listener: (context, state) {
+          if (state is MemberSearchLoading ||
+              state is MemberSearchFound ||
+              state is MemberSearchError) {
+            _scrollToResult();
+          }
+        },
         builder: (context, state) {
           return SingleChildScrollView(
             child: Column(
@@ -115,7 +191,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                  padding: EdgeInsets.fromLTRB(
+                      20, 24, 20, context.bottomSafePadding(32)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -126,53 +203,62 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
 
                       _RecentSearchesSection(
                         members: state.recentSearches,
+                        selectedMemberId:
+                            state is MemberSearchFound ? state.member.id : null,
                         onSelect: _selectRecent,
                       ),
 
                       // Result or loading
-                      if (state is MemberSearchLoading) ...[
-                        const SizedBox(height: 32),
-                        const Center(
-                          child: CircularProgressIndicator(
-                              color: AppColors.primary),
-                        ),
-                      ] else if (state is MemberSearchFound) ...[
-                        const SizedBox(height: 24),
-                        _MemberResultCard(
-                          member: state.member,
-                          onChat: () => _openChat(context, state.member),
-                          onMeet: () => _openMeeting(context, state.member),
-                        ),
-                      ] else if (state is MemberSearchError) ...[
-                        const SizedBox(height: 24),
-                        state.upgradeRequired
-                            ? _UpgradeLimitCard(
-                                message: state.message,
-                                onTap: () =>
-                                    context.push(AppRoutes.subscription),
-                              )
-                            : Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: AppColors.error.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
+                      Column(
+                        key: _resultSectionKey,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (state is MemberSearchLoading) ...[
+                            const SizedBox(height: 32),
+                            const Center(
+                              child: CircularProgressIndicator(
+                                  color: AppColors.primary),
+                            ),
+                          ] else if (state is MemberSearchFound) ...[
+                            const SizedBox(height: 24),
+                            _MemberResultCard(
+                              member: state.member,
+                              onChat: () => _openChat(context, state.member),
+                              onMeet: () => _openMeeting(context, state.member),
+                            ),
+                          ] else if (state is MemberSearchError) ...[
+                            const SizedBox(height: 24),
+                            state.upgradeRequired
+                                ? _UpgradeLimitCard(
+                                    message: state.message,
+                                    onTap: () =>
+                                        context.push(AppRoutes.subscription),
+                                  )
+                                : Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
                                       color: AppColors.error
-                                          .withValues(alpha: 0.3)),
-                                ),
-                                child: Row(children: [
-                                  Icon(Icons.error_outline,
-                                      color: AppColors.error, size: 20),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(state.message,
-                                        style: TextStyle(
-                                            color: AppColors.error,
-                                            fontSize: 14)),
+                                          .withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: AppColors.error
+                                              .withValues(alpha: 0.3)),
+                                    ),
+                                    child: Row(children: [
+                                      Icon(Icons.error_outline,
+                                          color: AppColors.error, size: 20),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(state.message,
+                                            style: TextStyle(
+                                                color: AppColors.error,
+                                                fontSize: 14)),
+                                      ),
+                                    ]),
                                   ),
-                                ]),
-                              ),
-                      ],
+                          ],
+                        ],
+                      ),
 
                       const SizedBox(height: 28),
                       Text(
@@ -194,7 +280,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                       _HintCard(
                         icon: Icons.qr_code_2,
                         text:
-                            'Or switch to the QR tab and scan their profile QR code.',
+                            'Or switch to the QR Scanner tab and scan their profile QR code.',
                       ),
                     ],
                   ),
@@ -311,10 +397,85 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
             if (resolved) ...[
               const SizedBox(height: 16),
               _SearchButton(label: 'Scan Again', onTap: _rescan),
+            ] else ...[
+              const SizedBox(height: 20),
+              _OrDivider(),
+              const SizedBox(height: 16),
+              _GalleryButton(
+                loading: _resolvingGalleryImage,
+                onTap: _pickFromGallery,
+              ),
             ],
           ]),
         ),
       ],
+    );
+  }
+}
+
+class _OrDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Row(children: [
+        Expanded(child: Divider(color: AppColors.border)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text('OR',
+              style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700)),
+        ),
+        Expanded(child: Divider(color: AppColors.border)),
+      ]),
+    );
+  }
+}
+
+class _GalleryButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onTap;
+  const _GalleryButton({required this.loading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: GestureDetector(
+        onTap: loading ? null : onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Center(
+            child: loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.photo_library_outlined,
+                          color: AppColors.textPrimary, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Choose from Gallery',
+                          style: GoogleFonts.inter(
+                              color: AppColors.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -383,8 +544,13 @@ class _HintCard extends StatelessWidget {
 
 class _RecentSearchesSection extends StatelessWidget {
   final List<MemberEntity> members;
+  final String? selectedMemberId;
   final ValueChanged<MemberEntity> onSelect;
-  const _RecentSearchesSection({required this.members, required this.onSelect});
+  const _RecentSearchesSection({
+    required this.members,
+    this.selectedMemberId,
+    required this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -414,6 +580,7 @@ class _RecentSearchesSection extends StatelessWidget {
               for (var i = 0; i < members.length; i++) ...[
                 _RecentMemberTile(
                   member: members[i],
+                  isSelected: members[i].id == selectedMemberId,
                   onTap: () => onSelect(members[i]),
                 ),
                 if (i != members.length - 1)
@@ -429,15 +596,26 @@ class _RecentSearchesSection extends StatelessWidget {
 
 class _RecentMemberTile extends StatelessWidget {
   final MemberEntity member;
+  final bool isSelected;
   final VoidCallback onTap;
-  const _RecentMemberTile({required this.member, required this.onTap});
+  const _RecentMemberTile({
+    required this.member,
+    this.isSelected = false,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary.withOpacity(0.08) : null,
+          border: isSelected
+              ? Border(left: BorderSide(color: AppColors.primary, width: 3))
+              : null,
+        ),
+        padding: EdgeInsets.fromLTRB(isSelected ? 11 : 14, 10, 14, 10),
         child: Row(children: [
           Container(
             width: 40,
@@ -467,7 +645,9 @@ class _RecentMemberTile extends StatelessWidget {
               children: [
                 Text(member.name,
                     style: GoogleFonts.inter(
-                        color: AppColors.textPrimary,
+                        color: isSelected
+                            ? AppColors.primary
+                            : AppColors.textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
@@ -477,7 +657,9 @@ class _RecentMemberTile extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 18),
+          isSelected
+              ? Icon(Icons.check_circle, color: AppColors.primary, size: 18)
+              : Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 18),
         ]),
       ),
     );
@@ -572,7 +754,7 @@ class _TabPillRow extends StatelessWidget {
           Expanded(
             child: _TabPill(
               icon: Icons.qr_code_2,
-              label: 'QR Code',
+              label: 'QR Scanner',
               active: activeTab == 1,
               onTap: () => onTabChanged(1),
             ),
@@ -772,15 +954,6 @@ class _MemberResultCard extends StatelessWidget {
                     ),
                   ),
                 ]),
-                if (member.verificationLevel != 'none') ...[
-                  const SizedBox(height: 16),
-                  _VerifiedPill(
-                    label: '${member.verificationLevel.toUpperCase()} Tier',
-                    color: member.verificationLevel == 'high'
-                        ? AppColors.blue
-                        : AppColors.success,
-                  ),
-                ],
                 if (member.badges.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(

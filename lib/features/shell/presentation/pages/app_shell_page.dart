@@ -4,13 +4,19 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/routes/route_observer.dart';
+import '../../../../core/shared/utils/verification_gate.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
 
 const _tabs = [
   _TabItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
-  _TabItem(icon: Icons.search_outlined, activeIcon: Icons.search, label: 'Search'),
-  _TabItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble, label: 'Chat'),
-  _TabItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
+  _TabItem(
+      icon: Icons.search_outlined, activeIcon: Icons.search, label: 'Search'),
+  _TabItem(
+      icon: Icons.chat_bubble_outline,
+      activeIcon: Icons.chat_bubble,
+      label: 'Chat'),
+  _TabItem(
+      icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
   _TabItem(icon: Icons.menu_outlined, activeIcon: Icons.menu, label: 'More'),
 ];
 
@@ -57,10 +63,19 @@ class _AppShellPageState extends State<AppShellPage> with RouteAware {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: _BottomNavBar(
         currentIndex: currentIndex,
-        onTap: (index) => widget.navigationShell.goBranch(
-          index,
-          initialLocation: index == currentIndex,
-        ),
+        // Search (1) and Chat (2) are verification-gated tabs — goBranch
+        // switches the shell's internal stack directly rather than pushing
+        // a route, so it doesn't reliably go through AppRouter's redirect
+        // guard the way a context.push/go does. Check explicitly here too.
+        onTap: (index) {
+          if ((index == 1 || index == 2) && !requireVerification(context)) {
+            return;
+          }
+          widget.navigationShell.goBranch(
+            index,
+            initialLocation: index == currentIndex,
+          );
+        },
       ),
     );
   }
@@ -87,17 +102,19 @@ class _BottomNavBar extends StatelessWidget {
           children: [
             // Home, then Chat instead of Search.
             ...[0, 2].map((i) => _NavItem(
-              tab: _tabs[i],
-              isActive: currentIndex == i,
-              onTap: () => onTap(i),
-            )),
+                  tab: _tabs[i],
+                  isActive: currentIndex == i,
+                  onTap: () => onTap(i),
+                )),
             // Space for FAB
             const SizedBox(width: 64),
-            ...List.generate(2, (i) => _NavItem(
-              tab: _tabs[i + 3],
-              isActive: currentIndex == i + 3,
-              onTap: () => onTap(i + 3),
-            )),
+            ...List.generate(
+                2,
+                (i) => _NavItem(
+                      tab: _tabs[i + 3],
+                      isActive: currentIndex == i + 3,
+                      onTap: () => onTap(i + 3),
+                    )),
           ],
         ),
       ),
@@ -110,7 +127,8 @@ class _NavItem extends StatelessWidget {
   final bool isActive;
   final VoidCallback onTap;
 
-  const _NavItem({required this.tab, required this.isActive, required this.onTap});
+  const _NavItem(
+      {required this.tab, required this.isActive, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +165,10 @@ class _SosButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push(AppRoutes.sos),
+      onTap: () {
+        if (!requireVerification(context)) return;
+        context.push(AppRoutes.sos);
+      },
       child: Container(
         width: 56,
         height: 56,

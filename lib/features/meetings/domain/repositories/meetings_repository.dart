@@ -20,6 +20,6 @@ abstract class MeetingsRepository {
     required MeetingStatus status,
   });
   Future<Either<Failure, void>> endMeeting(String meetingId);
-  Future<Either<Failure, MeetingEntity>> approveMeeting(String meetingId);
-  Future<Either<Failure, MeetingEntity>> denyMeeting(String meetingId);
+  Future<Either<Failure, void>> approveMeeting(String meetingId);
+  Future<Either<Failure, void>> denyMeeting(String meetingId);
 }

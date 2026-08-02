@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/services/api_client.dart';
 import '../../../../core/services/secure_storage_service.dart';
+import '../../../../core/shared/failures/dio_failure_mapper.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../domain/entities/meeting_entity.dart';
 import '../../domain/repositories/meetings_repository.dart';
@@ -126,10 +127,10 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
   }
 
   @override
-  Future<Either<Failure, MeetingEntity>> approveMeeting(String meetingId) async {
+  Future<Either<Failure, void>> approveMeeting(String meetingId) async {
     try {
       await _api.dio.post('/v1/meetings/$meetingId/approve');
-      return getMeeting(meetingId);
+      return const Right(null);
     } on DioException catch (e) {
       return Left(_map(e));
     } catch (_) {
@@ -138,10 +139,10 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
   }
 
   @override
-  Future<Either<Failure, MeetingEntity>> denyMeeting(String meetingId) async {
+  Future<Either<Failure, void>> denyMeeting(String meetingId) async {
     try {
       await _api.dio.post('/v1/meetings/$meetingId/deny');
-      return getMeeting(meetingId);
+      return const Right(null);
     } on DioException catch (e) {
       return Left(_map(e));
     } catch (_) {
@@ -241,16 +242,13 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
   Failure _map(DioException e) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.unknown) {
-      return const NetworkFailure();
+    if (isConnectivityError(e)) return const NetworkFailure();
+    if (e.response?.statusCode == 422) {
+      final responseData = e.response?.data;
+      final message =
+          responseData is Map ? responseData['message'] as String? : null;
+      return ValidationFailure(message ?? 'Invalid meeting details.');
     }
-    final status = e.response?.statusCode;
-    final responseData = e.response?.data;
-    final message = responseData is Map ? responseData['message'] as String? : null;
-
-    if (status == 401 || status == 403) return const UnauthorizedFailure();
-    if (status == 422) return ValidationFailure(message ?? 'Invalid meeting details.');
-    return ServerFailure(message ?? 'Server error', statusCode: status);
+    return mapDioException(e);
   }
 }

@@ -2,15 +2,20 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../gps_tracking/presentation/bloc/gps_tracking_bloc.dart';
 import '../../../messaging/domain/entities/message_entity.dart';
+import '../../../profile/presentation/pages/add_review_page.dart';
 import '../../domain/entities/emergency_share_entity.dart';
+import '../../domain/entities/meeting_entity.dart';
 import '../../domain/repositories/meetings_repository.dart';
 import '../bloc/emergency_share_bloc.dart';
 
@@ -23,8 +28,20 @@ class LiveLocationPage extends StatefulWidget {
 }
 
 class _LiveLocationPageState extends State<LiveLocationPage> {
+  static const _locationPollEvery = 10; // seconds
+
   Timer? _timer;
   bool _ending = false;
+  int _tick = 0;
+
+  // The emergency-share endpoint only ever returns successfully while the
+  // meeting is 'scheduled' (backend rejects anything else with a 422), so it
+  // can never itself report a 'cancelled'/'completed' status. GET
+  // /v1/meetings/{id} has no such restriction and returns the real status
+  // regardless — polling it alongside emergency-share is how the *other*
+  // participant's screen learns the meeting was cancelled/ended without
+  // relying on guessing at a backend error message.
+  bool _statusHandled = false;
 
   @override
   void initState() {
@@ -38,13 +55,67 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
         // the backend (POST /v1/meetings/{id}/location) for the duration of
         // the meeting — see GpsTrackingBloc.
         context.read<GpsTrackingBloc>().add(GpsTrackingStarted(meetingId));
+        _fetchMeetingStatus(meetingId);
       });
     }
-    // Ticks the countdown to the scheduled meeting time once a second — no
-    // state to mutate here, build() re-reads DateTime.now() each tick.
+    // Ticks once a second: always redraws the countdown to the scheduled
+    // meeting time (no state to mutate for that — build() just re-reads
+    // DateTime.now()), and every _locationPollEvery ticks also re-fetches
+    // emergency-share so the *other* participant's latest GPS ping (and the
+    // distance/map derived from it) stays live without a manual refresh —
+    // EmergencyShareBloc only blanks the screen on the very first load, so
+    // this repeated fetch just updates the existing data in place. The same
+    // tick also re-checks the real meeting status (see _fetchMeetingStatus)
+    // so a cancellation by either Host or Guest surfaces here automatically.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() => _tick++);
+      if (meetingId != null && _tick % _locationPollEvery == 0) {
+        context.read<EmergencyShareBloc>().add(EmergencyShareRequested(meetingId));
+        _fetchMeetingStatus(meetingId);
+      }
     });
+  }
+
+  Future<void> _fetchMeetingStatus(String meetingId) async {
+    final result = await sl<MeetingsRepository>().getMeeting(meetingId);
+    if (!mounted) return;
+    // A transient failure here (network blip, etc.) says nothing about the
+    // meeting's status — just skip it and let the next poll try again.
+    result.fold((_) {}, (meeting) => _handleMeetingStatus(meeting.status));
+  }
+
+  void _handleMeetingStatus(MeetingStatus status) {
+    if (_statusHandled || !mounted) return;
+    if (status == MeetingStatus.cancelled || status == MeetingStatus.declined) {
+      _statusHandled = true;
+      _leaveWithMessage('This meeting was cancelled.');
+    } else if (status == MeetingStatus.completed) {
+      _statusHandled = true;
+      _leaveWithMessage('This meeting has already ended.');
+    }
+  }
+
+  void _leaveWithMessage(String message) {
+    if (!mounted) return;
+    context.pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
+    );
+  }
+
+  // Pull-to-refresh: re-fetches both the emergency-share data (partner
+  // location, contacts) and the authoritative meeting status in one go, and
+  // waits for both before the RefreshIndicator's spinner dismisses.
+  Future<void> _handleRefresh() async {
+    final meetingId = widget.meetingId;
+    if (meetingId == null) return;
+    final bloc = context.read<EmergencyShareBloc>();
+    final shareDone = bloc.stream.firstWhere(
+      (s) => s is EmergencyShareLoaded || s is EmergencyShareError,
+    );
+    bloc.add(EmergencyShareRequested(meetingId));
+    await Future.wait([shareDone, _fetchMeetingStatus(meetingId)]);
   }
 
   @override
@@ -101,8 +172,31 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
       (failure) => ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(failure.message)),
       ),
-      (_) => context.go('${AppRoutes.meetings}?tab=past'),
+      (_) => _goToReviewOrMeetings(meetingId),
     );
+  }
+
+  // The meeting just ended successfully — send the user to rate the other
+  // participant. Falls back to the meetings list if the partner's identity
+  // (needed for AddReviewArgs) somehow isn't loaded.
+  void _goToReviewOrMeetings(String meetingId) {
+    final shareState = context.read<EmergencyShareBloc>().state;
+    final partner =
+        shareState is EmergencyShareLoaded ? shareState.data.partner : null;
+    final revieweeId = int.tryParse(partner?.id ?? '');
+
+    if (partner != null && revieweeId != null) {
+      context.go(
+        AppRoutes.addReview,
+        extra: AddReviewArgs(
+          meetingId: meetingId,
+          revieweeId: revieweeId,
+          revieweeName: partner.name,
+        ),
+      );
+    } else {
+      context.go('${AppRoutes.meetings}?tab=past');
+    }
   }
 
   @override
@@ -111,7 +205,7 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
       return _buildScaffold(null);
     }
     // Gate the whole screen on the emergency-share fetch: nothing renders
-    // (host name, contacts, location) until the data has fully loaded, so
+    // (partner name, contacts, location) until the data has fully loaded, so
     // the user never sees a half-populated screen.
     return BlocConsumer<EmergencyShareBloc, EmergencyShareState>(
       listener: (context, state) {
@@ -119,14 +213,11 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
         // ended/was cancelled after the list loaded (or this was opened via
         // a stale link), bounce back with a friendly message instead of
         // stranding the user on a raw backend-error page.
-        if (state is EmergencyShareError && _isMeetingUnavailable(state.message)) {
-          context.pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              behavior: SnackBarBehavior.floating,
-              content: Text('This meeting is over and is no longer available.'),
-            ),
-          );
+        if (state is EmergencyShareError &&
+            _isMeetingUnavailable(state.message) &&
+            !_statusHandled) {
+          _statusHandled = true;
+          _leaveWithMessage('This meeting is over and is no longer available.');
         }
       },
       builder: (context, state) {
@@ -146,10 +237,31 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
       message.toLowerCase().contains('scheduled');
 
   Widget _buildLoadingScreen() {
-    return const Scaffold(
-      backgroundColor: AppColors.lightBg,
-      body: Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          const _HeaderSkeleton(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, 20, 16, context.bottomSafePadding(32)),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _CardSkeleton(height: 118),
+                  SizedBox(height: 16),
+                  _CardSkeleton(height: 140),
+                  SizedBox(height: 16),
+                  _CardSkeleton(height: 74),
+                  SizedBox(height: 16),
+                  _CardSkeleton(height: 74),
+                  SizedBox(height: 16),
+                  _CardSkeleton(height: 56),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -195,48 +307,60 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
   Widget _buildScaffold(EmergencyShareEntity? data) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          _buildHeader(data),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _MeetingProgressCard(),
-                  const SizedBox(height: 16),
-                  _TrustedContactsCard(contacts: data?.emergencyContacts),
-                  const SizedBox(height: 16),
-                  _LiveLocationCard(location: data?.meeting.location),
-                  const SizedBox(height: 16),
-                  _buildActionButtons(data),
-                  const SizedBox(height: 16),
-                  _EndMeetingButton(loading: _ending, onTap: _showEndDialog),
-                ],
+      body: BlocBuilder<GpsTrackingBloc, GpsState>(
+        builder: (context, gpsState) {
+          final currentPosition = gpsState is GpsTracking ? gpsState : null;
+          return Column(
+            children: [
+              _buildHeader(data),
+              Expanded(
+                child: RefreshIndicator(
+                  color: AppColors.primary,
+                  onRefresh: _handleRefresh,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding:
+                        EdgeInsets.fromLTRB(16, 20, 16, context.bottomSafePadding(32)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _MeetingProgressCard(),
+                        const SizedBox(height: 16),
+                        _TrustedContactsCard(contacts: data?.emergencyContacts),
+                        const SizedBox(height: 16),
+                        // Always the user's own live GPS position (streamed
+                        // by GpsTrackingBloc), never the meeting's static
+                        // address.
+                        _LiveLocationCard(position: currentPosition),
+                        const SizedBox(height: 16),
+                        _buildActionButtons(data),
+                        const SizedBox(height: 16),
+                        _EndMeetingButton(loading: _ending, onTap: _showEndDialog),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 
   Widget _buildHeader(EmergencyShareEntity? data) {
-    return BlocBuilder<GpsTrackingBloc, GpsState>(
-      builder: (context, gpsState) => _Header(
-        countdown: _countdownLabel(data?.meeting),
-        meeting: data?.meeting,
-        host: data?.host,
-        currentPosition: gpsState is GpsTracking ? gpsState : null,
-      ),
+    return _Header(
+      countdown: _countdownLabel(data?.meeting),
+      meeting: data?.meeting,
+      partner: data?.partner,
     );
   }
 
   Widget _buildActionButtons(EmergencyShareEntity? data) {
-    final host = data?.host;
+    final partner = data?.partner;
     return _ActionButtons(
-      onMessage: host == null ? null : () => _openChatWithHost(context, host),
+      onMessage:
+          partner == null ? null : () => _openChatWithPartner(context, partner),
       onSos: () => context.push(
         widget.meetingId == null
             ? AppRoutes.sos
@@ -245,16 +369,17 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
     );
   }
 
-  void _openChatWithHost(BuildContext context, EmergencyShareUserEntity host) {
+  void _openChatWithPartner(
+      BuildContext context, EmergencyShareUserEntity partner) {
     final conversation = ConversationEntity(
-      id: host.id,
-      partnerId: host.id,
-      partnerName: host.name,
+      id: partner.id,
+      partnerId: partner.id,
+      partnerName: partner.name,
       partnerVerificationLevel: 'none',
       unreadCount: 0,
       updatedAt: DateTime.now(),
     );
-    context.push('${AppRoutes.chat}/${host.id}', extra: conversation);
+    context.push('${AppRoutes.chat}/${partner.id}', extra: conversation);
   }
 
   String _countdownLabel(EmergencyShareMeetingEntity? meeting) {
@@ -286,13 +411,11 @@ DateTime? meetingDateTime(EmergencyShareMeetingEntity meeting) {
 class _Header extends StatelessWidget {
   final String countdown;
   final EmergencyShareMeetingEntity? meeting;
-  final EmergencyShareUserEntity? host;
-  final GpsTracking? currentPosition;
+  final EmergencyShareUserEntity? partner;
   const _Header({
     required this.countdown,
     required this.meeting,
-    required this.host,
-    required this.currentPosition,
+    required this.partner,
   });
 
   @override
@@ -340,16 +463,15 @@ class _Header extends StatelessWidget {
           // Meeting partner card
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _PartnerCard(meeting: meeting, host: host),
+            child: _PartnerCard(meeting: meeting, partner: partner),
           ),
           const SizedBox(height: 12),
 
-          // Map placeholder with overlays
+          // Map with overlays
           _MapSection(
             countdown: countdown,
-            currentPosition: currentPosition,
-            destinationLat: meeting?.latitude,
-            destinationLng: meeting?.longitude,
+            meeting: meeting,
+            partner: partner,
           ),
         ],
       ),
@@ -359,10 +481,10 @@ class _Header extends StatelessWidget {
 
 class _PartnerCard extends StatelessWidget {
   final EmergencyShareMeetingEntity? meeting;
-  final EmergencyShareUserEntity? host;
-  const _PartnerCard({required this.meeting, required this.host});
+  final EmergencyShareUserEntity? partner;
+  const _PartnerCard({required this.meeting, required this.partner});
 
-  String get _hostName => host?.name ?? 'SAFEE User';
+  String get _partnerName => partner?.name ?? 'SAFEE User';
 
   String get _subtitle {
     if (meeting == null) return '';
@@ -405,7 +527,7 @@ class _PartnerCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _hostName,
+                  _partnerName,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 17,
@@ -441,24 +563,29 @@ class _PartnerCard extends StatelessWidget {
 
 class _MapSection extends StatelessWidget {
   final String countdown;
-  final GpsTracking? currentPosition;
-  final double? destinationLat;
-  final double? destinationLng;
+  final EmergencyShareMeetingEntity? meeting;
+  final EmergencyShareUserEntity? partner;
 
   const _MapSection({
     required this.countdown,
-    required this.currentPosition,
-    required this.destinationLat,
-    required this.destinationLng,
+    required this.meeting,
+    required this.partner,
   });
 
+  bool get _hasMeetingLocation =>
+      meeting?.latitude != null && meeting?.longitude != null;
+
+  // Distance from the *other* participant's last known GPS ping to the
+  // meeting point — a host sees the guest's distance and vice versa, never
+  // the current device's own distance.
   String? get _distanceLabel {
-    final pos = currentPosition;
-    if (pos == null || destinationLat == null || destinationLng == null) {
-      return null;
-    }
+    if (!_hasMeetingLocation || partner?.hasLocation != true) return null;
     final meters = Geolocator.distanceBetween(
-        pos.lat, pos.lng, destinationLat!, destinationLng!);
+      partner!.latitude!,
+      partner!.longitude!,
+      meeting!.latitude!,
+      meeting!.longitude!,
+    );
     return '${(meters / 1609.344).toStringAsFixed(1)} mi away';
   }
 
@@ -468,8 +595,9 @@ class _MapSection extends StatelessWidget {
       height: 200,
       child: Stack(
         children: [
-          // Map placeholder
-          const _MapPlaceholder(),
+          _hasMeetingLocation
+              ? _LiveMap(meeting: meeting!, partner: partner)
+              : const _MapPlaceholder(),
 
           // Countdown-to-meeting badge (top-left)
           Positioned(
@@ -532,6 +660,104 @@ class _MapSection extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+// Real map: meeting point + the other participant's last known position,
+// both updated live as fresh emergency-share data arrives (see the periodic
+// re-fetch in _LiveLocationPageState). Falls back to _MapPlaceholder only
+// when the meeting itself has no coordinates to plot at all.
+class _LiveMap extends StatefulWidget {
+  final EmergencyShareMeetingEntity meeting;
+  final EmergencyShareUserEntity? partner;
+  const _LiveMap({required this.meeting, required this.partner});
+
+  @override
+  State<_LiveMap> createState() => _LiveMapState();
+}
+
+class _LiveMapState extends State<_LiveMap> {
+  GoogleMapController? _controller;
+
+  @override
+  void didUpdateWidget(covariant _LiveMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // This widget rebuilds every second (parent's countdown timer) — only
+    // re-fit the camera when the partner's position actually moved, not on
+    // every tick.
+    final partner = widget.partner;
+    final oldPartner = oldWidget.partner;
+    final moved = partner?.latitude != oldPartner?.latitude ||
+        partner?.longitude != oldPartner?.longitude;
+    if (moved && partner != null && partner.hasLocation) {
+      _fitBounds(partner);
+    }
+  }
+
+  void _fitBounds(EmergencyShareUserEntity partner) {
+    final meetingLatLng =
+        LatLng(widget.meeting.latitude!, widget.meeting.longitude!);
+    final partnerLatLng = LatLng(partner.latitude!, partner.longitude!);
+    final bounds = LatLngBounds(
+      southwest: LatLng(
+        math.min(meetingLatLng.latitude, partnerLatLng.latitude),
+        math.min(meetingLatLng.longitude, partnerLatLng.longitude),
+      ),
+      northeast: LatLng(
+        math.max(meetingLatLng.latitude, partnerLatLng.latitude),
+        math.max(meetingLatLng.longitude, partnerLatLng.longitude),
+      ),
+    );
+    _controller?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final meetingLatLng =
+        LatLng(widget.meeting.latitude!, widget.meeting.longitude!);
+    final partner = widget.partner;
+    final hasPartnerLocation = partner != null && partner.hasLocation;
+
+    final markers = <Marker>{
+      Marker(
+        markerId: const MarkerId('meeting'),
+        position: meetingLatLng,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        infoWindow: InfoWindow(
+          title: widget.meeting.location.isNotEmpty
+              ? widget.meeting.location
+              : 'Meeting point',
+        ),
+      ),
+      if (hasPartnerLocation)
+        Marker(
+          markerId: const MarkerId('partner'),
+          position: LatLng(partner.latitude!, partner.longitude!),
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          infoWindow: InfoWindow(title: partner.name),
+        ),
+    };
+
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: hasPartnerLocation
+            ? LatLng(
+                (meetingLatLng.latitude + partner.latitude!) / 2,
+                (meetingLatLng.longitude + partner.longitude!) / 2,
+              )
+            : meetingLatLng,
+        zoom: 14,
+      ),
+      onMapCreated: (controller) {
+        _controller = controller;
+        if (hasPartnerLocation) _fitBounds(partner);
+      },
+      markers: markers,
+      myLocationEnabled: true,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
     );
   }
 }
@@ -832,12 +1058,77 @@ class _TrustedContactsCard extends StatelessWidget {
 
 // ── Live Location ───────────────────────────────────────────────────────────
 
-class _LiveLocationCard extends StatelessWidget {
-  final String? location;
-  const _LiveLocationCard({this.location});
+class _LiveLocationCard extends StatefulWidget {
+  final GpsTracking? position;
+  const _LiveLocationCard({this.position});
 
-  String get _locationLabel =>
-      (location != null && location!.isNotEmpty) ? location! : 'Location unavailable';
+  @override
+  State<_LiveLocationCard> createState() => _LiveLocationCardState();
+}
+
+class _LiveLocationCardState extends State<_LiveLocationCard> {
+  String? _address;
+  bool _resolving = false;
+  double? _resolvedLat;
+  double? _resolvedLng;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeResolveAddress();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveLocationCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _maybeResolveAddress();
+  }
+
+  // Re-geocodes only when we've moved meaningfully (~40m) since the last
+  // resolved point — GPS ticks roughly every 10m (see GpsTrackingBloc), so
+  // reverse-geocoding every single update would hammer the geocoding API
+  // for no visible benefit.
+  void _maybeResolveAddress() {
+    final pos = widget.position;
+    if (pos == null || _resolving) return;
+    if (_resolvedLat != null && _resolvedLng != null) {
+      final movedMeters = Geolocator.distanceBetween(
+          _resolvedLat!, _resolvedLng!, pos.lat, pos.lng);
+      if (movedMeters < 40) return;
+    }
+    _resolveAddress(pos.lat, pos.lng);
+  }
+
+  Future<void> _resolveAddress(double lat, double lng) async {
+    _resolving = true;
+    String resolved;
+    try {
+      final placemarks = await placemarkFromCoordinates(lat, lng);
+      final p = placemarks.first;
+      final parts = [p.street, p.locality, p.administrativeArea]
+          .where((s) => s != null && s.isNotEmpty)
+          .toList();
+      resolved = parts.isNotEmpty
+          ? parts.join(', ')
+          : '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+    } catch (_) {
+      resolved = '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+    }
+    _resolving = false;
+    if (!mounted) return;
+    setState(() {
+      _address = resolved;
+      _resolvedLat = lat;
+      _resolvedLng = lng;
+    });
+  }
+
+  String get _locationLabel {
+    final pos = widget.position;
+    if (pos == null) return 'Acquiring your location…';
+    return _address ??
+        '${pos.lat.toStringAsFixed(5)}, ${pos.lng.toStringAsFixed(5)}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -986,6 +1277,159 @@ class _ActionButton extends StatelessWidget {
 }
 
 // ── End Meeting ─────────────────────────────────────────────────────────────
+
+// ── Shimmer loading (no external shimmer package in this project) ─────────
+
+class _HeaderSkeleton extends StatelessWidget {
+  const _HeaderSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.darkBg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(height: MediaQuery.of(context).padding.top),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Active Meeting',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.darkBg2,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  const _ShimmerBox(
+                    width: 52,
+                    height: 52,
+                    borderRadius: BorderRadius.all(Radius.circular(26)),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        _ShimmerBox(width: 140, height: 15),
+                        SizedBox(height: 8),
+                        _ShimmerBox(width: 100, height: 12),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const SizedBox(
+            height: 200,
+            child: _ShimmerBox(
+              width: double.infinity,
+              height: double.infinity,
+              borderRadius: BorderRadius.zero,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CardSkeleton extends StatelessWidget {
+  final double height;
+  const _CardSkeleton({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return _ShimmerBox(
+      width: double.infinity,
+      height: height,
+      borderRadius: BorderRadius.circular(16),
+    );
+  }
+}
+
+class _ShimmerBox extends StatefulWidget {
+  final double width;
+  final double height;
+  final BorderRadius? borderRadius;
+  const _ShimmerBox({required this.width, required this.height, this.borderRadius});
+
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
+            gradient: LinearGradient(
+              begin: Alignment(-1 + t * 3, 0),
+              end: Alignment(0 + t * 3, 0),
+              colors: const [
+                AppColors.cardBg,
+                AppColors.border,
+                AppColors.cardBg,
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _EndMeetingButton extends StatelessWidget {
   final bool loading;

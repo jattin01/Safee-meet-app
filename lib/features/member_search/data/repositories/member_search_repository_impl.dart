@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
+import '../../../../core/shared/failures/dio_failure_mapper.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../domain/entities/member_entity.dart';
 import '../../domain/repositories/member_search_repository.dart';
@@ -60,15 +61,10 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
       );
 
   Failure _map(DioException e) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.unknown) {
-      return const NetworkFailure();
+    if (isConnectivityError(e)) return const NetworkFailure();
+    if (e.response?.statusCode == 404) {
+      return const ValidationFailure('Member not found');
     }
-    final status = e.response?.statusCode;
-    if (status == 404) return const ValidationFailure('Member not found');
-    return ServerFailure(
-      e.response?.data?['message'] as String? ?? 'Server error',
-      statusCode: status,
-    );
+    return mapDioException(e);
   }
 }

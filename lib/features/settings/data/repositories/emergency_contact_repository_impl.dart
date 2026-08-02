@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
+import '../../../../core/shared/failures/dio_failure_mapper.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../domain/entities/emergency_contact_entity.dart';
 import '../../domain/repositories/emergency_contact_repository.dart';
@@ -67,18 +68,14 @@ class EmergencyContactRepositoryImpl implements EmergencyContactRepository {
       );
 
   Failure _map(DioException e) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.unknown) {
-      return const NetworkFailure();
-    }
+    if (isConnectivityError(e)) return const NetworkFailure();
     final status = e.response?.statusCode;
     final responseData = e.response?.data;
     final message = responseData is Map ? responseData['message'] as String? : null;
 
-    if (status == 401 || status == 403) return const UnauthorizedFailure();
     if (status == 404) return ValidationFailure(message ?? 'Emergency contact not found.');
     if (status == 409) return ValidationFailure(message ?? 'This phone number already exists.');
     if (status == 422) return ValidationFailure(message ?? 'Invalid emergency contact details.');
-    return ServerFailure(message ?? 'Server error', statusCode: status);
+    return mapDioException(e);
   }
 }

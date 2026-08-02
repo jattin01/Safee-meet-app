@@ -35,6 +35,16 @@ class RegisterRequested extends AuthEvent {
   List<Object?> get props => [provider, providerToken, name, email, accountType, companyName, consentAccepted];
 }
 
+/// Checks whether a phone number is already registered *before* an OTP is
+/// sent — so an unregistered number is rejected up front instead of after
+/// the user goes through the whole OTP step.
+class PhoneRegistrationCheckRequested extends AuthEvent {
+  final String phone;
+  const PhoneRegistrationCheckRequested(this.phone);
+  @override
+  List<Object?> get props => [phone];
+}
+
 /// Login with any provider token (already obtained by datasource)
 class LoginRequested extends AuthEvent {
   final String provider;

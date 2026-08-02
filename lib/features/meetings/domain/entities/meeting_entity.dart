@@ -68,6 +68,23 @@ class MeetingEntity extends Equatable {
     required this.isHost,
   });
 
+  MeetingEntity copyWith({MeetingStatus? status}) => MeetingEntity(
+        id: id,
+        partnerId: partnerId,
+        partnerName: partnerName,
+        partnerAvatarUrl: partnerAvatarUrl,
+        partnerVerificationLevel: partnerVerificationLevel,
+        scheduledAt: scheduledAt,
+        purpose: purpose,
+        location: location,
+        notes: notes,
+        status: status ?? this.status,
+        partnerLat: partnerLat,
+        partnerLng: partnerLng,
+        timeElapsed: timeElapsed,
+        isHost: isHost,
+      );
+
   String get partnerInitials {
     final parts = partnerName.trim().split(' ');
     if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();

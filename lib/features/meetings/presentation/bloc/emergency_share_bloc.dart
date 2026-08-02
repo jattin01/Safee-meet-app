@@ -59,7 +59,9 @@ class EmergencyShareBloc
     EmergencyShareRequested event,
     Emitter<EmergencyShareState> emit,
   ) async {
-    emit(const EmergencyShareLoading());
+    // Skip the full-screen loading state on a pull-to-refresh — only the
+    // very first load should blank the screen while it fetches.
+    if (state is! EmergencyShareLoaded) emit(const EmergencyShareLoading());
     final result = await _repository.getEmergencyShare(event.meetingId);
     result.fold(
       (f) => emit(EmergencyShareError(f.message)),

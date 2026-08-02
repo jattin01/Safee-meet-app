@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dartz/dartz.dart';
 import '../../../../core/services/secure_storage_service.dart';
 import '../../../../core/shared/failures/failures.dart';
@@ -34,7 +35,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       );
       return Right(room);
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -79,7 +80,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       final rooms = await _dataSource.getConversations(currentUserId);
       return Right(rooms.map((r) => _roomToConversation(r, currentUserId)).toList());
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -109,7 +110,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       );
       return const Right(null);
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -139,7 +140,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       );
       return Right(models.map((m) => m.toEntity(roomId)).toList());
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -170,7 +171,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       );
       return const Right(null);
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -181,7 +182,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       final users = await _dataSource.getUsers(excludeUid);
       return Right(users);
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -196,7 +197,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       await _dataSource.setTyping(roomId: roomId, uid: uid, isTyping: isTyping);
       return const Right(null);
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -216,7 +217,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       await _dataSource.updatePresence(uid: uid, isOnline: isOnline);
       return const Right(null);
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -236,7 +237,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       await _dataSource.togglePin(roomId: roomId, uid: uid, pin: pin);
       return const Right(null);
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -251,7 +252,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       await _dataSource.toggleMute(roomId: roomId, uid: uid, mute: mute);
       return const Right(null);
     } catch (e) {
-      return Left(ServerFailure(e.toString()));
+      return Left(_mapError(e));
     }
   }
 
@@ -261,5 +262,23 @@ class MessagingRepositoryImpl implements MessagingRepository {
     required bool accepted,
   }) async {
     return const Right(null);
+  }
+
+  // This backend talks to Firestore/Storage directly (no Dio/REST here), so
+  // failures surface as FirebaseException/SocketException rather than
+  // DioException — map the connectivity-flavored codes to NetworkFailure
+  // instead of leaking a raw `e.toString()` (e.g.
+  // "[cloud_firestore/unavailable] Failed to get document...") to the UI.
+  Failure _mapError(Object e) {
+    if (e is FirebaseException) {
+      if (e.code == 'unavailable' ||
+          e.code == 'deadline-exceeded' ||
+          e.code == 'network-request-failed') {
+        return const NetworkFailure();
+      }
+      return ServerFailure(e.message ?? 'Something went wrong.', code: e.code);
+    }
+    if (e is SocketException) return const NetworkFailure();
+    return const UnknownFailure();
   }
 }

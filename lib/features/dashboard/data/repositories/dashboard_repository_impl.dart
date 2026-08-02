@@ -1,5 +1,6 @@
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
+import '../../../../core/shared/failures/dio_failure_mapper.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../domain/entities/dashboard_entity.dart';
 import '../../domain/repositories/dashboard_repository.dart';
@@ -33,14 +34,5 @@ class DashboardRepositoryImpl implements DashboardRepository {
     }
   }
 
-  Failure _mapError(DioException e) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.unknown) {
-      return const NetworkFailure();
-    }
-    return ServerFailure(
-      e.response?.data?['message'] as String? ?? 'Server error',
-      statusCode: e.response?.statusCode,
-    );
-  }
+  Failure _mapError(DioException e) => mapDioException(e);
 }

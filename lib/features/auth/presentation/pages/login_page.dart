@@ -11,7 +11,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/app_logo_widget.dart';
+import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/widgets/field_input.dart';
 import '../../../../core/shared/widgets/otp_input_widget.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
@@ -75,12 +77,15 @@ class _LoginViewState extends State<_LoginView> {
     return '+$digits';
   }
 
-  // ── Firebase: Send OTP ────────────────────────────────────────────────────
-  Future<void> _sendPhoneOtp() async {
+  // ── Step 1: verify the number is registered before an OTP is ever sent ────
+  void _onSendOtpPressed() {
     final phone = _phoneCtrl.text.trim();
     if (phone.isEmpty) return;
+    context.read<AuthBloc>().add(PhoneRegistrationCheckRequested(_toE164(phone)));
+  }
 
-    final e164 = _toE164(phone);
+  // ── Firebase: Send OTP (only called once registration is confirmed) ──────
+  Future<void> _sendPhoneOtp(String e164) async {
     setState(() { _sendingOtp = true; _otpError = null; });
 
     await FirebaseAuth.instance.verifyPhoneNumber(
@@ -162,42 +167,18 @@ class _LoginViewState extends State<_LoginView> {
   bool get _supportsAppleSignIn =>
       !kIsWeb && (Platform.isIOS || Platform.isMacOS);
 
-  // ── USER_NOT_REGISTERED dialog ────────────────────────────────────────────
-  void _showNotRegisteredDialog(BuildContext ctx, String message) {
-    showDialog<void>(
+  // ── USER_NOT_REGISTERED bottom sheet ──────────────────────────────────────
+  void _showNotRegisteredSheet(BuildContext ctx, String message) {
+    showModalBottomSheet<void>(
       context: ctx,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          Icon(Icons.person_add_outlined, color: AppColors.primary, size: 24),
-          const SizedBox(width: 10),
-          const Text('Not Registered'),
-        ]),
-        content: Text(
-          message,
-          style: TextStyle(color: AppColors.textSecondary, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              ctx.push(AppRoutes.register);
-            },
-            child: const Text('Register Now',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _NotRegisteredSheet(
+        message: message,
+        onRegister: () {
+          Navigator.pop(sheetCtx);
+          sheetCtx.push(AppRoutes.register);
+        },
       ),
     );
   }
@@ -210,19 +191,14 @@ class _LoginViewState extends State<_LoginView> {
         if (state is LoginSuccess) {
           context.go(AppRoutes.dashboardHome);
         }
+        if (state is PhoneRegistrationVerified) {
+          _sendPhoneOtp(state.phone);
+        }
         if (state is UserNotRegistered) {
-          _showNotRegisteredDialog(context, state.message);
+          _showNotRegisteredSheet(context, state.message);
         }
         if (state is AuthFailureState) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-          );
+          AppSnackbar.error(context, state.message);
         }
       },
       child: BlocBuilder<AuthBloc, AuthState>(
@@ -237,7 +213,8 @@ class _LoginViewState extends State<_LoginView> {
                 children: [
                   _Header(isOtpStep: _isOtpStep),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+                    padding: EdgeInsets.fromLTRB(
+                        24, 28, 24, context.bottomSafePadding(32)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -275,10 +252,12 @@ class _LoginViewState extends State<_LoginView> {
       ),
       const SizedBox(height: 20),
       PrimaryButton(
-        label:     _sendingOtp ? 'Sending OTP...' : 'Send OTP',
+        label: _sendingOtp
+            ? 'Sending OTP...'
+            : (isLoading ? 'Checking number...' : 'Send OTP'),
         onPressed: (_sendingOtp || isLoading || !_isValidPhone)
             ? null
-            : _sendPhoneOtp,
+            : _onSendOtpPressed,
         gradientStart: (_sendingOtp || !_isValidPhone)
             ? AppColors.textTertiary : null,
         gradientEnd: (_sendingOtp || !_isValidPhone)
@@ -347,7 +326,14 @@ class _LoginViewState extends State<_LoginView> {
       const SizedBox(height: 28),
       OtpInputWidget(
         length: 6,
-        onCompleted: (otp) => setState(() => _enteredOtp = otp),
+        // Auto-submits the moment all 6 digits are present (typed, pasted,
+        // or filled by the OS's SMS/one-time-code autofill) — no separate
+        // button tap needed. _verifyPhoneOtp itself is unchanged; this just
+        // calls it automatically instead of waiting for a button press.
+        onCompleted: (otp) {
+          setState(() => _enteredOtp = otp);
+          _verifyPhoneOtp();
+        },
         onResend:    () => setState(() {
           _isOtpStep  = false;
           _enteredOtp = null;
@@ -395,6 +381,100 @@ class _LoginViewState extends State<_LoginView> {
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+class _NotRegisteredSheet extends StatelessWidget {
+  final String message;
+  final VoidCallback onRegister;
+  const _NotRegisteredSheet({required this.message, required this.onRegister});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Center(
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.person_add_alt_1_rounded,
+                    color: AppColors.primary, size: 28),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Not Registered',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: AppColors.border),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text('Cancel',
+                        style: GoogleFonts.inter(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: PrimaryButton(
+                    label: 'Register Now',
+                    onPressed: onRegister,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _Header extends StatelessWidget {
   final bool isOtpStep;

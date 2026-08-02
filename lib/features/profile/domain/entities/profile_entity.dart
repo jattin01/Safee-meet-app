@@ -72,9 +72,16 @@ class ReviewEntity extends Equatable {
   final String authorId;
   final String authorName;
   final String? authorAvatarUrl;
+  // 'none' | 'level1' | 'level2' | 'professional' — the reviewer's own
+  // verification level, as returned by GET /v1/reviews.
+  final String authorVerificationLevel;
   final double rating;
   final String text;
   final bool verifiedMeeting;
+  final String? meetingType;
+  final bool punctual;
+  final bool trustworthy;
+  final bool responsive;
   final DateTime createdAt;
   final int helpfulCount;
 
@@ -83,9 +90,14 @@ class ReviewEntity extends Equatable {
     required this.authorId,
     required this.authorName,
     this.authorAvatarUrl,
+    this.authorVerificationLevel = 'none',
     required this.rating,
     required this.text,
     required this.verifiedMeeting,
+    this.meetingType,
+    this.punctual = false,
+    this.trustworthy = false,
+    this.responsive = false,
     required this.createdAt,
     required this.helpfulCount,
   });
@@ -96,6 +108,35 @@ class ReviewEntity extends Equatable {
     return authorName.isNotEmpty ? authorName[0].toUpperCase() : '?';
   }
 
+  ReviewEntity copyWith({int? helpfulCount}) => ReviewEntity(
+        id: id,
+        authorId: authorId,
+        authorName: authorName,
+        authorAvatarUrl: authorAvatarUrl,
+        authorVerificationLevel: authorVerificationLevel,
+        rating: rating,
+        text: text,
+        verifiedMeeting: verifiedMeeting,
+        meetingType: meetingType,
+        punctual: punctual,
+        trustworthy: trustworthy,
+        responsive: responsive,
+        createdAt: createdAt,
+        helpfulCount: helpfulCount ?? this.helpfulCount,
+      );
+
   @override
-  List<Object?> get props => [id, authorId, rating, text, createdAt];
+  List<Object?> get props => [
+        id,
+        authorId,
+        rating,
+        text,
+        createdAt,
+        authorVerificationLevel,
+        meetingType,
+        punctual,
+        trustworthy,
+        responsive,
+        helpfulCount,
+      ];
 }

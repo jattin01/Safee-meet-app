@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../../core/services/secure_storage_service.dart';
+import '../../../../core/shared/failures/dio_failure_mapper.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../../../core/storage/auth_session_manager.dart';
 import '../../domain/entities/auth_response_entity.dart';
@@ -226,11 +227,7 @@ class AuthRepositoryImpl implements AuthRepository {
   // ── Error Mapping ─────────────────────────────────────────────────────────────
 
   Failure _mapDioError(DioException e) {
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.connectionError) {
-      return const NetworkFailure();
-    }
+    if (isConnectivityError(e)) return const NetworkFailure();
 
     final status  = e.response?.statusCode;
     final body    = e.response?.data as Map<String, dynamic>?;

@@ -119,6 +119,17 @@ class SosDone extends SosState {
   const SosDone();
 }
 
+/// Emitted instead of SosActivatedState when a real GPS fix couldn't be
+/// obtained, or the trigger request itself failed — the SOS is never sent
+/// with a fabricated/placeholder (0, 0) location.
+class SosError extends SosState {
+  final String message;
+  final List<SosContactEntity> contacts;
+  const SosError({required this.message, required this.contacts});
+  @override
+  List<Object?> get props => [message, contacts];
+}
+
 // ── BLoC ────────────────────────────────────────────────────────────────────
 class SosBloc extends Bloc<SosEvent, SosState> {
   final ApiClient _api;
@@ -164,20 +175,44 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     }
   }
 
-  Future<Position?> _currentPosition() async {
+  // Returns a real GPS fix or a specific reason it couldn't be obtained —
+  // never a silent null-turned-into-(0,0). Checked in this order: location
+  // services on, permission granted, then an actual fix within 8s.
+  Future<({Position? position, String? error})> _resolvePosition() async {
     try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return (
+          position: null,
+          error: 'Turn on location services to send an SOS alert.'
+        );
+      }
+
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        return null;
+        return (
+          position: null,
+          error: 'Location permission is required to send an SOS alert.'
+        );
       }
-      return await Geolocator.getCurrentPosition()
+
+      final position = await Geolocator.getCurrentPosition()
           .timeout(const Duration(seconds: 8));
+      return (position: position, error: null);
+    } on TimeoutException {
+      return (
+        position: null,
+        error: 'Could not get your current location. Please try again.'
+      );
     } catch (_) {
-      return null;
+      return (
+        position: null,
+        error: 'Unable to get your current location. Please try again.'
+      );
     }
   }
 
@@ -204,19 +239,33 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   Future<void> _onActivated(SosActivated event, Emitter<SosState> emit) async {
     _holdTimer?.cancel();
 
-    final position = await _currentPosition();
+    final resolved = await _resolvePosition();
+    final position = resolved.position;
+    if (position == null) {
+      emit(SosError(
+        message: resolved.error ?? 'Unable to get your current location.',
+        contacts: _contacts,
+      ));
+      return;
+    }
 
     // Send SOS to server — reporter comes from the auth token, not a
     // client-supplied id. meetingId (when triggered from an active meeting)
     // ties the incident to that meeting on the backend.
     try {
       final res = await _api.dio.post('/v1/sos/trigger', data: {
-        'latitude': position?.latitude ?? 0.0,
-        'longitude': position?.longitude ?? 0.0,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
         if (event.meetingId != null) 'meeting_id': event.meetingId,
       });
       _activeIncidentId = res.data['incident']?['id']?.toString();
-    } catch (_) {}
+    } catch (_) {
+      emit(SosError(
+        message: 'Failed to send SOS alert. Please try again.',
+        contacts: _contacts,
+      ));
+      return;
+    }
 
     final contacts = _contacts.map((c) {
       c.notified = true;
@@ -227,8 +276,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     emit(SosActivatedState(
       contacts: contacts,
       countdown: countdown,
-      lat: position?.latitude,
-      lng: position?.longitude,
+      lat: position.latitude,
+      lng: position.longitude,
       incidentId: _activeIncidentId,
     ));
 

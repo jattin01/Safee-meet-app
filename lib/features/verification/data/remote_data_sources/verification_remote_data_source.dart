@@ -1,18 +1,13 @@
-import 'dart:io';
-import 'package:dio/dio.dart';
 import '../../../../core/services/api_client.dart';
 
 abstract class VerificationRemoteDataSource {
   Future<Map<String, dynamic>> getVerificationStatus();
-  Future<Map<String, dynamic>> submitVerification({
-    required String userId,
-    required File faceIdImage,
-    required File nationalIdFrontImage,
-    required File nationalIdBackImage,
-    required String nationalIdNumber,
-    required String nationalIdCountry,
-  });
-  Future<Map<String, dynamic>> getVerificationProgress();
+
+  /// Asks our backend to open a Didit verification session (backend calls
+  /// Didit's `POST /v3/session/` with the workflow_id + secret API key,
+  /// neither of which ever reach the client) and returns the short-lived
+  /// session token the SDK needs to launch its capture UI.
+  Future<Map<String, dynamic>> createDiditSession();
 }
 
 class VerificationRemoteDataSourceImpl implements VerificationRemoteDataSource {
@@ -27,34 +22,9 @@ class VerificationRemoteDataSourceImpl implements VerificationRemoteDataSource {
   }
 
   @override
-  Future<Map<String, dynamic>> submitVerification({
-    required String userId,
-    required File faceIdImage,
-    required File nationalIdFrontImage,
-    required File nationalIdBackImage,
-    required String nationalIdNumber,
-    required String nationalIdCountry,
-  }) async {
-    final formData = FormData.fromMap({
-      'user_id': userId,
-      'face_id_image':
-          await MultipartFile.fromFile(faceIdImage.path, filename: 'face_id.jpg'),
-      'national_id_front_image': await MultipartFile.fromFile(
-          nationalIdFrontImage.path,
-          filename: 'national_id_front.jpg'),
-      'national_id_back_image': await MultipartFile.fromFile(
-          nationalIdBackImage.path,
-          filename: 'national_id_back.jpg'),
-      'national_id_number': nationalIdNumber,
-      'national_id_country': nationalIdCountry,
-    });
-    final res = await _api.dio.post('/v1/verification/submit', data: formData);
-    return res.data as Map<String, dynamic>;
-  }
-
-  @override
-  Future<Map<String, dynamic>> getVerificationProgress() async {
-    final res = await _api.dio.get('/v1/verification/progress');
-    return res.data as Map<String, dynamic>;
+  Future<Map<String, dynamic>> createDiditSession() async {
+    final res = await _api.dio.post('/v1/verification/didit/start');
+    final body = res.data as Map<String, dynamic>;
+    return body['data'] as Map<String, dynamic>? ?? body;
   }
 }

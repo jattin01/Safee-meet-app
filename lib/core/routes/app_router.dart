@@ -9,7 +9,6 @@ import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/register_page.dart';
 import '../../features/dashboard/presentation/pages/home_page.dart';
 import '../../features/meetings/presentation/bloc/emergency_share_bloc.dart';
-import '../../features/meetings/presentation/pages/active_meeting_page.dart';
 import '../../features/meetings/presentation/pages/emergency_share_page.dart';
 import '../../features/meetings/presentation/pages/live_location_page.dart';
 import '../../features/meetings/presentation/pages/meeting_setup_page.dart';
@@ -22,9 +21,11 @@ import '../../features/messaging/presentation/pages/conversations_page.dart';
 import '../../features/messaging/presentation/pages/users_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/onboarding/presentation/pages/onboarding_page.dart';
+import '../../features/profile/presentation/pages/add_review_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/reviews_page.dart';
 import '../../features/profile/presentation/cubit/current_user_cubit.dart';
+import '../../features/profile/presentation/cubit/submit_review_cubit.dart';
 import '../../features/settings/presentation/pages/change_password_page.dart';
 import '../../features/settings/presentation/pages/emergency_contacts_page.dart';
 import '../../features/settings/presentation/pages/personal_info_page.dart';
@@ -35,6 +36,7 @@ import '../../features/gps_tracking/presentation/bloc/gps_tracking_bloc.dart';
 import '../../features/sos/presentation/bloc/sos_bloc.dart';
 import '../../features/sos/presentation/pages/sos_page.dart';
 import '../../features/splash/presentation/pages/splash_page.dart';
+import '../../features/subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../../features/subscription/presentation/pages/subscription_page.dart';
 import '../../features/verification/presentation/pages/verification_page.dart';
 import '../../features/verification/presentation/pages/verification_status_page.dart';
@@ -78,8 +80,16 @@ class AppRouter {
 
       // ── Shell (bottom nav) ────────────────────────────────────────────────
       StatefulShellRoute.indexedStack(
-        builder: (_, __, shell) => BlocProvider(
-          create: (_) => sl<CurrentUserCubit>()..load(),
+        builder: (_, __, shell) => MultiBlocProvider(
+          providers: [
+            // Singleton cubits (see injection_container.dart) — already
+            // provided at the app root (main.dart) too; `.value` here just
+            // re-exposes the same instance to this subtree without ever
+            // closing it when the shell rebuilds/disposes. `.load()` is a
+            // cheap no-op re-entrancy guard if it's already loaded/loading.
+            BlocProvider.value(value: sl<CurrentUserCubit>()..load()),
+            BlocProvider.value(value: sl<CurrentSubscriptionCubit>()..load()),
+          ],
           child: AppShellPage(navigationShell: shell),
         ),
         branches: [
@@ -95,7 +105,9 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.search,
-                builder: (_, __) => const MemberSearchPage(),
+                builder: (_, state) => MemberSearchPage(
+                  initialTab: state.uri.queryParameters['tab'],
+                ),
               ),
             ],
           ),
@@ -168,14 +180,10 @@ class AppRouter {
         path: AppRoutes.meetingSetup,
         builder: (_, state) {
           final memberId = state.uri.queryParameters['memberId'];
-          final partner = state.extra is MemberEntity ? state.extra as MemberEntity : null;
+          final partner =
+              state.extra is MemberEntity ? state.extra as MemberEntity : null;
           return MeetingSetupPage(partnerId: memberId, partner: partner);
         },
-      ),
-      GoRoute(
-        path: '${AppRoutes.activeMeeting}/:id',
-        builder: (_, state) =>
-            ActiveMeetingPage(meetingId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: AppRoutes.liveLocation,
@@ -234,6 +242,13 @@ class AppRouter {
         path: AppRoutes.reviews,
         builder: (_, __) => const ReviewsPage(),
       ),
+      GoRoute(
+        path: AppRoutes.addReview,
+        builder: (_, state) => BlocProvider(
+          create: (_) => sl<SubmitReviewCubit>(),
+          child: AddReviewPage(args: state.extra as AddReviewArgs),
+        ),
+      ),
 
       // ── Settings sub-screens ──────────────────────────────────────────────
       GoRoute(
@@ -276,6 +291,10 @@ class AppRouter {
     // on every navigation is harmless.
     if (isAuth) {
       unawaited(sl<FcmService>().initialize());
+      // Warms the shared current-subscription cache right after auth is
+      // confirmed. load() is a no-op re-entrancy guard + cache read when
+      // already loaded/fresh, so calling it on every navigation is cheap.
+      unawaited(sl<CurrentSubscriptionCubit>().load());
     }
 
     final preAuthRoutes = {
@@ -298,6 +317,44 @@ class AppRouter {
       return AppRoutes.home;
     }
 
+    // Unverified users are blocked from Safee-PIN search, creating/joining/
+    // managing meetings (+ history), SOS, and chat — this is the backstop
+    // for every entry point (deep links, notification taps, back
+    // navigation), on top of the tap-level requireVerification() checks that
+    // also show the "Verification Required" snackbar before redirecting.
+    if (isAuth &&
+        _isVerificationRestricted(state.matchedLocation) &&
+        state.matchedLocation != AppRoutes.verification) {
+      final verified = await _isVerifiedUser(context.read<CurrentUserCubit>());
+      if (!verified) return AppRoutes.verification;
+    }
+
     return null;
+  }
+
+  static const _verificationRestrictedPrefixes = [
+    AppRoutes.memberSearch, // == AppRoutes.search
+    AppRoutes.meetingSetup,
+    AppRoutes.meetings,
+    AppRoutes.sos,
+    AppRoutes.reviews,
+    AppRoutes.chat, // prefix also covers /chat/:id and /chat/new
+  ];
+
+  bool _isVerificationRestricted(String location) =>
+      _verificationRestrictedPrefixes.any(
+          (prefix) => location == prefix || location.startsWith('$prefix/'));
+
+  Future<bool> _isVerifiedUser(CurrentUserCubit cubit) async {
+    if (cubit.state.profile == null) {
+      if (cubit.state.status == CurrentUserStatus.loading) {
+        await cubit.stream.firstWhere(
+          (s) => s.profile != null || s.status == CurrentUserStatus.error,
+        );
+      } else {
+        await cubit.load();
+      }
+    }
+    return cubit.isVerified;
   }
 }

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/verification_entity.dart';
@@ -15,33 +14,10 @@ class VerificationStatusRequested extends VerificationEvent {
   const VerificationStatusRequested();
 }
 
-class VerificationProgressRequested extends VerificationEvent {
-  const VerificationProgressRequested();
-}
-
-class VerificationSubmitted extends VerificationEvent {
-  final File faceIdImage;
-  final File nationalIdFrontImage;
-  final File nationalIdBackImage;
-  final String nationalIdNumber;
-  final String nationalIdCountry;
-
-  const VerificationSubmitted({
-    required this.faceIdImage,
-    required this.nationalIdFrontImage,
-    required this.nationalIdBackImage,
-    required this.nationalIdNumber,
-    required this.nationalIdCountry,
-  });
-
-  @override
-  List<Object?> get props => [
-        faceIdImage,
-        nationalIdFrontImage,
-        nationalIdBackImage,
-        nationalIdNumber,
-        nationalIdCountry,
-      ];
+/// Asks our backend to open a Didit session; the resulting token is what the
+/// page passes to `DiditSdk.startVerification`.
+class VerificationDiditSessionRequested extends VerificationEvent {
+  const VerificationDiditSessionRequested();
 }
 
 // ── States ────────────────────────────────────────────────────────────────────
@@ -66,23 +42,13 @@ class VerificationStatusLoaded extends VerificationState {
   List<Object?> get props => [status];
 }
 
-class VerificationProgressLoaded extends VerificationState {
-  final VerificationEntity progress;
-  const VerificationProgressLoaded(this.progress);
+/// Session token ready — the page's BlocListener launches the Didit SDK the
+/// moment this is emitted.
+class VerificationDiditSessionReady extends VerificationState {
+  final DiditSessionEntity session;
+  const VerificationDiditSessionReady(this.session);
   @override
-  List<Object?> get props => [progress];
-}
-
-class VerificationUploading extends VerificationState {
-  const VerificationUploading();
-}
-
-class VerificationUploadSuccess extends VerificationState {
-  final String message;
-  final VerificationSubmitEntity data;
-  const VerificationUploadSuccess({required this.message, required this.data});
-  @override
-  List<Object?> get props => [message, data];
+  List<Object?> get props => [session];
 }
 
 class VerificationError extends VerificationState {
@@ -98,15 +64,16 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
 
   VerificationBloc(this._repository) : super(const VerificationInitial()) {
     on<VerificationStatusRequested>(_onStatusRequested);
-    on<VerificationProgressRequested>(_onProgressRequested);
-    on<VerificationSubmitted>(_onSubmitted);
+    on<VerificationDiditSessionRequested>(_onDiditSessionRequested);
   }
 
   Future<void> _onStatusRequested(
     VerificationStatusRequested _,
     Emitter<VerificationState> emit,
   ) async {
-    emit(const VerificationLoading());
+    // Skip the full-screen loading state on a pull-to-refresh — only the
+    // very first load should blank the screen while it fetches.
+    if (state is! VerificationStatusLoaded) emit(const VerificationLoading());
     final result = await _repository.getVerificationStatus();
     result.fold(
       (f) => emit(VerificationError(f.message)),
@@ -114,33 +81,15 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
     );
   }
 
-  Future<void> _onProgressRequested(
-    VerificationProgressRequested _,
+  Future<void> _onDiditSessionRequested(
+    VerificationDiditSessionRequested _,
     Emitter<VerificationState> emit,
   ) async {
     emit(const VerificationLoading());
-    final result = await _repository.getVerificationProgress();
+    final result = await _repository.createDiditSession();
     result.fold(
       (f) => emit(VerificationError(f.message)),
-      (p) => emit(VerificationProgressLoaded(p)),
-    );
-  }
-
-  Future<void> _onSubmitted(
-    VerificationSubmitted event,
-    Emitter<VerificationState> emit,
-  ) async {
-    emit(const VerificationUploading());
-    final result = await _repository.submitVerification(
-      faceIdImage: event.faceIdImage,
-      nationalIdFrontImage: event.nationalIdFrontImage,
-      nationalIdBackImage: event.nationalIdBackImage,
-      nationalIdNumber: event.nationalIdNumber,
-      nationalIdCountry: event.nationalIdCountry,
-    );
-    result.fold(
-      (f) => emit(VerificationError(f.message)),
-      (r) => emit(VerificationUploadSuccess(message: r.message, data: r.data)),
+      (session) => emit(VerificationDiditSessionReady(session)),
     );
   }
 }

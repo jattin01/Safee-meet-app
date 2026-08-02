@@ -57,6 +57,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         _firebaseAuthOverride = firebaseAuth,
         super(const AuthInitial()) {
     on<AuthStatusChecked>(_onAuthStatusChecked);
+    on<PhoneRegistrationCheckRequested>(_onCheckPhoneRegistration);
     on<RegisterRequested>(_onRegister);
     on<LoginRequested>(_onLogin);
     on<GoogleLoginRequested>(_onGoogleLogin);
@@ -89,6 +90,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(const Unauthenticated());
         }
       },
+    );
+  }
+
+  // ── Phone registration pre-check (before OTP is sent) ─────────────────────────
+
+  Future<void> _onCheckPhoneRegistration(
+    PhoneRegistrationCheckRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    final result = await checkUserExists(CheckUserExistsParams(phone: event.phone));
+    result.fold(
+      (failure) => emit(_mapFailureToState(failure)),
+      (exists) => exists
+          ? emit(PhoneRegistrationVerified(event.phone))
+          : emit(const UserNotRegistered(
+              'This mobile number is not registered. Please register first.')),
     );
   }
 

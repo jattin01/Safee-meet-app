@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/app_constants.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
@@ -48,7 +49,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           children: [
             const DarkScreenHeader(title: 'Change Password'),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+              padding: EdgeInsets.fromLTRB(
+                  20, 24, 20, context.bottomSafePadding(32)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

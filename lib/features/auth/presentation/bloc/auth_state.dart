@@ -51,6 +51,14 @@ class LogoutSuccess extends AuthState {
   const LogoutSuccess();
 }
 
+/// Phone number is registered — safe to proceed with sending the OTP.
+class PhoneRegistrationVerified extends AuthState {
+  final String phone;
+  const PhoneRegistrationVerified(this.phone);
+  @override
+  List<Object?> get props => [phone];
+}
+
 /// Backend returned USER_NOT_REGISTERED
 class UserNotRegistered extends AuthState {
   final String message;

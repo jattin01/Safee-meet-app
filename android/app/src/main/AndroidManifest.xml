@@ -46,6 +46,12 @@
         android:maxSdkVersion="28" />
     <!-- mobile_scanner: QR code scanning on the Member Search page -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- geolocator: SOS coordinates, live location sharing during meetings,
+         and the "drop a pin" meeting location picker all need this — without
+         it, Geolocator.checkPermission()/requestPermission() can never
+         succeed on Android. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>

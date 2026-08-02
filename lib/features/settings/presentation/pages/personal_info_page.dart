@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
@@ -73,7 +74,8 @@ class _PersonalInfoView extends StatelessWidget {
                 children: [
                   const DarkScreenHeader(title: 'Personal Information'),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                    padding: EdgeInsets.fromLTRB(
+                        20, 24, 20, context.bottomSafePadding(32)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [

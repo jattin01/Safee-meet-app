@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/config/app_constants.dart';
 import '../../../../core/services/stripe_payment_service.dart';
 import '../../domain/repositories/subscription_repository.dart';
 import '../../domain/use_cases/get_subscription_plans_use_case.dart';
+import '../cubit/current_subscription_cubit.dart';
 import 'subscription_event.dart';
 import 'subscription_state.dart';
 
@@ -11,9 +14,14 @@ class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionState> {
   final GetSubscriptionPlansUseCase _getPlans;
   final SubscriptionRepository _repository;
   final StripePaymentService _stripePaymentService;
+  final CurrentSubscriptionCubit _currentSubscriptionCubit;
 
-  SubscriptionBloc(this._getPlans, this._repository, this._stripePaymentService)
-      : super(const SubscriptionInitial()) {
+  SubscriptionBloc(
+    this._getPlans,
+    this._repository,
+    this._stripePaymentService,
+    this._currentSubscriptionCubit,
+  ) : super(const SubscriptionInitial()) {
     on<SubscriptionPlansRequested>(_onPlansRequested);
     on<SubscribeRequested>(_onSubscribeRequested);
   }
@@ -22,7 +30,9 @@ class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionState> {
     SubscriptionPlansRequested _,
     Emitter<SubscriptionState> emit,
   ) async {
-    emit(const SubscriptionLoading());
+    // Skip the full-screen loading state on a pull-to-refresh — only the
+    // very first load should blank the screen while it fetches.
+    if (state is! SubscriptionLoaded) emit(const SubscriptionLoading());
     final result = await _getPlans();
     result.fold(
       (f) => emit(SubscriptionError(f.message)),
@@ -61,6 +71,7 @@ class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionState> {
         );
 
         if (!checkout.requiresPaymentConfirmation) {
+          unawaited(_currentSubscriptionCubit.load(forceRefresh: true));
           emit(SubscriptionLoaded(current.plans, checkoutStatus: CheckoutStatus.success));
           return;
         }
@@ -87,6 +98,7 @@ class SubscriptionBloc extends Bloc<SubscriptionEvent, SubscriptionState> {
               return;
             }
             debugPrint('[Subscribe] Stripe checkout SUCCEEDED');
+            unawaited(_currentSubscriptionCubit.load(forceRefresh: true));
             emit(SubscriptionLoaded(current.plans, checkoutStatus: CheckoutStatus.success));
           },
         );

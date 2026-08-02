@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/field_input.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
@@ -43,7 +44,7 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
   final _buildingNameCtrl = TextEditingController();
   final _floorFlatCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
-  DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
+  DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = const TimeOfDay(hour: 14, minute: 0);
   MeetingPurpose _selectedPurpose = MeetingPurpose.coffee;
   late MemberEntity? _selectedPartner = widget.partner;
@@ -58,6 +59,18 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
     (MeetingPurpose.freelance, '💻'),
     (MeetingPurpose.social, '👥'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Default time (2 PM today) may already be in the past — bump it
+    // forward the same way _pickDate does, so the initial selection is
+    // always valid without requiring the user to open a picker.
+    if (_isPastDateTime(_selectedDate, _selectedTime)) {
+      final adjusted = DateTime.now().add(const Duration(minutes: 5));
+      _selectedTime = TimeOfDay(hour: adjusted.hour, minute: adjusted.minute);
+    }
+  }
 
   String? get _partnerId => _selectedPartner?.id ?? widget.partnerId;
 
@@ -89,12 +102,22 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
     super.dispose();
   }
 
+  // Combines a date + time-of-day and checks it against "now" — used to
+  // block past dates/times both while picking and again at submit time.
+  bool _isPastDateTime(DateTime date, TimeOfDay time) {
+    final combined =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    return combined.isBefore(DateTime.now());
+  }
+
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _selectedDate.isBefore(today) ? today : _selectedDate,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
       builder: (context, child) => Theme(
         data: ThemeData.light().copyWith(
           colorScheme: ColorScheme.light(
@@ -107,7 +130,17 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked == null) return;
+    setState(() {
+      _selectedDate = picked;
+      // Picking "today" after the already-selected time has since passed
+      // (or after the previous date was in the future) would otherwise
+      // silently produce a past scheduledAt — bump the time forward.
+      if (_isPastDateTime(_selectedDate, _selectedTime)) {
+        final adjusted = DateTime.now().add(const Duration(minutes: 5));
+        _selectedTime = TimeOfDay(hour: adjusted.hour, minute: adjusted.minute);
+      }
+    });
   }
 
   Future<void> _pickTime() async {
@@ -126,7 +159,16 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _selectedTime = picked);
+    if (picked == null) return;
+    // showTimePicker has no min/max-time param, so past times (when the
+    // selected date is today) have to be rejected manually.
+    if (_isPastDateTime(_selectedDate, picked)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose a current or future time.')),
+      );
+      return;
+    }
+    setState(() => _selectedTime = picked);
   }
 
   void _submit() {
@@ -204,7 +246,8 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
               children: [
                 const DarkScreenHeader(title: 'Create Meeting'),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                  padding: EdgeInsets.fromLTRB(
+                      20, 24, 20, context.bottomSafePadding(32)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -364,9 +407,16 @@ class _PartnerCard extends StatelessWidget {
   final VoidCallback onTap;
   const _PartnerCard({this.partner, this.partnerId, required this.onTap});
 
+  // Mirrors the level naming ('none'/'low'/'medium'/'high') the API returns
+  // and every other verification-level display in the app (settings,
+  // profile, home) already switches on — just abbreviated to fit this
+  // compact inline badge.
+  static const _levelLabels = {'low': 'L1', 'medium': 'L2', 'high': 'L3'};
+
   @override
   Widget build(BuildContext context) {
     final hasPartner = partner != null;
+    final isVerified = hasPartner && partner!.verificationLevel != 'none';
 
     return GestureDetector(
       onTap: onTap,
@@ -403,10 +453,22 @@ class _PartnerCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        Icon(Icons.verified, color: AppColors.blue, size: 13),
+                        Icon(
+                          isVerified ? Icons.verified : Icons.shield_outlined,
+                          color: isVerified ? AppColors.blue : AppColors.textTertiary,
+                          size: 13,
+                        ),
                         const SizedBox(width: 4),
-                        Text(partner!.verificationLevel,
-                            style: TextStyle(color: AppColors.blue, fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(
+                          isVerified
+                              ? '${_levelLabels[partner!.verificationLevel] ?? partner!.verificationLevel.toUpperCase()} Verified'
+                              : 'Unverified',
+                          style: TextStyle(
+                            color: isVerified ? AppColors.blue : AppColors.textTertiary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ],
                     ),
                   ],

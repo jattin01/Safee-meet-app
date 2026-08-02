@@ -2,44 +2,6 @@ import 'package:equatable/equatable.dart';
 
 enum VerificationStep { uploadId, selfie, processing, complete }
 
-class VerificationEntity extends Equatable {
-  final String? idFrontUrl;
-  final String? idBackUrl;
-  final String? selfieUrl;
-  final bool hasIdFront;
-  final bool hasIdBack;
-  final bool hasSelfie;
-  final VerificationStep currentStep;
-  final String
-      status; // 'not_started' | 'draft' | 'pending' | 'approved' | 'rejected'
-  final String? rejectionReason;
-
-  const VerificationEntity({
-    this.idFrontUrl,
-    this.idBackUrl,
-    this.selfieUrl,
-    required this.hasIdFront,
-    required this.hasIdBack,
-    required this.hasSelfie,
-    required this.currentStep,
-    required this.status,
-    this.rejectionReason,
-  });
-
-  @override
-  List<Object?> get props => [
-        idFrontUrl,
-        idBackUrl,
-        selfieUrl,
-        hasIdFront,
-        hasIdBack,
-        hasSelfie,
-        currentStep,
-        status,
-        rejectionReason,
-      ];
-}
-
 class VerificationStatusEntity extends Equatable {
   final int trustScore;
   final String verificationLevel;
@@ -86,51 +48,21 @@ class VerificationStatusEntity extends Equatable {
       ];
 }
 
-class VerificationSubmitEntity extends Equatable {
-  final int id;
-  final String userId;
-  final String faceIdImage;
-  final String nationalIdFrontImage;
-  final String nationalIdBackImage;
-  final String nationalIdNumber;
-  final String nationalIdCountry;
-  final int verificationLevel;
-  final String status;
+/// Short-lived token handed to `DiditSdk.startVerification` to launch the
+/// native capture UI (ID scan + facial liveness) — minted by our backend via
+/// Didit's `POST /v3/session/`, which requires the secret API key that must
+/// never reach the client.
+class DiditSessionEntity extends Equatable {
+  final String sessionId;
+  final String sessionToken;
 
-  const VerificationSubmitEntity({
-    required this.id,
-    required this.userId,
-    required this.faceIdImage,
-    required this.nationalIdFrontImage,
-    required this.nationalIdBackImage,
-    required this.nationalIdNumber,
-    required this.nationalIdCountry,
-    required this.verificationLevel,
-    required this.status,
+  const DiditSessionEntity({
+    required this.sessionId,
+    required this.sessionToken,
   });
 
   @override
-  List<Object?> get props => [
-        id,
-        userId,
-        faceIdImage,
-        nationalIdFrontImage,
-        nationalIdBackImage,
-        nationalIdNumber,
-        nationalIdCountry,
-        verificationLevel,
-        status,
-      ];
-}
-
-class VerificationSubmitResult extends Equatable {
-  final String message;
-  final VerificationSubmitEntity data;
-
-  const VerificationSubmitResult({required this.message, required this.data});
-
-  @override
-  List<Object?> get props => [message, data];
+  List<Object?> get props => [sessionId, sessionToken];
 }
 
 class ReviewSummaryEntity extends Equatable {
