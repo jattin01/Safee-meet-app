@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/services/api_client.dart';
@@ -115,11 +116,13 @@ class GpsTrackingBloc extends Bloc<GpsEvent, GpsState> {
     // Broadcast to server
     if (_activeMeetingId != null) {
       try {
-        await _api.dio.post('/v1/meetings/$_activeMeetingId/location', data: {
+        await _api.dio.post('/v1/update-location', data: {
           'latitude': event.position.latitude,
           'longitude': event.position.longitude,
         });
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[GpsTracking] update-location failed: $e');
+      }
     }
   }
 

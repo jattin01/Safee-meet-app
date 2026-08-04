@@ -10,6 +10,7 @@ abstract class AuthRepository {
     required String providerToken,
     String? name,
     String? email,
+    String? phone,
     String? accountType,
     String? companyName,
     required bool consentAccepted,
@@ -48,6 +49,16 @@ abstract class AuthRepository {
   Future<Either<Failure, bool>> checkAuthStatus();
 
   // Legacy OTP methods (kept for backward compat)
-  Future<Either<Failure, void>> sendOtp(String phone);
+  /// Returns the OTP's validity window in seconds, if the backend sent one.
+  Future<Either<Failure, int?>> sendOtp(String phone);
   Future<Either<Failure, void>> sendEmailOtp(String email);
+
+  /// Verifies a phone OTP against the backend and returns the Firebase
+  /// custom token it minted — callers exchange it via
+  /// FirebaseAuth.signInWithCustomToken() to get an ID token, then call
+  /// login()/register() with provider: 'phone', exactly like Google/Apple.
+  Future<Either<Failure, String>> verifyOtp({
+    required String phone,
+    required String otp,
+  });
 }

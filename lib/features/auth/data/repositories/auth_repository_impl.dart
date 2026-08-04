@@ -45,6 +45,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String providerToken,
     String? name,
     String? email,
+    String? phone,
     String? accountType,
     String? companyName,
     required bool consentAccepted,
@@ -55,6 +56,7 @@ class AuthRepositoryImpl implements AuthRepository {
         providerToken:   providerToken,
         name:            name,
         email:           email,
+        phone:           phone,
         accountType:     accountType,
         companyName:     companyName,
         consentAccepted: consentAccepted,
@@ -69,8 +71,8 @@ class AuthRepositoryImpl implements AuthRepository {
       if (entity.user.displayName != null) {
         await _secureStorage.saveUserName(entity.user.displayName!);
       }
-      final phone = _firebaseAuth.currentUser?.phoneNumber;
-      if (phone != null) await _secureStorage.saveUserPhone(phone);
+      final firebasePhone = _firebaseAuth.currentUser?.phoneNumber;
+      if (firebasePhone != null) await _secureStorage.saveUserPhone(firebasePhone);
       return Right(entity);
     } on DioException catch (e) {
       return Left(_mapDioError(e));
@@ -201,10 +203,25 @@ class AuthRepositoryImpl implements AuthRepository {
   // ── Legacy OTP stubs ──────────────────────────────────────────────────────────
 
   @override
-  Future<Either<Failure, void>> sendOtp(String phone) async {
+  Future<Either<Failure, int?>> sendOtp(String phone) async {
     try {
-      await _remote.sendOtp(phone);
-      return const Right(null);
+      final expiresIn = await _remote.sendOtp(phone);
+      return Right(expiresIn);
+    } on DioException catch (e) {
+      return Left(_mapDioError(e));
+    } catch (_) {
+      return const Left(UnknownFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, String>> verifyOtp({
+    required String phone,
+    required String otp,
+  }) async {
+    try {
+      final customToken = await _remote.verifyOtp(phone: phone, otp: otp);
+      return Right(customToken);
     } on DioException catch (e) {
       return Left(_mapDioError(e));
     } catch (_) {

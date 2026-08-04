@@ -9,6 +9,7 @@ class RegisterParams extends Equatable {
   final String  providerToken;
   final String? name;
   final String? email;
+  final String? phone;
   final String? accountType;
   final String? companyName;
   final bool    consentAccepted;
@@ -18,13 +19,14 @@ class RegisterParams extends Equatable {
     required this.providerToken,
     this.name,
     this.email,
+    this.phone,
     this.accountType,
     this.companyName,
     this.consentAccepted = true,
   });
 
   @override
-  List<Object?> get props => [provider, providerToken, name, email, accountType, companyName, consentAccepted];
+  List<Object?> get props => [provider, providerToken, name, email, phone, accountType, companyName, consentAccepted];
 }
 
 class RegisterUserUseCase {
@@ -43,6 +45,7 @@ class RegisterUserUseCase {
       providerToken:   params.providerToken,
       name:            params.name?.trim(),
       email:           params.email?.trim(),
+      phone:           params.phone?.trim(),
       accountType:     params.accountType,
       companyName:     params.companyName?.trim(),
       consentAccepted: params.consentAccepted,

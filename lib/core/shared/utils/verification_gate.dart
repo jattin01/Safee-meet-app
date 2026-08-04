@@ -27,6 +27,7 @@ bool requireVerification(BuildContext context) {
     context,
     'Complete your verification to access this feature..',
     title: 'Verification Required',
+    duration: const Duration(seconds: 1),
   );
   context.push(AppRoutes.verification);
   return false;

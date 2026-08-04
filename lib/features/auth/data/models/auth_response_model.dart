@@ -5,11 +5,13 @@ class AuthResponseModel {
   final String accessToken;
   final String? refreshToken;
   final UserModel user;
+  final bool isNewUser;
 
   const AuthResponseModel({
     required this.accessToken,
     this.refreshToken,
     required this.user,
+    this.isNewUser = false,
   });
 
   factory AuthResponseModel.fromJson(Map<String, dynamic> json) {
@@ -18,6 +20,7 @@ class AuthResponseModel {
       accessToken:  data['accessToken']  as String,
       refreshToken: data['refreshToken'] as String?,
       user: UserModel.fromJson(data['user'] as Map<String, dynamic>),
+      isNewUser: data['isNewUser'] as bool? ?? false,
     );
   }
 
@@ -25,5 +28,6 @@ class AuthResponseModel {
         accessToken:  accessToken,
         refreshToken: refreshToken,
         user: user.toEntity(),
+        isNewUser: isNewUser,
       );
 }

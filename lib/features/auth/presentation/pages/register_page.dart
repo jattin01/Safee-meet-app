@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -46,8 +45,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _employerIdCtrl  = TextEditingController();
   final _jobTitleCtrl    = TextEditingController();
 
-  // ── Firebase phone auth state ─────────────────────────────────────────────
-  String? _verificationId;
+  // ── Phone OTP (backend-verified) state ────────────────────────────────────
   String? _firebaseIdToken;
   bool    _sendingOtp   = false;
   bool    _verifyingOtp = false;
@@ -111,8 +109,8 @@ class _RegisterPageState extends State<RegisterPage> {
   // ── Navigation & API calls ────────────────────────────────────────────────
 
   Future<void> _onNext(BuildContext context) async {
-    if (_step == 2) { await _sendPhoneOtp(); return; }
-    if (_step == 3) { await _verifyPhoneOtp(context); return; }
+    if (_step == 2) { _sendPhoneOtp(); return; }
+    if (_step == 3) { _verifyPhoneOtp(); return; }
 
     if (_step < _totalSteps) {
       setState(() => _step++);
@@ -133,76 +131,21 @@ class _RegisterPageState extends State<RegisterPage> {
     return '+$digits';
   }
 
-  // ── Firebase: Send OTP ────────────────────────────────────────────────────
-  Future<void> _sendPhoneOtp() async {
-    final phone = _phoneCtrl.text.trim();
-    final e164  = _toE164(phone);
-
+  // ── Backend: Send OTP ─────────────────────────────────────────────────────
+  void _sendPhoneOtp() {
+    final e164 = _toE164(_phoneCtrl.text.trim());
     setState(() { _sendingOtp = true; _otpError = null; });
-
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: e164,
-      timeout: const Duration(seconds: 60),
-      verificationCompleted: (credential) async {
-        // Auto-retrieval (Android only)
-        try {
-          final result = await FirebaseAuth.instance.signInWithCredential(credential);
-          final token  = await result.user?.getIdToken();
-          if (token != null && mounted) {
-            setState(() { _firebaseIdToken = token; _step = 4; });
-          }
-        } catch (_) {}
-      },
-      verificationFailed: (e) {
-        if (mounted) {
-          setState(() {
-            _sendingOtp = false;
-            _otpError   = e.message ?? 'Verification failed. Check phone number.';
-          });
-        }
-      },
-      codeSent: (verificationId, _) {
-        if (mounted) {
-          setState(() {
-            _verificationId = verificationId;
-            _sendingOtp     = false;
-            _step           = 3;
-          });
-        }
-      },
-      codeAutoRetrievalTimeout: (_) {},
-    );
+    context.read<AuthBloc>().add(SendOtpRequested(e164));
   }
 
-  // ── Firebase: Verify OTP ──────────────────────────────────────────────────
-  Future<void> _verifyPhoneOtp(BuildContext context) async {
-    if (_verificationId == null || _enteredOtp == null) return;
-
+  // ── Backend: Verify OTP → Firebase custom-token session ───────────────────
+  void _verifyPhoneOtp() {
+    if (_enteredOtp == null) return;
     setState(() { _verifyingOtp = true; _otpError = null; });
-
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: _verificationId!,
-        smsCode: _enteredOtp!,
-      );
-      final result = await FirebaseAuth.instance.signInWithCredential(credential);
-      final token  = await result.user?.getIdToken();
-
-      if (token != null && mounted) {
-        setState(() {
-          _firebaseIdToken = token;
-          _verifyingOtp    = false;
-          _step            = 4;
-        });
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        setState(() {
-          _verifyingOtp = false;
-          _otpError = e.message ?? 'Invalid OTP. Please try again.';
-        });
-      }
-    }
+    context.read<AuthBloc>().add(OtpVerificationRequested(
+      phone: _toE164(_phoneCtrl.text.trim()),
+      otp:   _enteredOtp!,
+    ));
   }
 
   // ── Backend: Send Email OTP ───────────────────────────────────────────────
@@ -268,6 +211,7 @@ class _RegisterPageState extends State<RegisterPage> {
       providerToken:   _firebaseIdToken!,
       name:            _nameCtrl.text.trim().isEmpty ? null : _nameCtrl.text.trim(),
       email:           _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      phone:           _toE164(_phoneCtrl.text.trim()),
       accountType:     _isEmployer ? 'employer' : 'normal',
       companyName:     _isEmployer ? _companyNameCtrl.text.trim() : null,
       consentAccepted: _consentAccepted,
@@ -307,10 +251,19 @@ class _RegisterPageState extends State<RegisterPage> {
       listener: (context, state) {
         if (state is RegistrationSuccess) {
           context.go(AppRoutes.dashboardHome);
+        } else if (state is OtpSent) {
+          setState(() { _sendingOtp = false; _step = 3; });
+        } else if (state is PhoneOtpVerified) {
+          setState(() {
+            _firebaseIdToken = state.firebaseIdToken;
+            _verifyingOtp    = false;
+            _step            = 4;
+          });
         } else if (state is UserNotRegistered) {
           // Shouldn't happen on register, but handle gracefully
           AppSnackbar.error(context, state.message);
         } else if (state is AuthFailureState) {
+          setState(() { _sendingOtp = false; _verifyingOtp = false; });
           AppSnackbar.error(context, state.message);
         }
       },

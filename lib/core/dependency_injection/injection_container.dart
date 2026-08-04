@@ -30,6 +30,7 @@ import '../../features/auth/domain/use_cases/login_use_case.dart';
 import '../../features/auth/domain/use_cases/logout_use_case.dart';
 import '../../features/auth/domain/use_cases/register_user_use_case.dart';
 import '../../features/auth/domain/use_cases/send_otp_use_case.dart';
+import '../../features/auth/domain/use_cases/verify_otp_use_case.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
 // Dashboard
@@ -181,6 +182,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton(() => CheckAuthStatusUseCase(sl()));
   sl.registerLazySingleton(() => GetCurrentUserUseCase(sl()));
   sl.registerLazySingleton(() => SendOtpUseCase(sl()));
+  sl.registerLazySingleton(() => VerifyOtpUseCase(sl()));
   sl.registerFactory(
     () => AuthBloc(
       checkAuthStatus: sl(),
@@ -192,6 +194,7 @@ Future<void> configureDependencies() async {
       checkUserExists: sl(),
       getCurrentUser: sl(),
       sendOtp: sl(),
+      verifyOtp: sl(),
     ),
   );
 

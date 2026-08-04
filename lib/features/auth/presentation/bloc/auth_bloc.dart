@@ -17,6 +17,7 @@ import '../../domain/use_cases/login_use_case.dart';
 import '../../domain/use_cases/logout_use_case.dart';
 import '../../domain/use_cases/register_user_use_case.dart';
 import '../../domain/use_cases/send_otp_use_case.dart';
+import '../../domain/use_cases/verify_otp_use_case.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -32,6 +33,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final CheckUserExistsUseCase checkUserExists;
   final GetCurrentUserUseCase  getCurrentUser;
   final SendOtpUseCase         sendOtp;
+  final VerifyOtpUseCase       verifyOtp;
 
   // Firebase is only here to get the ID token — not for business logic.
   // Optional: injected for testability; lazily defaults to the singletons.
@@ -51,6 +53,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.checkUserExists,
     required this.getCurrentUser,
     required this.sendOtp,
+    required this.verifyOtp,
     GoogleSignIn? googleSignIn,
     FirebaseAuth? firebaseAuth,
   })  : _googleSignInOverride = googleSignIn,
@@ -122,6 +125,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       providerToken:   event.providerToken,
       name:            event.name,
       email:           event.email,
+      phone:           event.phone,
       accountType:     event.accountType,
       companyName:     event.companyName,
       consentAccepted: event.consentAccepted,
@@ -131,6 +135,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (response) => emit(RegistrationSuccess(
         user:        response.user,
         accessToken: response.accessToken,
+        isNewUser:   response.isNewUser,
       )),
     );
   }
@@ -151,6 +156,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (response) => emit(LoginSuccess(
         user:        response.user,
         accessToken: response.accessToken,
+        isNewUser:   response.isNewUser,
       )),
     );
   }
@@ -177,6 +183,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         (response) => emit(LoginSuccess(
           user:        response.user,
           accessToken: response.accessToken,
+          isNewUser:   response.isNewUser,
         )),
       );
     } catch (e) {
@@ -206,6 +213,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         (response) => emit(LoginSuccess(
           user:        response.user,
           accessToken: response.accessToken,
+          isNewUser:   response.isNewUser,
         )),
       );
     } on SignInWithAppleAuthorizationException catch (e) {
@@ -296,20 +304,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     return AuthFailureState(failure.message);
   }
 
-  // ── Legacy handlers ───────────────────────────────────────────────────────────
+  // ── Phone OTP (backend-verified, replaces Firebase phone auth) ───────────────
 
   Future<void> _onSendOtp(SendOtpRequested event, Emitter<AuthState> emit) async {
     emit(const AuthLoading());
     final result = await sendOtp(event.phone);
     result.fold(
-      (f) => emit(AuthError(f.message)),
-      (_) => emit(OtpSent(event.phone)),
+      (f) => emit(_mapFailureToState(f)),
+      (expiresIn) => emit(OtpSent(event.phone, expiresIn)),
     );
   }
 
   Future<void> _onVerifyOtp(OtpVerificationRequested event, Emitter<AuthState> emit) async {
     emit(const AuthLoading());
-    emit(const AuthInitial());
+    final result = await verifyOtp(phone: event.phone, otp: event.otp);
+    await result.fold(
+      (failure) async => emit(_mapFailureToState(failure)),
+      (customToken) async {
+        try {
+          final cred = await _firebaseAuth.signInWithCustomToken(customToken);
+          final idToken = await cred.user?.getIdToken();
+          if (idToken == null) {
+            emit(const AuthFailureState('Could not verify OTP. Please try again.'));
+            return;
+          }
+          emit(PhoneOtpVerified(idToken));
+        } on FirebaseAuthException catch (e) {
+          emit(AuthFailureState(e.message ?? 'Could not verify OTP. Please try again.'));
+        }
+      },
+    );
   }
 
   Future<void> _onSendEmailOtp(SendEmailOtpRequested event, Emitter<AuthState> emit) async {

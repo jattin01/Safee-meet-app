@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -47,8 +46,7 @@ class _LoginViewState extends State<_LoginView> {
   // ── Step ──────────────────────────────────────────────────────────────────
   bool _isOtpStep = false;
 
-  // ── Firebase phone auth ───────────────────────────────────────────────────
-  String? _verificationId;
+  // ── Phone OTP (backend-verified) ──────────────────────────────────────────
   String? _enteredOtp;
   bool    _sendingOtp   = false;
   bool    _verifyingOtp = false;
@@ -84,73 +82,20 @@ class _LoginViewState extends State<_LoginView> {
     context.read<AuthBloc>().add(PhoneRegistrationCheckRequested(_toE164(phone)));
   }
 
-  // ── Firebase: Send OTP (only called once registration is confirmed) ──────
-  Future<void> _sendPhoneOtp(String e164) async {
+  // ── Backend: Send OTP (only called once registration is confirmed) ───────
+  void _sendPhoneOtp(String e164) {
     setState(() { _sendingOtp = true; _otpError = null; });
-
-    await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: e164,
-      timeout: const Duration(seconds: 60),
-      verificationCompleted: (credential) async {
-        // Android auto-retrieval
-        try {
-          final result = await FirebaseAuth.instance.signInWithCredential(credential);
-          final token  = await result.user?.getIdToken();
-          if (token != null && mounted) {
-            context.read<AuthBloc>().add(
-              LoginRequested(provider: 'phone', providerToken: token),
-            );
-          }
-        } catch (_) {}
-      },
-      verificationFailed: (e) {
-        if (mounted) {
-          setState(() {
-            _sendingOtp = false;
-            _otpError   = e.message ?? 'Phone verification failed.';
-          });
-        }
-      },
-      codeSent: (verificationId, _) {
-        if (mounted) {
-          setState(() {
-            _verificationId = verificationId;
-            _sendingOtp     = false;
-            _isOtpStep      = true;
-          });
-        }
-      },
-      codeAutoRetrievalTimeout: (_) {},
-    );
+    context.read<AuthBloc>().add(SendOtpRequested(e164));
   }
 
-  // ── Firebase: Verify OTP → Backend Login ──────────────────────────────────
-  Future<void> _verifyPhoneOtp() async {
-    if (_verificationId == null || _enteredOtp == null) return;
+  // ── Backend: Verify OTP → Firebase custom-token session → Backend Login ──
+  void _verifyPhoneOtp() {
+    if (_enteredOtp == null) return;
     setState(() { _verifyingOtp = true; _otpError = null; });
-
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: _verificationId!,
-        smsCode:        _enteredOtp!,
-      );
-      final result = await FirebaseAuth.instance.signInWithCredential(credential);
-      final token  = await result.user?.getIdToken();
-
-      if (token != null && mounted) {
-        setState(() => _verifyingOtp = false);
-        context.read<AuthBloc>().add(
-          LoginRequested(provider: 'phone', providerToken: token),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        setState(() {
-          _verifyingOtp = false;
-          _otpError = e.message ?? 'Invalid OTP. Please try again.';
-        });
-      }
-    }
+    context.read<AuthBloc>().add(OtpVerificationRequested(
+      phone: _toE164(_phoneCtrl.text.trim()),
+      otp:   _enteredOtp!,
+    ));
   }
 
   // ── Google Sign-In ────────────────────────────────────────────────────────
@@ -194,10 +139,20 @@ class _LoginViewState extends State<_LoginView> {
         if (state is PhoneRegistrationVerified) {
           _sendPhoneOtp(state.phone);
         }
+        if (state is OtpSent) {
+          setState(() { _sendingOtp = false; _isOtpStep = true; });
+        }
+        if (state is PhoneOtpVerified) {
+          setState(() => _verifyingOtp = false);
+          context.read<AuthBloc>().add(
+            LoginRequested(provider: 'phone', providerToken: state.firebaseIdToken),
+          );
+        }
         if (state is UserNotRegistered) {
           _showNotRegisteredSheet(context, state.message);
         }
         if (state is AuthFailureState) {
+          setState(() { _sendingOtp = false; _verifyingOtp = false; });
           AppSnackbar.error(context, state.message);
         }
       },

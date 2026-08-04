@@ -8,6 +8,7 @@ abstract class AuthRemoteDataSource {
     required String providerToken,
     String? name,
     String? email,
+    String? phone,
     String? accountType,
     String? companyName,
     required bool consentAccepted,
@@ -28,7 +29,15 @@ abstract class AuthRemoteDataSource {
     String? providerUid,
   });
 
-  Future<void> sendOtp(String phone);
+  /// Returns the OTP's validity window in seconds (`data.expires_in`), if
+  /// the backend included one.
+  Future<int?> sendOtp(String phone);
+
+  /// Verifies the OTP against the backend (new SMS provider) and returns the
+  /// Firebase custom token the backend minted for this phone's uid — the
+  /// caller then does FirebaseAuth.signInWithCustomToken(token) with it.
+  Future<String> verifyOtp({required String phone, required String otp});
+
   Future<void> sendEmailOtp(String email);
 }
 
@@ -42,6 +51,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     required String providerToken,
     String? name,
     String? email,
+    String? phone,
     String? accountType,
     String? companyName,
     required bool consentAccepted,
@@ -51,6 +61,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       'providerToken':           providerToken,
       if (name != null)        'name':        name,
       if (email != null)       'email':       email,
+      if (phone != null)       'phone':       phone,
       if (accountType != null) 'accountType': accountType,
       if (companyName != null) 'companyName': companyName,
       'consentAccepted':         consentAccepted,
@@ -99,8 +110,17 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<void> sendOtp(String phone) async {
-    await _dio.post('/v1/auth/verify-phone', data: {'phone': phone, 'providerToken': ''});
+  Future<int?> sendOtp(String phone) async {
+    final res = await _dio.post('/v1/auth/send-otp', data: {'phone': phone});
+    final data = (res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>?;
+    return data?['expires_in'] as int?;
+  }
+
+  @override
+  Future<String> verifyOtp({required String phone, required String otp}) async {
+    final res = await _dio.post('/v1/auth/verify-otp', data: {'phone': phone, 'otp': otp});
+    final data = (res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+    return data['firebaseCustomToken'] as String;
   }
 
   @override

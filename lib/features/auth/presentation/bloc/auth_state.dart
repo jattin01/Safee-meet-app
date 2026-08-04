@@ -32,18 +32,28 @@ class Unauthenticated extends AuthState {
 class RegistrationSuccess extends AuthState {
   final UserEntity user;
   final String accessToken;
-  const RegistrationSuccess({required this.user, required this.accessToken});
+  final bool isNewUser;
+  const RegistrationSuccess({
+    required this.user,
+    required this.accessToken,
+    this.isNewUser = true,
+  });
   @override
-  List<Object?> get props => [user, accessToken];
+  List<Object?> get props => [user, accessToken, isNewUser];
 }
 
 /// POST /auth/login succeeded
 class LoginSuccess extends AuthState {
   final UserEntity user;
   final String accessToken;
-  const LoginSuccess({required this.user, required this.accessToken});
+  final bool isNewUser;
+  const LoginSuccess({
+    required this.user,
+    required this.accessToken,
+    this.isNewUser = false,
+  });
   @override
-  List<Object?> get props => [user, accessToken];
+  List<Object?> get props => [user, accessToken, isNewUser];
 }
 
 /// Logout completed
@@ -76,13 +86,24 @@ class AuthFailureState extends AuthState {
   List<Object?> get props => [message, code];
 }
 
+/// Phone OTP verified against the backend — carries the Firebase ID token
+/// (obtained via signInWithCustomToken) that the UI then sends straight to
+/// LoginRequested/RegisterRequested, exactly like the Google/Apple flows do.
+class PhoneOtpVerified extends AuthState {
+  final String firebaseIdToken;
+  const PhoneOtpVerified(this.firebaseIdToken);
+  @override
+  List<Object?> get props => [firebaseIdToken];
+}
+
 // ── Legacy states (kept for existing UI compat) ───────────────────────────────
 
 class OtpSent extends AuthState {
   final String phone;
-  const OtpSent(this.phone);
+  final int? expiresIn;
+  const OtpSent(this.phone, [this.expiresIn]);
   @override
-  List<Object?> get props => [phone];
+  List<Object?> get props => [phone, expiresIn];
 }
 
 class AuthAuthenticated extends AuthState {

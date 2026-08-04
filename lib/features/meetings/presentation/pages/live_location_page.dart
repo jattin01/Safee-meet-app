@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
@@ -668,98 +667,115 @@ class _MapSection extends StatelessWidget {
 // both updated live as fresh emergency-share data arrives (see the periodic
 // re-fetch in _LiveLocationPageState). Falls back to _MapPlaceholder only
 // when the meeting itself has no coordinates to plot at all.
-class _LiveMap extends StatefulWidget {
+// Schematic (non-georeferenced) live view: same drawn style as
+// _MapPlaceholder, but driven by whether the partner's last GPS ping has
+// arrived yet. Real distance/direction are shown via the badges in
+// _MapSection, not by this drawing.
+class _LiveMap extends StatelessWidget {
   final EmergencyShareMeetingEntity meeting;
   final EmergencyShareUserEntity? partner;
   const _LiveMap({required this.meeting, required this.partner});
 
   @override
-  State<_LiveMap> createState() => _LiveMapState();
+  Widget build(BuildContext context) {
+    final hasPartnerLocation = partner != null && partner!.hasLocation;
+    return CustomPaint(
+      painter: _LiveMapPainter(hasPartnerLocation: hasPartnerLocation),
+      child: const SizedBox.expand(),
+    );
+  }
 }
 
-class _LiveMapState extends State<_LiveMap> {
-  GoogleMapController? _controller;
+class _LiveMapPainter extends CustomPainter {
+  final bool hasPartnerLocation;
+  const _LiveMapPainter({required this.hasPartnerLocation});
 
   @override
-  void didUpdateWidget(covariant _LiveMap oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // This widget rebuilds every second (parent's countdown timer) — only
-    // re-fit the camera when the partner's position actually moved, not on
-    // every tick.
-    final partner = widget.partner;
-    final oldPartner = oldWidget.partner;
-    final moved = partner?.latitude != oldPartner?.latitude ||
-        partner?.longitude != oldPartner?.longitude;
-    if (moved && partner != null && partner.hasLocation) {
-      _fitBounds(partner);
+  void paint(Canvas canvas, Size size) {
+    final bgPaint = Paint()..color = const Color(0xFFCBD5E1);
+    canvas.drawRect(Offset.zero & size, bgPaint);
+
+    // Grid blocks (simulating a map)
+    final blockPaint = Paint()..color = const Color(0xFFB0BEC5);
+    final blocks = [
+      Rect.fromLTWH(0, 0, size.width * 0.28, size.height * 0.32),
+      Rect.fromLTWH(size.width * 0.32, 0, size.width * 0.22, size.height * 0.32),
+      Rect.fromLTWH(size.width * 0.58, 0, size.width * 0.24, size.height * 0.32),
+      Rect.fromLTWH(size.width * 0.86, 0, size.width * 0.14, size.height * 0.32),
+      Rect.fromLTWH(0, size.height * 0.38, size.width * 0.18, size.height * 0.24),
+      Rect.fromLTWH(size.width * 0.22, size.height * 0.38, size.width * 0.32, size.height * 0.24),
+      Rect.fromLTWH(size.width * 0.58, size.height * 0.38, size.width * 0.18, size.height * 0.24),
+      Rect.fromLTWH(size.width * 0.80, size.height * 0.38, size.width * 0.20, size.height * 0.24),
+      Rect.fromLTWH(0, size.height * 0.70, size.width * 0.22, size.height * 0.30),
+      Rect.fromLTWH(size.width * 0.26, size.height * 0.70, size.width * 0.18, size.height * 0.30),
+      Rect.fromLTWH(size.width * 0.48, size.height * 0.70, size.width * 0.28, size.height * 0.30),
+      Rect.fromLTWH(size.width * 0.80, size.height * 0.70, size.width * 0.20, size.height * 0.30),
+    ];
+    final rr = const Radius.circular(4);
+    for (final b in blocks) {
+      canvas.drawRRect(RRect.fromRectAndRadius(b, rr), blockPaint);
     }
-  }
 
-  void _fitBounds(EmergencyShareUserEntity partner) {
-    final meetingLatLng =
-        LatLng(widget.meeting.latitude!, widget.meeting.longitude!);
-    final partnerLatLng = LatLng(partner.latitude!, partner.longitude!);
-    final bounds = LatLngBounds(
-      southwest: LatLng(
-        math.min(meetingLatLng.latitude, partnerLatLng.latitude),
-        math.min(meetingLatLng.longitude, partnerLatLng.longitude),
-      ),
-      northeast: LatLng(
-        math.max(meetingLatLng.latitude, partnerLatLng.latitude),
-        math.max(meetingLatLng.longitude, partnerLatLng.longitude),
-      ),
-    );
-    _controller?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));
+    final startX = size.width * 0.28;
+    final endX = size.width * 0.72;
+    final midY = size.height * 0.52;
+
+    if (hasPartnerLocation) {
+      // Route line (dashed green) — only drawn once the partner's position
+      // is actually known, not while still locating.
+      final dashPaint = Paint()
+        ..color = const Color(0xFF22C55E)
+        ..strokeWidth = 3
+        ..style = PaintingStyle.stroke;
+      const dashLen = 8.0;
+      const gapLen = 5.0;
+      double x = startX + 16;
+      while (x < endX - 16) {
+        final end = math.min(x + dashLen, endX - 16.0);
+        canvas.drawLine(Offset(x, midY), Offset(end, midY), dashPaint);
+        x += dashLen + gapLen;
+      }
+
+      // Partner's last known location — soft halo, then blue dot with white ring
+      canvas.drawCircle(Offset(startX, midY), 24,
+          Paint()..color = const Color(0xFF3B82F6).withValues(alpha: 0.16));
+      canvas.drawCircle(Offset(startX, midY), 10, Paint()..color = Colors.white);
+      canvas.drawCircle(
+          Offset(startX, midY), 7, Paint()..color = const Color(0xFF3B82F6));
+    } else {
+      // Still waiting for the partner's first GPS ping — a hollow ring
+      // instead of a solid dot, and no route line to a position we don't
+      // have yet.
+      canvas.drawCircle(
+        Offset(startX, midY),
+        9,
+        Paint()
+          ..color = const Color(0xFF94A3B8)
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke,
+      );
+    }
+
+    // Meeting point pin (red) — always known, this is fixed at booking time.
+    final px = endX;
+    final py = midY;
+    canvas.drawCircle(Offset(px, py - 2), 26,
+        Paint()..color = const Color(0xFFEF4444).withValues(alpha: 0.14));
+    final pinPaint = Paint()..color = const Color(0xFFEF4444);
+    final pinPath = Path();
+    pinPath.moveTo(px, py + 14);
+    pinPath.quadraticBezierTo(px - 12, py + 2, px - 12, py - 6);
+    pinPath.arcToPoint(Offset(px + 12, py - 6),
+        radius: const Radius.circular(12), clockwise: false);
+    pinPath.quadraticBezierTo(px + 12, py + 2, px, py + 14);
+    pinPath.close();
+    canvas.drawPath(pinPath, pinPaint);
+    canvas.drawCircle(Offset(px, py - 6), 4, Paint()..color = Colors.white);
   }
 
   @override
-  Widget build(BuildContext context) {
-    final meetingLatLng =
-        LatLng(widget.meeting.latitude!, widget.meeting.longitude!);
-    final partner = widget.partner;
-    final hasPartnerLocation = partner != null && partner.hasLocation;
-
-    final markers = <Marker>{
-      Marker(
-        markerId: const MarkerId('meeting'),
-        position: meetingLatLng,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        infoWindow: InfoWindow(
-          title: widget.meeting.location.isNotEmpty
-              ? widget.meeting.location
-              : 'Meeting point',
-        ),
-      ),
-      if (hasPartnerLocation)
-        Marker(
-          markerId: const MarkerId('partner'),
-          position: LatLng(partner.latitude!, partner.longitude!),
-          icon:
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-          infoWindow: InfoWindow(title: partner.name),
-        ),
-    };
-
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: hasPartnerLocation
-            ? LatLng(
-                (meetingLatLng.latitude + partner.latitude!) / 2,
-                (meetingLatLng.longitude + partner.longitude!) / 2,
-              )
-            : meetingLatLng,
-        zoom: 14,
-      ),
-      onMapCreated: (controller) {
-        _controller = controller;
-        if (hasPartnerLocation) _fitBounds(partner);
-      },
-      markers: markers,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
-    );
-  }
+  bool shouldRepaint(covariant _LiveMapPainter oldDelegate) =>
+      oldDelegate.hasPartnerLocation != hasPartnerLocation;
 }
 
 class _MapPlaceholder extends StatelessWidget {
@@ -820,17 +836,21 @@ class _MapPainter extends CustomPainter {
       x += dashLen + gapLen;
     }
 
-    // Current location dot (blue with white ring)
+    // Current location dot — soft halo, then blue dot with white ring
+    canvas.drawCircle(Offset(startX, midY), 24,
+        Paint()..color = const Color(0xFF3B82F6).withValues(alpha: 0.16));
     final dotPaint = Paint()..color = Colors.white;
     canvas.drawCircle(Offset(startX, midY), 10, dotPaint);
     final innerDotPaint = Paint()..color = const Color(0xFF3B82F6);
     canvas.drawCircle(Offset(startX, midY), 7, innerDotPaint);
 
-    // Destination pin (red)
-    final pinPaint = Paint()..color = const Color(0xFFEF4444);
-    final pinPath = Path();
+    // Destination pin (red) — soft halo behind it too
     final px = endX;
     final py = midY;
+    canvas.drawCircle(Offset(px, py - 2), 26,
+        Paint()..color = const Color(0xFFEF4444).withValues(alpha: 0.14));
+    final pinPaint = Paint()..color = const Color(0xFFEF4444);
+    final pinPath = Path();
     pinPath.moveTo(px, py + 14);
     pinPath.quadraticBezierTo(px - 12, py + 2, px - 12, py - 6);
     pinPath.arcToPoint(Offset(px + 12, py - 6),
@@ -854,7 +874,7 @@ class _MeetingProgressCard extends StatelessWidget {
       (label: 'Confirmed', number: 1, done: true, active: false),
       (label: 'En Route', number: 2, done: false, active: true),
       (label: 'Arrived', number: 3, done: false, active: false),
-      (label: 'Done', number: 4, done: false, active: false),
+      // (label: 'Done', number: 4, done: false, active: false),
     ];
 
     return Container(
