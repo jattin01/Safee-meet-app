@@ -51,6 +51,17 @@ class EmergencyShareBloc
     extends Bloc<EmergencyShareEvent, EmergencyShareState> {
   final EmergencyShareRepository _repository;
 
+  // bloc's default EventTransformer processes events *concurrently* (no
+  // transformer is passed to `on<>` below), so LiveLocationPage's 10-second
+  // poll would otherwise start a brand-new request for the same data even
+  // while a previous one is still in flight — if a single response ever
+  // takes ≥10s, duplicate overlapping requests start stacking, competing
+  // for bandwidth and making a slow response slower still. Guard against
+  // that instead: drop a new request while one's already running — the
+  // in-flight one already covers it, and any caller awaiting the next
+  // Loaded/Error (e.g. pull-to-refresh) still resolves normally off of it.
+  bool _isFetching = false;
+
   EmergencyShareBloc(this._repository) : super(const EmergencyShareInitial()) {
     on<EmergencyShareRequested>(_onRequested);
   }
@@ -59,13 +70,19 @@ class EmergencyShareBloc
     EmergencyShareRequested event,
     Emitter<EmergencyShareState> emit,
   ) async {
-    // Skip the full-screen loading state on a pull-to-refresh — only the
-    // very first load should blank the screen while it fetches.
-    if (state is! EmergencyShareLoaded) emit(const EmergencyShareLoading());
-    final result = await _repository.getEmergencyShare(event.meetingId);
-    result.fold(
-      (f) => emit(EmergencyShareError(f.message)),
-      (data) => emit(EmergencyShareLoaded(data)),
-    );
+    if (_isFetching) return;
+    _isFetching = true;
+    try {
+      // Skip the full-screen loading state on a pull-to-refresh — only the
+      // very first load should blank the screen while it fetches.
+      if (state is! EmergencyShareLoaded) emit(const EmergencyShareLoading());
+      final result = await _repository.getEmergencyShare(event.meetingId);
+      result.fold(
+        (f) => emit(EmergencyShareError(f.message)),
+        (data) => emit(EmergencyShareLoaded(data)),
+      );
+    } finally {
+      _isFetching = false;
+    }
   }
 }

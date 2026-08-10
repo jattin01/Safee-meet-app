@@ -181,15 +181,6 @@
       }
     },
     {
-      "identity" : "sdk-ios",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/didit-protocol/sdk-ios.git",
-      "state" : {
-        "revision" : "c72ce40ccba5c55de813d30dcace230e9e1c00fe",
-        "version" : "4.5.3"
-      }
-    },
-    {
       "identity" : "sdwebimage",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SDWebImage/SDWebImage",

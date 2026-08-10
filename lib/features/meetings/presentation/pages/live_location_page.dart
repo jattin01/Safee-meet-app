@@ -42,6 +42,13 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
   // relying on guessing at a backend error message.
   bool _statusHandled = false;
 
+  // Same overlap risk as EmergencyShareBloc's own guard (see its comment)
+  // but this call isn't routed through a bloc at all — it's fired directly
+  // from the 1-second Timer below, un-awaited, with nothing queuing it. If
+  // a response ever takes ≥10s, the next poll would otherwise fire a
+  // duplicate request on top of the still-running one.
+  bool _statusFetching = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,11 +84,17 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
   }
 
   Future<void> _fetchMeetingStatus(String meetingId) async {
-    final result = await sl<MeetingsRepository>().getMeeting(meetingId);
-    if (!mounted) return;
-    // A transient failure here (network blip, etc.) says nothing about the
-    // meeting's status — just skip it and let the next poll try again.
-    result.fold((_) {}, (meeting) => _handleMeetingStatus(meeting.status));
+    if (_statusFetching) return;
+    _statusFetching = true;
+    try {
+      final result = await sl<MeetingsRepository>().getMeeting(meetingId);
+      if (!mounted) return;
+      // A transient failure here (network blip, etc.) says nothing about
+      // the meeting's status — just skip it and let the next poll retry.
+      result.fold((_) {}, (meeting) => _handleMeetingStatus(meeting.status));
+    } finally {
+      _statusFetching = false;
+    }
   }
 
   void _handleMeetingStatus(MeetingStatus status) {
@@ -235,33 +248,18 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
   bool _isMeetingUnavailable(String message) =>
       message.toLowerCase().contains('scheduled');
 
+  // Was a hand-rolled skeleton screen — 8 separate shimmer widgets, each
+  // running its own AnimationController + AnimatedBuilder every frame
+  // purely for visual polish. That's real, continuous CPU/repaint work
+  // competing with this screen's other live work (GPS streaming, the
+  // 10s poll), and none of it makes data appear any sooner — the loaded
+  // state renders the instant EmergencyShareBloc emits it either way. A
+  // single standard spinner, matching every other loading state in this
+  // app (see e.g. MeetingsListPage), is both simpler and cheaper.
   Widget _buildLoadingScreen() {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          const _HeaderSkeleton(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(16, 20, 16, context.bottomSafePadding(32)),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _CardSkeleton(height: 118),
-                  SizedBox(height: 16),
-                  _CardSkeleton(height: 140),
-                  SizedBox(height: 16),
-                  _CardSkeleton(height: 74),
-                  SizedBox(height: 16),
-                  _CardSkeleton(height: 74),
-                  SizedBox(height: 16),
-                  _CardSkeleton(height: 56),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
     );
   }
 
@@ -1297,159 +1295,6 @@ class _ActionButton extends StatelessWidget {
 }
 
 // ── End Meeting ─────────────────────────────────────────────────────────────
-
-// ── Shimmer loading (no external shimmer package in this project) ─────────
-
-class _HeaderSkeleton extends StatelessWidget {
-  const _HeaderSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.darkBg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(height: MediaQuery.of(context).padding.top),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Active Meeting',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.darkBg2,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const _ShimmerBox(
-                    width: 52,
-                    height: 52,
-                    borderRadius: BorderRadius.all(Radius.circular(26)),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        _ShimmerBox(width: 140, height: 15),
-                        SizedBox(height: 8),
-                        _ShimmerBox(width: 100, height: 12),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const SizedBox(
-            height: 200,
-            child: _ShimmerBox(
-              width: double.infinity,
-              height: double.infinity,
-              borderRadius: BorderRadius.zero,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CardSkeleton extends StatelessWidget {
-  final double height;
-  const _CardSkeleton({required this.height});
-
-  @override
-  Widget build(BuildContext context) {
-    return _ShimmerBox(
-      width: double.infinity,
-      height: height,
-      borderRadius: BorderRadius.circular(16),
-    );
-  }
-}
-
-class _ShimmerBox extends StatefulWidget {
-  final double width;
-  final double height;
-  final BorderRadius? borderRadius;
-  const _ShimmerBox({required this.width, required this.height, this.borderRadius});
-
-  @override
-  State<_ShimmerBox> createState() => _ShimmerBoxState();
-}
-
-class _ShimmerBoxState extends State<_ShimmerBox>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1300),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = _controller.value;
-        return Container(
-          width: widget.width,
-          height: widget.height,
-          decoration: BoxDecoration(
-            borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
-            gradient: LinearGradient(
-              begin: Alignment(-1 + t * 3, 0),
-              end: Alignment(0 + t * 3, 0),
-              colors: const [
-                AppColors.cardBg,
-                AppColors.border,
-                AppColors.cardBg,
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
 
 class _EndMeetingButton extends StatelessWidget {
   final bool loading;

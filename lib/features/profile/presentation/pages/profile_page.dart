@@ -439,6 +439,7 @@ class _PinCard extends StatelessWidget {
             child: Container(
               width: 52,
               height: 52,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                   color: AppColors.darkBg,
                   borderRadius: BorderRadius.circular(14)),

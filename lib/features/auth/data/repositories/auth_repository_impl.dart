@@ -87,9 +87,10 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, AuthResponseEntity>> login({
     required String provider,
     required String providerToken,
+    String? phone,
   }) async {
     try {
-      final model  = await _remote.login(provider: provider, providerToken: providerToken);
+      final model  = await _remote.login(provider: provider, providerToken: providerToken, phone: phone);
       final entity = model.toEntity();
       await _session.saveSession(
         accessToken:  entity.accessToken,
@@ -101,8 +102,8 @@ class AuthRepositoryImpl implements AuthRepository {
         if (entity.user.displayName != null) {
           await _secureStorage.saveUserName(entity.user.displayName!);
         }
-        final phone = _firebaseAuth.currentUser?.phoneNumber;
-        if (phone != null) await _secureStorage.saveUserPhone(phone);
+        final firebasePhone = _firebaseAuth.currentUser?.phoneNumber;
+        if (firebasePhone != null) await _secureStorage.saveUserPhone(firebasePhone);
       } catch (_) {}
       return Right(entity);
     } on DioException catch (e) {
@@ -206,6 +207,30 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, int?>> sendOtp(String phone) async {
     try {
       final expiresIn = await _remote.sendOtp(phone);
+      return Right(expiresIn);
+    } on DioException catch (e) {
+      return Left(_mapDioError(e));
+    } catch (_) {
+      return const Left(UnknownFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, int?>> resendOtp(String phone) async {
+    try {
+      final expiresIn = await _remote.resendOtp(phone);
+      return Right(expiresIn);
+    } on DioException catch (e) {
+      return Left(_mapDioError(e));
+    } catch (_) {
+      return const Left(UnknownFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, int?>> sendRegisterOtp(String phone) async {
+    try {
+      final expiresIn = await _remote.sendRegisterOtp(phone);
       return Right(expiresIn);
     } on DioException catch (e) {
       return Left(_mapDioError(e));

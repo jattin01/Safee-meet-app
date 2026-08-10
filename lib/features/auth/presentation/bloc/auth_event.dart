@@ -51,19 +51,25 @@ class PhoneRegistrationCheckRequested extends AuthEvent {
 class LoginRequested extends AuthEvent {
   final String provider;
   final String providerToken;
+  final String? phone;
 
-  const LoginRequested({required this.provider, required this.providerToken});
+  const LoginRequested({required this.provider, required this.providerToken, this.phone});
 
   @override
-  List<Object?> get props => [provider, providerToken];
+  List<Object?> get props => [provider, providerToken, phone];
 }
 
-/// Google Sign-In: opens picker, gets Firebase token, calls backend
+/// Google Sign-In: opens picker, gets Firebase token. The backend requires a
+/// verified phone on every /login call regardless of provider, so the bloc
+/// never logs in directly here — it always emits [SocialTokenObtained] once
+/// the Google token is obtained, and the UI collects + verifies a phone
+/// number afterward before the actual login call.
 class GoogleLoginRequested extends AuthEvent {
   const GoogleLoginRequested();
 }
 
-/// Apple Sign-In: gets Apple token, calls backend
+/// Apple Sign-In: gets Apple token. See [GoogleLoginRequested] for the
+/// [SocialTokenObtained] handoff.
 class AppleLoginRequested extends AuthEvent {
   const AppleLoginRequested();
 }
@@ -78,6 +84,24 @@ class LogoutRequested extends AuthEvent {
 class SendOtpRequested extends AuthEvent {
   final String phone;
   const SendOtpRequested(this.phone);
+  @override
+  List<Object?> get props => [phone];
+}
+
+/// Sends the initial phone OTP during registration via the dedicated
+/// registration endpoint — the login flow uses [SendOtpRequested] instead.
+class SendRegisterOtpRequested extends AuthEvent {
+  final String phone;
+  const SendRegisterOtpRequested(this.phone);
+  @override
+  List<Object?> get props => [phone];
+}
+
+/// Resend OTP from the verification screen — hits the dedicated resend
+/// endpoint and never navigates the user away from that screen.
+class ResendOtpRequested extends AuthEvent {
+  final String phone;
+  const ResendOtpRequested(this.phone);
   @override
   List<Object?> get props => [phone];
 }

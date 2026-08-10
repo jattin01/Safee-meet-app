@@ -17,6 +17,7 @@ abstract class AuthRemoteDataSource {
   Future<AuthResponseModel> login({
     required String provider,
     required String providerToken,
+    String? phone,
   });
 
   Future<UserModel> getCurrentUser();
@@ -32,6 +33,15 @@ abstract class AuthRemoteDataSource {
   /// Returns the OTP's validity window in seconds (`data.expires_in`), if
   /// the backend included one.
   Future<int?> sendOtp(String phone);
+
+  /// Sends the initial phone OTP during registration via the dedicated
+  /// registration endpoint (distinct from [sendOtp], which is login-only).
+  Future<int?> sendRegisterOtp(String phone);
+
+  /// Resends the phone OTP via the dedicated resend endpoint (distinct from
+  /// [sendOtp]'s initial-send endpoint) — used by the "Resend OTP" action on
+  /// the OTP verification screen, which stays on that screen throughout.
+  Future<int?> resendOtp(String phone);
 
   /// Verifies the OTP against the backend (new SMS provider) and returns the
   /// Firebase custom token the backend minted for this phone's uid — the
@@ -73,11 +83,13 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<AuthResponseModel> login({
     required String provider,
     required String providerToken,
+    String? phone,
   }) async {
     final res = await _dio.post('/v1/auth/login', data: {
-      'provider':      provider,
-      'providerToken': providerToken,
-      'loginType':     'social',
+      'provider':         provider,
+      'providerToken':    providerToken,
+      if (phone != null) 'phone': phone,
+      'loginType':        'social',
     });
     return AuthResponseModel.fromJson(res.data as Map<String, dynamic>);
   }
@@ -112,6 +124,20 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<int?> sendOtp(String phone) async {
     final res = await _dio.post('/v1/auth/send-otp', data: {'phone': phone});
+    final data = (res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>?;
+    return data?['expires_in'] as int?;
+  }
+
+  @override
+  Future<int?> sendRegisterOtp(String phone) async {
+    final res = await _dio.post('/v1/auth/send-register-otp', data: {'phone': phone});
+    final data = (res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>?;
+    return data?['expires_in'] as int?;
+  }
+
+  @override
+  Future<int?> resendOtp(String phone) async {
+    final res = await _dio.post('/v1/auth/resend-otp', data: {'phone': phone});
     final data = (res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>?;
     return data?['expires_in'] as int?;
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/verification_entity.dart';
@@ -11,7 +13,14 @@ abstract class VerificationEvent extends Equatable {
 }
 
 class VerificationStatusRequested extends VerificationEvent {
-  const VerificationStatusRequested();
+  // Completed once this specific request finishes, independent of whether
+  // the resulting state actually changed — Bloc's emit() silently skips the
+  // stream when the new state is equal to the current one (e.g. a
+  // pull-to-refresh that returns unchanged data), so callers that need to
+  // know "the request is done" (like RefreshIndicator) can't rely on
+  // observing a new state on the stream.
+  final Completer<void>? done;
+  const VerificationStatusRequested({this.done});
 }
 
 /// Asks our backend to open a Didit session; the resulting token is what the
@@ -68,17 +77,21 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
   }
 
   Future<void> _onStatusRequested(
-    VerificationStatusRequested _,
+    VerificationStatusRequested event,
     Emitter<VerificationState> emit,
   ) async {
-    // Skip the full-screen loading state on a pull-to-refresh — only the
-    // very first load should blank the screen while it fetches.
-    if (state is! VerificationStatusLoaded) emit(const VerificationLoading());
-    final result = await _repository.getVerificationStatus();
-    result.fold(
-      (f) => emit(VerificationError(f.message)),
-      (s) => emit(VerificationStatusLoaded(s)),
-    );
+    try {
+      // Skip the full-screen loading state on a pull-to-refresh — only the
+      // very first load should blank the screen while it fetches.
+      if (state is! VerificationStatusLoaded) emit(const VerificationLoading());
+      final result = await _repository.getVerificationStatus();
+      result.fold(
+        (f) => emit(VerificationError(f.message)),
+        (s) => emit(VerificationStatusLoaded(s)),
+      );
+    } finally {
+      event.done?.complete();
+    }
   }
 
   Future<void> _onDiditSessionRequested(

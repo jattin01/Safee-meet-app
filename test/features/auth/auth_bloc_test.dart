@@ -14,7 +14,9 @@ import 'package:safee_meet/features/auth/domain/use_cases/google_login_use_case.
 import 'package:safee_meet/features/auth/domain/use_cases/login_use_case.dart';
 import 'package:safee_meet/features/auth/domain/use_cases/logout_use_case.dart';
 import 'package:safee_meet/features/auth/domain/use_cases/register_user_use_case.dart';
+import 'package:safee_meet/features/auth/domain/use_cases/resend_otp_use_case.dart';
 import 'package:safee_meet/features/auth/domain/use_cases/send_otp_use_case.dart';
+import 'package:safee_meet/features/auth/domain/use_cases/send_register_otp_use_case.dart';
 import 'package:safee_meet/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:safee_meet/features/auth/presentation/bloc/auth_event.dart';
 import 'package:safee_meet/features/auth/presentation/bloc/auth_state.dart';
@@ -28,6 +30,8 @@ class MockLogoutUseCase extends Mock implements LogoutUseCase {}
 class MockCheckUserExistsUseCase extends Mock implements CheckUserExistsUseCase {}
 class MockGetCurrentUserUseCase extends Mock implements GetCurrentUserUseCase {}
 class MockSendOtpUseCase extends Mock implements SendOtpUseCase {}
+class MockResendOtpUseCase extends Mock implements ResendOtpUseCase {}
+class MockSendRegisterOtpUseCase extends Mock implements SendRegisterOtpUseCase {}
 
 final _user = UserEntity(
   id: 'ulid-123',
@@ -58,6 +62,8 @@ void main() {
   late MockCheckUserExistsUseCase checkUserExists;
   late MockGetCurrentUserUseCase  getCurrentUser;
   late MockSendOtpUseCase         sendOtp;
+  late MockResendOtpUseCase       resendOtp;
+  late MockSendRegisterOtpUseCase sendRegisterOtp;
 
   setUp(() {
     checkAuthStatus = MockCheckAuthStatusUseCase();
@@ -69,6 +75,8 @@ void main() {
     checkUserExists = MockCheckUserExistsUseCase();
     getCurrentUser  = MockGetCurrentUserUseCase();
     sendOtp         = MockSendOtpUseCase();
+    resendOtp       = MockResendOtpUseCase();
+    sendRegisterOtp = MockSendRegisterOtpUseCase();
 
     registerFallbackValue(const RegisterParams(
       provider:      'phone',
@@ -91,6 +99,8 @@ void main() {
         checkUserExists: checkUserExists,
         getCurrentUser:  getCurrentUser,
         sendOtp:         sendOtp,
+        resendOtp:       resendOtp,
+        sendRegisterOtp: sendRegisterOtp,
       );
 
   // ── AuthStatusChecked ──────────────────────────────────────────────────────

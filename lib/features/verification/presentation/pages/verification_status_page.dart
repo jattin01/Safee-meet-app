@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -27,11 +29,9 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
   }
 
   Future<void> _refresh(BuildContext context) {
-    final bloc = context.read<VerificationBloc>();
-    final done = bloc.stream.firstWhere(
-        (s) => s is VerificationStatusLoaded || s is VerificationError);
-    bloc.add(const VerificationStatusRequested());
-    return done;
+    final done = Completer<void>();
+    context.read<VerificationBloc>().add(VerificationStatusRequested(done: done));
+    return done.future;
   }
 
   @override
@@ -642,12 +642,9 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final buttonLabel = switch (status.kycStatus) {
-      'approved' => 'Back to Profile',
-      'pending' => 'Refresh Status',
-      'rejected' => 'Upload Again',
-      _ => 'Complete Verification',
-    };
+    // The bottom action button is hidden by default for every status —
+    // only a rejected submission gets a "Verify Again" call-to-action here.
+    if (status.kycStatus != 'rejected') return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -665,32 +662,15 @@ class _ActionCard extends StatelessWidget {
                   fontSize: 16,
                   fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          Text(
-            switch (status.kycStatus) {
-              'approved' => 'Your identity badge is already active.',
-              'pending' => 'We recommend checking back after a short while.',
-              'rejected' =>
-                'Review the reason above, then resubmit your documents.',
-              _ =>
-                'Finish or resubmit your Level 1 verification to build trust.',
-            },
-            style: const TextStyle(
+          const Text(
+            'Review the reason above, then resubmit your documents.',
+            style: TextStyle(
                 color: AppColors.textSecondary, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 16),
           PrimaryButton(
-            label: buttonLabel,
-            onPressed: () {
-              if (status.kycStatus == 'pending') {
-                context
-                    .read<VerificationBloc>()
-                    .add(const VerificationStatusRequested());
-                return;
-              }
-              context.go(status.kycStatus == 'approved'
-                  ? AppRoutes.profile
-                  : AppRoutes.verification);
-            },
+            label: 'Verify Again',
+            onPressed: () => context.go(AppRoutes.verification),
           ),
         ],
       ),

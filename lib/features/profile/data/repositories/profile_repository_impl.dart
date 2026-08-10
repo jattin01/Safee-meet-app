@@ -157,12 +157,10 @@ class ProfileRepositoryImpl implements ProfileRepository {
         email: d['email'] as String?,
         trustScore: (d['trustScore'] as num?)?.toInt() ?? 0,
         verificationLevel: _resolveVerificationLevel(d),
+        verificationStatus: d['verificationStatus'] as String? ?? 'not_submitted',
         pinSearchCount: (d['pinSearchCount'] as num?)?.toInt() ?? 0,
         subscriptionPlan: 'free',
-        // Same plain `rating` key member-search's parser already reads
-        // successfully off a user object — this was previously hardcoded to
-        // 0, which is why the Home dashboard's rating stat never moved.
-        rating: (d['rating'] as num?)?.toDouble() ?? 0,
+        safetyScore: (d['safetyScore'] as num?)?.toInt() ?? 0,
         totalMeetings: (d['meetingCount'] as num?)?.toInt() ?? 0,
         totalReviews: 0,
         badges: [],

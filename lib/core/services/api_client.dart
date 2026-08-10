@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:injectable/injectable.dart';
 import '../config/app_constants.dart';
 import 'secure_storage_service.dart';
@@ -22,11 +23,17 @@ class ApiClient {
     );
     _dio.interceptors.addAll([
       _AuthInterceptor(_storage),
-      LogInterceptor(
-        requestBody: true,
-        responseBody: true,
-        logPrint: (o) => print('[API] $o'),
-      ),
+      // Was unconditional — serializing every request/response body to a
+      // string and printing it on every call (including release builds)
+      // adds real synchronous overhead directly in the response path, on
+      // every single call a chatty screen like Live Location makes. Debug
+      // builds only; release users pay nothing for it.
+      if (kDebugMode)
+        LogInterceptor(
+          requestBody: true,
+          responseBody: true,
+          logPrint: (o) => print('[API] $o'),
+        ),
     ]);
   }
 

@@ -15,6 +15,8 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
   Future<Either<Failure, MemberEntity>> searchByPIN(String pin) async {
     try {
       final data = await _remote.searchByPIN(pin);
+      final failure = _businessFailure(data);
+      if (failure != null) return Left(failure);
       return Right(_parse(data));
     } on DioException catch (e) {
       return Left(_map(e));
@@ -27,12 +29,30 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
   Future<Either<Failure, MemberEntity>> searchByQR(String qrCode) async {
     try {
       final data = await _remote.searchByQR(qrCode);
+      final failure = _businessFailure(data);
+      if (failure != null) return Left(failure);
       return Right(_parse(data));
     } on DioException catch (e) {
       return Left(_map(e));
     } catch (_) {
       return const Left(UnknownFailure());
     }
+  }
+
+  // The search endpoints answer subscription/search-limit denials with HTTP
+  // 200 and `success: false` in the body instead of a 4xx status — so no
+  // DioException is ever thrown for them, and the body has to be checked
+  // before treating it as a member record. `code: 'SUBSCRIPTION_REQUIRED'`
+  // is how MemberSearchBloc tells this apart from an ordinary business
+  // error to decide whether the error card links to the plans page.
+  Failure? _businessFailure(Map<String, dynamic> data) {
+    if (data['success'] != false) return null;
+    final message = data['message'] as String? ??
+        'Unable to search for this member right now.';
+    return ServerFailure(
+      message,
+      code: data['subscription_required'] == true ? 'SUBSCRIPTION_REQUIRED' : null,
+    );
   }
 
   @override
@@ -55,7 +75,7 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
         trustScore: (d['trustScore'] as num).toInt(),
         verificationLevel: d['verificationLevel'] as String? ?? 'none',
         subscriptionPlan: d['subscriptionPlan'] as String? ?? 'free',
-        rating: (d['rating'] as num?)?.toDouble() ?? 0,
+        safetyScore: (d['safetyScore'] as num?)?.toInt() ?? 0,
         totalMeetings: (d['totalMeetings'] as num?)?.toInt() ?? 0,
         badges: List<String>.from(d['badges'] as List? ?? []),
       );

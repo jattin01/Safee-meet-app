@@ -104,6 +104,7 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
         case MeetingStatus.scheduled:
         case MeetingStatus.pendingApproval:
         case MeetingStatus.declined:
+        case MeetingStatus.incidentReported:
           break;
       }
       return getMeeting(meetingId);
@@ -217,6 +218,8 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
       case 'cancelled':
       case 'expired':
         return MeetingStatus.cancelled;
+      case 'incident_reported':
+        return MeetingStatus.incidentReported;
       case 'active':
       case 'live':
         return hasArrived ? MeetingStatus.arrived : MeetingStatus.enRoute;

@@ -25,9 +25,13 @@ final _meeting = MeetingEntity(
 void main() {
   late MockMeetingsRepository repository;
 
+  setUpAll(() {
+    registerFallbackValue(MeetingStatus.scheduled);
+    registerFallbackValue(MeetingPurpose.coffee);
+  });
+
   setUp(() {
     repository = MockMeetingsRepository();
-    registerFallbackValue(MeetingStatus.scheduled);
   });
 
   MeetingsBloc _bloc() => MeetingsBloc(repository);

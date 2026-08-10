@@ -17,8 +17,8 @@ class MeetingsListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<MeetingsBloc>()..add(const MeetingsLoadRequested()),
+    return BlocProvider.value(
+      value: sl<MeetingsBloc>()..add(const MeetingsLoadRequested()),
       child: _MeetingsListView(initialTab: initialTab),
     );
   }
@@ -37,15 +37,32 @@ class _MeetingsListViewState extends State<_MeetingsListView>
   late final TabController _tabs;
   List<MeetingEntity> _meetings = const [];
 
+  int _getTabIndex(String? tab) => switch (tab) {
+        'requests' => 1,
+        'past' => 2,
+        'upcoming' || _ => 0,
+      };
+
   @override
   void initState() {
     super.initState();
-    final startIndex = switch (widget.initialTab) {
-      'requests' => 1,
-      'past' => 2,
-      'upcoming' || _ => 0,
-    };
-    _tabs = TabController(length: 3, vsync: this, initialIndex: startIndex);
+    _tabs = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: _getTabIndex(widget.initialTab),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_MeetingsListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTab != oldWidget.initialTab) {
+      final targetIndex = _getTabIndex(widget.initialTab);
+      if (_tabs.index != targetIndex) {
+        _tabs.animateTo(targetIndex);
+      }
+    }
+    context.read<MeetingsBloc>().add(const MeetingsLoadRequested());
   }
 
   @override
@@ -97,7 +114,8 @@ class _MeetingsListViewState extends State<_MeetingsListView>
               .where((m) =>
                   m.status == MeetingStatus.completed ||
                   m.status == MeetingStatus.cancelled ||
-                  m.status == MeetingStatus.declined)
+                  m.status == MeetingStatus.declined ||
+                  m.status == MeetingStatus.incidentReported)
               .toList();
 
           return Scaffold(
@@ -195,11 +213,29 @@ class _MeetingsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (meetings.isEmpty) {
-      return _EmptyState(
-        message: emptyMessage,
-        subtitle: emptySubtitle,
-        icon: emptyIcon,
-        showAction: showEmptyAction,
+      // A bare _EmptyState here has nothing scrollable for RefreshIndicator
+      // to attach its pull gesture to, so an empty tab could never be
+      // refreshed — only a populated list could. LayoutBuilder + a
+      // minHeight-constrained SingleChildScrollView keeps the empty state
+      // centered exactly as before (Center expands to fill that minimum
+      // height) while making the tab always scrollable enough to pull.
+      return RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: onRefresh,
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: _EmptyState(
+                message: emptyMessage,
+                subtitle: emptySubtitle,
+                icon: emptyIcon,
+                showAction: showEmptyAction,
+              ),
+            ),
+          ),
+        ),
       );
     }
 
@@ -351,21 +387,32 @@ class _MeetingCard extends StatelessWidget {
               ],
             ),
             // Own row (rather than crammed alongside the date/time chips) so
-            // the full address gets real width to ellipsize against instead
-            // of being hard-cut to a fixed character count.
+            // the full address gets real width to wrap against instead of
+            // being hard-cut to a fixed character count.
             const SizedBox(height: 10),
             Row(
+              // Top-aligned rather than the Row default (center) — once the
+              // address wraps to a second line, centering would float the
+              // icon between both lines instead of next to the first.
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.location_on_outlined,
-                    color: AppColors.textSecondary, size: 14),
+                Padding(
+                  // Nudges the icon down to sit level with the first line
+                  // of text rather than the whole (now taller) block.
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Icon(Icons.location_on_outlined,
+                      color: AppColors.textSecondary, size: 14),
+                ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     meeting.location,
-                    maxLines: 1,
+                    // Full address should read on the card, not truncate —
+                    // wrap up to 2 lines and only ellipsize past that.
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12),
+                        color: AppColors.textSecondary, fontSize: 12, height: 1.35),
                   ),
                 ),
               ],
@@ -424,6 +471,7 @@ class _MeetingCard extends StatelessWidget {
       case MeetingStatus.pendingApproval:
         return AppColors.warning;
       case MeetingStatus.declined:
+      case MeetingStatus.incidentReported:
         return AppColors.error;
     }
   }
@@ -444,6 +492,8 @@ class _MeetingCard extends StatelessWidget {
         return 'Pending approval';
       case MeetingStatus.declined:
         return 'Declined';
+      case MeetingStatus.incidentReported:
+        return 'Incident Reported';
     }
   }
 }

@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "606194809150-qpvt0kf2mts7p2iclgcm39hhas4u8259.apps.googleusercontent.com",
+          "client_id": "606194809150-gv7p2eh5klcjrhc08tbrsffpuktf35r8.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "solutionbowl.com.safee_meet",
-            "certificate_hash": "36c882f7153a4df78b8d6a9887b0b6e970cb9c9d"
+            "certificate_hash": "b1eccb368971a7a8c14d43d51d85b29851b04f55"
           }
         },
         {

@@ -1,3 +1,4 @@
+import 'package:country_code_picker/country_code_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,8 +43,6 @@ class _RegisterPageState extends State<RegisterPage> {
   final _phoneCtrl       = TextEditingController();
   final _emailCtrl       = TextEditingController();
   final _companyNameCtrl = TextEditingController();
-  final _employerIdCtrl  = TextEditingController();
-  final _jobTitleCtrl    = TextEditingController();
 
   // ── Phone OTP (backend-verified) state ────────────────────────────────────
   String? _firebaseIdToken;
@@ -93,7 +92,7 @@ class _RegisterPageState extends State<RegisterPage> {
     final emailStep = _isEmployer ? 5 : 4;
     switch (_step) {
       case 1: return _nameCtrl.text.trim().isNotEmpty;
-      case 2: return _phoneDigits.length == 10 && !_sendingOtp;
+      case 2: return _phoneDigits.length >= 7 && _phoneDigits.length <= 15 && !_sendingOtp;
       case 3: return (_enteredOtp?.length ?? 0) == 6 && !_verifyingOtp;
       default:
         if (_step == 4 && _isEmployer) return _companyNameCtrl.text.trim().isNotEmpty;
@@ -122,20 +121,30 @@ class _RegisterPageState extends State<RegisterPage> {
   // ── Helpers ───────────────────────────────────────────────────────────────
   String get _phoneDigits => _phoneCtrl.text.replaceAll(RegExp(r'[^\d]'), '');
 
+  // ── Country dial code (editable via the country selector) ────────────────
+  String _dialCode = '91';
+
   String _toE164(String raw) {
     final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
     if (raw.startsWith('+')) return raw.replaceAll(RegExp(r'\s'), '');
-    if (digits.length == 12 && digits.startsWith('91')) return '+$digits';
-    if (digits.length == 11 && digits.startsWith('0'))  return '+91${digits.substring(1)}';
-    if (digits.length == 10) return '+91$digits';
-    return '+$digits';
+    if (digits.startsWith(_dialCode) && digits.length > _dialCode.length) {
+      return '+$digits';
+    }
+    if (digits.startsWith('0')) return '+$_dialCode${digits.substring(1)}';
+    return '+$_dialCode$digits';
   }
 
-  // ── Backend: Send OTP ─────────────────────────────────────────────────────
+  // ── Backend: Send OTP (registration-specific endpoint) ────────────────────
   void _sendPhoneOtp() {
     final e164 = _toE164(_phoneCtrl.text.trim());
     setState(() { _sendingOtp = true; _otpError = null; });
-    context.read<AuthBloc>().add(SendOtpRequested(e164));
+    context.read<AuthBloc>().add(SendRegisterOtpRequested(e164));
+  }
+
+  // ── Backend: Resend OTP — stays on the OTP step, never navigates away ────
+  void _resendPhoneOtp() {
+    setState(() { _enteredOtp = null; _otpError = null; });
+    context.read<AuthBloc>().add(ResendOtpRequested(_toE164(_phoneCtrl.text.trim())));
   }
 
   // ── Backend: Verify OTP → Firebase custom-token session ───────────────────
@@ -232,8 +241,6 @@ class _RegisterPageState extends State<RegisterPage> {
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _companyNameCtrl.dispose();
-    _employerIdCtrl.dispose();
-    _jobTitleCtrl.dispose();
     super.dispose();
   }
 
@@ -253,6 +260,8 @@ class _RegisterPageState extends State<RegisterPage> {
           context.go(AppRoutes.dashboardHome);
         } else if (state is OtpSent) {
           setState(() { _sendingOtp = false; _step = 3; });
+        } else if (state is OtpResent) {
+          AppSnackbar.success(context, 'OTP resent successfully.');
         } else if (state is PhoneOtpVerified) {
           setState(() {
             _firebaseIdToken = state.firebaseIdToken;
@@ -403,6 +412,8 @@ class _RegisterPageState extends State<RegisterPage> {
       _PhoneInputField(
         controller: _phoneCtrl,
         onChanged:  (_) => setState(() {}),
+        onCountryChanged: (country) =>
+            setState(() => _dialCode = country.dialCode?.replaceAll('+', '') ?? '91'),
       ),
       const SizedBox(height: 16),
       const InfoBanner(
@@ -436,7 +447,7 @@ class _RegisterPageState extends State<RegisterPage> {
       OtpInputWidget(
         length: 6,
         onCompleted: (otp) => setState(() => _enteredOtp = otp),
-        onResend: () => setState(() { _step = 2; _enteredOtp = null; }),
+        onResend: _resendPhoneOtp,
       ),
     ],
   );
@@ -509,23 +520,6 @@ class _RegisterPageState extends State<RegisterPage> {
         prefixIcon:         Icons.business_outlined,
         textCapitalization: TextCapitalization.words,
         onChanged:          (_) => setState(() {}),
-      ),
-      const SizedBox(height: 16),
-      FieldInput(
-        label:              'Employer ID',
-        hint:               'e.g. EMP-00123',
-        controller:         _employerIdCtrl,
-        prefixIcon:         Icons.badge_outlined,
-        textCapitalization: TextCapitalization.characters,
-        onChanged:          (_) => setState(() {}),
-      ),
-      const SizedBox(height: 16),
-      FieldInput(
-        label:              'Job Title (Optional)',
-        hint:               'e.g. HR Manager',
-        controller:         _jobTitleCtrl,
-        prefixIcon:         Icons.work_outline,
-        textCapitalization: TextCapitalization.words,
       ),
       const SizedBox(height: 16),
       const InfoBanner(
@@ -934,10 +928,15 @@ class _OtpStepIcon extends StatelessWidget {
 
 // ── Reusable phone input with +91 country code prefix ────────────────────────
 class _PhoneInputField extends StatelessWidget {
-  final TextEditingController controller;
-  final ValueChanged<String>?  onChanged;
+  final TextEditingController      controller;
+  final ValueChanged<String>?      onChanged;
+  final ValueChanged<CountryCode>? onCountryChanged;
 
-  const _PhoneInputField({required this.controller, this.onChanged});
+  const _PhoneInputField({
+    required this.controller,
+    this.onChanged,
+    this.onCountryChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -956,20 +955,49 @@ class _PhoneInputField extends StatelessWidget {
             border:       Border.all(color: AppColors.border, width: 1.5),
           ),
           child: Row(children: [
+            // Country code selector (tap to change country)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
               decoration: BoxDecoration(
                 border: Border(
                     right: BorderSide(color: AppColors.border, width: 1.5)),
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Text('🇮🇳', style: TextStyle(fontSize: 18)),
-                const SizedBox(width: 6),
-                Text('+91',
-                    style: GoogleFonts.inter(
-                        fontSize: 15, fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
-              ]),
+              child: CountryCodePicker(
+                onChanged:       onCountryChanged,
+                initialSelection: 'IN',
+                favorite:        const ['+91', 'IN'],
+                showFlag:        true,
+                showDropDownButton: true,
+                padding:         const EdgeInsets.symmetric(horizontal: 10),
+                flagWidth:       22,
+                textStyle: GoogleFonts.inter(
+                    fontSize: 15, fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary),
+                dialogTextStyle: GoogleFonts.inter(
+                    fontSize: 15, color: AppColors.textPrimary),
+                searchStyle: GoogleFonts.inter(
+                    fontSize: 15, color: AppColors.textPrimary),
+                // Package default is a bare, unstyled InputDecoration — no
+                // hint, no icon, no border — which renders as an empty box
+                // users can't tell is a search field. Give it a real look.
+                searchDecoration: InputDecoration(
+                  hintText: 'Search country',
+                  hintStyle: GoogleFonts.inter(
+                      fontSize: 14, color: AppColors.textTertiary),
+                  prefixIcon: Icon(Icons.search,
+                      color: AppColors.textTertiary, size: 20),
+                  filled:         true,
+                  fillColor:      AppColors.lightBg,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:   BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:   BorderSide(color: AppColors.primary),
+                  ),
+                ),
+              ),
             ),
             Expanded(
               child: TextField(
@@ -980,7 +1008,7 @@ class _PhoneInputField extends StatelessWidget {
                     fontSize: 15, color: AppColors.textPrimary),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
+                  LengthLimitingTextInputFormatter(15),
                 ],
                 decoration: InputDecoration(
                   hintText: '98765 43210',
@@ -994,7 +1022,7 @@ class _PhoneInputField extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: 6),
-        Text('Enter 10-digit mobile number without country code',
+        Text('Enter your mobile number without the country code',
             style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
       ],
     );

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -13,8 +15,38 @@ import '../../../../core/shared/widgets/primary_button.dart';
 import '../../../member_search/domain/entities/member_entity.dart';
 import '../../../member_search/presentation/pages/member_search_page.dart';
 import '../../domain/entities/meeting_entity.dart';
+import '../../domain/repositories/meetings_repository.dart';
 import '../bloc/meetings_bloc.dart';
 import 'location_picker_page.dart';
+
+/// Meetings whose status blocks their own 15-minute window — everything
+/// else (completed/cancelled/declined/etc.) doesn't affect new bookings.
+const _activeStatuses = {MeetingStatus.scheduled, MeetingStatus.pendingApproval};
+
+const _activeMeetingMessage =
+    'You already have an active meeting. Please create a new meeting at '
+    'least 15 minutes after your current meeting.';
+
+/// How often to re-check whether a previously-detected active meeting's
+/// 15-minute block window has lapsed, so the warning clears itself (without
+/// needing a refetch) once "now" passes Block Until while this page sits
+/// open across that boundary.
+const _activeMeetingRecheckInterval = Duration(seconds: 30);
+
+/// Increment offered by the time-slot picker below.
+const _slotMinutes = 15;
+
+/// Rounds [dt] up to the next `_slotMinutes` boundary (e.g. 14:07 → 14:15),
+/// rolling into the next day if needed — so an auto-adjusted default always
+/// lands on a real, selectable slot instead of an arbitrary in-between
+/// minute the grid can't represent.
+DateTime _snapUpToSlot(DateTime dt) {
+  final truncated = DateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute);
+  final remainder = truncated.minute % _slotMinutes;
+  final hasSubMinuteRemainder = dt.second > 0 || dt.millisecond > 0;
+  if (remainder == 0 && !hasSubMinuteRemainder) return truncated;
+  return truncated.add(Duration(minutes: _slotMinutes - remainder));
+}
 
 class MeetingSetupPage extends StatelessWidget {
   final String? partnerId;
@@ -23,8 +55,8 @@ class MeetingSetupPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<MeetingsBloc>(),
+    return BlocProvider.value(
+      value: sl<MeetingsBloc>(),
       child: _MeetingSetupView(partnerId: partnerId, partner: partner),
     );
   }
@@ -51,6 +83,55 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
   double? _pickedLatitude;
   double? _pickedLongitude;
 
+  // Populated from the meeting history API (GET /v1/meetings) — every
+  // meeting that's still `scheduled` or `pending_approval` AND whose own
+  // 15-minute block window hasn't lapsed yet. Each one independently
+  // blocks only its own window ([scheduledAt, scheduledAt+15min)); a user
+  // can have several of these at once (at different times), so this is a
+  // list, not a single "the" active meeting.
+  List<MeetingEntity> _activeMeetings = const [];
+
+  // True until the initial GET /v1/meetings check resolves. The date/time
+  // pickers and the submit button stay disabled during this window —
+  // otherwise a user who opens either before the check completes could
+  // pick (or even submit) a slot that turns out to be blocked, since
+  // _activeMeetings would still read as empty at that instant.
+  bool _checkingActiveMeeting = true;
+  Timer? _activeMeetingRecheckTimer;
+
+  // The specific meeting (if any) whose window [scheduledAt, scheduledAt +
+  // 15min) contains [date]+[time].
+  MeetingEntity? _blockingMeetingFor(DateTime date, TimeOfDay time) {
+    final combined =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    for (final m in _activeMeetings) {
+      final start = m.scheduledAt;
+      final end = start.add(const Duration(minutes: 15));
+      if (!combined.isBefore(start) && combined.isBefore(end)) return m;
+    }
+    return null;
+  }
+
+  // The earliest real, selectable slot (snapped to `_slotMinutes`) at or
+  // after [from] that isn't inside any active meeting's window — chains
+  // forward through back-to-back/overlapping meetings (e.g. meetings at
+  // 4:30 and 4:45 push a 4:20 pick to 5:00, not just to 4:45) instead of
+  // only clearing a single one, and re-snaps after each hop since a
+  // meeting's own start time may not itself land on a slot boundary.
+  DateTime _nextAvailableSlot(DateTime from) {
+    var candidate = _snapUpToSlot(from);
+    // Bounded by one hop per active meeting — enough to clear any chain of
+    // back-to-back windows without risking an infinite loop.
+    for (var i = 0; i <= _activeMeetings.length; i++) {
+      final date = DateTime(candidate.year, candidate.month, candidate.day);
+      final time = TimeOfDay(hour: candidate.hour, minute: candidate.minute);
+      final blocker = _blockingMeetingFor(date, time);
+      if (blocker == null) return candidate;
+      candidate = _snapUpToSlot(blocker.scheduledAt.add(const Duration(minutes: 15)));
+    }
+    return candidate;
+  }
+
   static const _purposes = [
     (MeetingPurpose.coffee, '☕'),
     (MeetingPurpose.marketplace, '🛍️'),
@@ -67,8 +148,82 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
     // forward the same way _pickDate does, so the initial selection is
     // always valid without requiring the user to open a picker.
     if (_isPastDateTime(_selectedDate, _selectedTime)) {
-      final adjusted = DateTime.now().add(const Duration(minutes: 5));
+      final adjusted = _snapUpToSlot(DateTime.now());
+      _selectedDate = DateTime(adjusted.year, adjusted.month, adjusted.day);
       _selectedTime = TimeOfDay(hour: adjusted.hour, minute: adjusted.minute);
+    }
+    _loadActiveMeetings();
+  }
+
+  // Pulls the meeting history (GET /v1/meetings) directly from the
+  // repository rather than through MeetingsBloc — that bloc's state
+  // machine is shared with the create-meeting submission below, and
+  // routing this check through it would flip the same MeetingsLoading
+  // state the "Creating…" button relies on.
+  Future<void> _loadActiveMeetings() async {
+    final result = await sl<MeetingsRepository>().getMeetings();
+    if (!mounted) return;
+    result.fold(
+      (_) {
+        // A failed history fetch shouldn't block meeting creation — fall
+        // back to no restriction rather than surfacing an error here.
+        setState(() => _checkingActiveMeeting = false);
+      },
+      (meetings) {
+        // A meeting only counts as "active" while its own 15-minute block
+        // window is still running — a `scheduled`/`pending_approval`
+        // meeting whose window has already lapsed (e.g. the backend hasn't
+        // flipped it to completed/expired yet) shouldn't warn or restrict
+        // anything. Every meeting that qualifies blocks its own window
+        // independently — there can be several at once, at different times.
+        final now = DateTime.now();
+        final active = meetings
+            .where((m) =>
+                _activeStatuses.contains(m.status) &&
+                now.isBefore(m.scheduledAt.add(const Duration(minutes: 15))))
+            .toList()
+          ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+        setState(() {
+          _checkingActiveMeeting = false;
+          _activeMeetings = active;
+          // The current selection may now fall inside one of the
+          // newly-known block windows — bump it forward past whichever
+          // (possibly chained) windows it lands in, same as the past-time
+          // bump above. Times outside every window are unaffected.
+          final combined = DateTime(_selectedDate.year, _selectedDate.month,
+              _selectedDate.day, _selectedTime.hour, _selectedTime.minute);
+          final allowed = _nextAvailableSlot(combined);
+          if (allowed.isAfter(combined)) {
+            _selectedDate = DateTime(allowed.year, allowed.month, allowed.day);
+            _selectedTime = TimeOfDay(hour: allowed.hour, minute: allowed.minute);
+          }
+        });
+        if (active.isEmpty) return;
+        // Each window's end is a hard deadline that lapses while this page
+        // might just be sitting open — poll for that instead of only ever
+        // re-deriving it from a fresh API response.
+        _activeMeetingRecheckTimer ??= Timer.periodic(
+          _activeMeetingRecheckInterval,
+          (_) => _pruneLapsedActiveMeetings(),
+        );
+      },
+    );
+  }
+
+  void _pruneLapsedActiveMeetings() {
+    final now = DateTime.now();
+    // Block Until itself is already unrestricted (see
+    // _blockingMeetingFor) — a meeting stops being "active" the instant
+    // now reaches it, not only once now passes it.
+    final stillActive = _activeMeetings
+        .where((m) => now.isBefore(m.scheduledAt.add(const Duration(minutes: 15))))
+        .toList();
+    if (stillActive.length != _activeMeetings.length) {
+      setState(() => _activeMeetings = stillActive);
+    }
+    if (stillActive.isEmpty) {
+      _activeMeetingRecheckTimer?.cancel();
+      _activeMeetingRecheckTimer = null;
     }
   }
 
@@ -95,6 +250,7 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
 
   @override
   void dispose() {
+    _activeMeetingRecheckTimer?.cancel();
     _locationCtrl.dispose();
     _buildingNameCtrl.dispose();
     _floorFlatCtrl.dispose();
@@ -102,13 +258,27 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
     super.dispose();
   }
 
-  // Combines a date + time-of-day and checks it against "now" — used to
-  // block past dates/times both while picking and again at submit time.
+  // True when [date]+[time] is already in the past relative to now — the
+  // only reason *any* date/time is ever disabled, independent of whether
+  // an active meeting exists.
   bool _isPastDateTime(DateTime date, TimeOfDay time) {
     final combined =
         DateTime(date.year, date.month, date.day, time.hour, time.minute);
     return combined.isBefore(DateTime.now());
   }
+
+  // True while [date]+[time] falls inside ANY active meeting's own window
+  // — [scheduledAt, scheduledAt + 15min), inclusive of that meeting's own
+  // start time but *not* the +15 boundary itself, since "at least 15
+  // minutes after" means exactly +15 is the first bookable slot. Times
+  // earlier or later the same day, and outside every other meeting's own
+  // window, are unaffected — each meeting is a narrow exclusion, not a
+  // floor under the whole day.
+  bool _isWithinActiveMeetingBlock(DateTime date, TimeOfDay time) =>
+      _blockingMeetingFor(date, time) != null;
+
+  bool _isDisabledDateTime(DateTime date, TimeOfDay time) =>
+      _isPastDateTime(date, time) || _isWithinActiveMeetingBlock(date, time);
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -133,41 +303,43 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
     if (picked == null) return;
     setState(() {
       _selectedDate = picked;
-      // Picking "today" after the already-selected time has since passed
-      // (or after the previous date was in the future) would otherwise
-      // silently produce a past scheduledAt — bump the time forward.
+      // Picking a date on which the already-selected time now falls in the
+      // past, or inside some active meeting's block window, would
+      // otherwise silently produce an invalid scheduledAt — bump forward
+      // past whichever (possibly chained) restriction applies.
       if (_isPastDateTime(_selectedDate, _selectedTime)) {
-        final adjusted = DateTime.now().add(const Duration(minutes: 5));
+        final adjusted = _nextAvailableSlot(DateTime.now());
+        _selectedDate = DateTime(adjusted.year, adjusted.month, adjusted.day);
+        _selectedTime = TimeOfDay(hour: adjusted.hour, minute: adjusted.minute);
+      } else if (_isWithinActiveMeetingBlock(_selectedDate, _selectedTime)) {
+        final combined = DateTime(_selectedDate.year, _selectedDate.month,
+            _selectedDate.day, _selectedTime.hour, _selectedTime.minute);
+        final adjusted = _nextAvailableSlot(combined);
+        _selectedDate = DateTime(adjusted.year, adjusted.month, adjusted.day);
         _selectedTime = TimeOfDay(hour: adjusted.hour, minute: adjusted.minute);
       }
     });
   }
 
+  // Native showTimePicker has no way to disable individual times, so a
+  // past time (today) or one inside an active meeting's own 15-minute
+  // block window could only be caught after the fact. This opens a slot
+  // grid instead, where every disabled slot simply can't be tapped.
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
+    final picked = await showModalBottomSheet<TimeOfDay>(
       context: context,
-      initialTime: _selectedTime,
-      builder: (context, child) => Theme(
-        data: ThemeData.light().copyWith(
-          colorScheme: ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-            surface: Colors.white,
-            onSurface: AppColors.textPrimary,
-          ),
-        ),
-        child: child!,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _TimeSlotSheet(
+        date: _selectedDate,
+        selectedTime: _selectedTime,
+        activeMeetings: _activeMeetings,
       ),
     );
     if (picked == null) return;
-    // showTimePicker has no min/max-time param, so past times (when the
-    // selected date is today) have to be rejected manually.
-    if (_isPastDateTime(_selectedDate, picked)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please choose a current or future time.')),
-      );
-      return;
-    }
     setState(() => _selectedTime = picked);
   }
 
@@ -203,6 +375,19 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
       _selectedTime.hour,
       _selectedTime.minute,
     );
+
+    // Belt-and-suspenders re-check: the pickers already keep the selection
+    // clear of past times and the active meeting's block window, but
+    // re-validate here too in case that state changed after the fields
+    // were populated (e.g. this page was pre-filled via a deep link) or
+    // the history check is still in flight.
+    if (_isDisabledDateTime(_selectedDate, _selectedTime)) {
+      final message = _isWithinActiveMeetingBlock(_selectedDate, _selectedTime)
+          ? _activeMeetingMessage
+          : 'Please choose a current or future time.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
 
     context.read<MeetingsBloc>().add(
           MeetingScheduleRequested(
@@ -251,6 +436,10 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (_activeMeetings.isNotEmpty) ...[
+                        const _ActiveMeetingBanner(message: _activeMeetingMessage),
+                        const SizedBox(height: 20),
+                      ],
                       _Label('MEETING WITH'),
                       const SizedBox(height: 10),
                       _PartnerCard(
@@ -273,7 +462,11 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
                             child: _PickerField(
                               icon: Icons.calendar_today_outlined,
                               label: DateFormat('MMM d, y').format(_selectedDate),
-                              onTap: _pickDate,
+                              // Disabled until the active-meeting check
+                              // resolves — otherwise a date/time picked in
+                              // that window could dodge the block entirely,
+                              // since _activeMeetings would still be empty.
+                              onTap: _checkingActiveMeeting ? null : _pickDate,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -281,11 +474,22 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
                             child: _PickerField(
                               icon: Icons.access_time,
                               label: _selectedTime.format(context),
-                              onTap: _pickTime,
+                              onTap: _checkingActiveMeeting ? null : _pickTime,
                             ),
                           ),
                         ],
                       ),
+                      if (_checkingActiveMeeting) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Checking your schedule…',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textTertiary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       _Label('MEETING PURPOSE'),
                       const SizedBox(height: 10),
@@ -369,7 +573,11 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
                       const SizedBox(height: 24),
                       PrimaryButton(
                         label: isSubmitting ? 'Creating…' : 'Create Safe Meeting',
-                        onPressed: isSubmitting ? null : _submit,
+                        // Also blocked while _checkingActiveMeeting, for the
+                        // same reason the pickers are — closes the window
+                        // where a slot could be submitted before the active-
+                        // meeting check has had a chance to restrict it.
+                        onPressed: isSubmitting || _checkingActiveMeeting ? null : _submit,
                       ),
                     ],
                   ),
@@ -378,6 +586,45 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// Shown when the meeting history API (GET /v1/meetings) already has a
+// `scheduled` or `pending_approval` meeting for this user — explains why
+// the date/time pickers below won't accept a slot inside the 15-minute
+// buffer after that meeting's start.
+class _ActiveMeetingBanner extends StatelessWidget {
+  final String message;
+  const _ActiveMeetingBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withOpacity(0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline, color: AppColors.warning, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: GoogleFonts.inter(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -489,32 +736,172 @@ class _PartnerCard extends StatelessWidget {
 class _PickerField extends StatelessWidget {
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _PickerField({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onTap != null;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: AppColors.textTertiary, size: 17),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.textTertiary, size: 17),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Bottom-sheet grid of selectable times, in `_slotMinutes` increments across
+// [date]. A slot is disabled — rendered greyed out and untappable — only
+// when it's already in the past, or when it falls inside any one of
+// [activeMeetings]' own block windows (each [scheduledAt] inclusive,
+// [scheduledAt]+15min exclusive — exactly Block Until is the first
+// bookable slot). Each meeting is its own narrow exclusion, not a floor:
+// slots earlier or later the same day, clear of every window, stay
+// selectable — even between two back-to-back meetings.
+class _TimeSlotSheet extends StatelessWidget {
+  final DateTime date;
+  final TimeOfDay selectedTime;
+  final List<MeetingEntity> activeMeetings;
+  const _TimeSlotSheet({
+    required this.date,
+    required this.selectedTime,
+    this.activeMeetings = const [],
+  });
+
+  static const _crossAxisCount = 4;
+  static const _rowExtent = 54.0; // mainAxisExtent (44) + mainAxisSpacing (10)
+
+  bool _isDisabled(TimeOfDay t) {
+    final combined = DateTime(date.year, date.month, date.day, t.hour, t.minute);
+    if (combined.isBefore(DateTime.now())) return true;
+    for (final m in activeMeetings) {
+      final start = m.scheduledAt;
+      final end = start.add(const Duration(minutes: 15));
+      if (!combined.isBefore(start) && combined.isBefore(end)) return true;
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = List.generate(
+      (24 * 60) ~/ _slotMinutes,
+      (i) => TimeOfDay(hour: (i * _slotMinutes) ~/ 60, minute: (i * _slotMinutes) % 60),
+    );
+
+    // Scroll so the currently-selected slot (or, failing that, the first
+    // enabled one) starts a couple of rows down from the top instead of
+    // requiring the user to scroll from midnight every time.
+    var initialIndex = slots.indexWhere(
+      (t) => !_isDisabled(t) && t.hour == selectedTime.hour && t.minute == selectedTime.minute,
+    );
+    if (initialIndex == -1) initialIndex = slots.indexWhere((t) => !_isDisabled(t));
+    final rowIndex = initialIndex < 0 ? 0 : initialIndex ~/ _crossAxisCount;
+    final scrollController = ScrollController(
+      initialScrollOffset: (rowIndex * _rowExtent - _rowExtent * 2).clamp(0, double.infinity),
+    );
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.55,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Select Time',
+                style: GoogleFonts.inter(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: GridView.builder(
+                  controller: scrollController,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: _crossAxisCount,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    mainAxisExtent: 44,
+                  ),
+                  itemCount: slots.length,
+                  itemBuilder: (context, i) {
+                    final slot = slots[i];
+                    final disabled = _isDisabled(slot);
+                    final isSelected = !disabled &&
+                        slot.hour == selectedTime.hour &&
+                        slot.minute == selectedTime.minute;
+                    return GestureDetector(
+                      onTap: disabled ? null : () => Navigator.of(context).pop(slot),
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primary
+                              : disabled
+                                  ? AppColors.lightBg
+                                  : Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primary : AppColors.border,
+                          ),
+                        ),
+                        child: Text(
+                          slot.format(context),
+                          style: GoogleFonts.inter(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? Colors.white
+                                : disabled
+                                    ? AppColors.textTertiary.withOpacity(0.5)
+                                    : AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

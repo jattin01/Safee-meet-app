@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/routes/app_routes.dart';
 import '../bloc/sos_bloc.dart';
 
 class SosPage extends StatefulWidget {
@@ -36,7 +37,13 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return BlocConsumer<SosBloc, SosState>(
       listener: (context, state) {
-        if (state is SosDone) context.pop();
+        // SosPage can be pushed from several places (the persistent shell
+        // SOS button, Home, or an active meeting's Live Location screen) —
+        // context.pop() used to just return to whichever of those launched
+        // it, so triggering SOS during a meeting landed back on Live
+        // Location. Go to Home explicitly instead, regardless of entry
+        // point.
+        if (state is SosDone) context.go(AppRoutes.home);
         if (state is SosError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(state.message)),
@@ -76,7 +83,17 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar();
+  // Idle (SOS not yet triggered): defaults to a plain pop, back to
+  // whichever screen launched this one — nothing was created, so there's
+  // nothing to redirect around.
+  // Activated (SOS already triggered successfully): the SosDone listener
+  // in SosPage already sends "Cancel SOS" to Home instead of back to
+  // whatever launched this screen (e.g. Live Location) — but the back
+  // arrow is a second, separate exit that bypassed that entirely via a
+  // bare context.pop(). _ActivatedView passes an explicit onBack here so
+  // both exits land in the same place once an SOS has actually gone out.
+  final VoidCallback? onBack;
+  const _TopBar({this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +102,7 @@ class _TopBar extends StatelessWidget {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => context.pop(),
+            onTap: onBack ?? () => context.pop(),
             child: Container(
               width: 40,
               height: 40,
@@ -324,7 +341,7 @@ class _ActivatedView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const _TopBar(),
+        _TopBar(onBack: () => context.go(AppRoutes.home)),
         const SizedBox(height: 40),
         Container(
           width: 130,

@@ -85,7 +85,7 @@ dependencies:
   qr_flutter: ^4.1.0
 
   # QR Code Scanning
-  mobile_scanner: ^6.0.6
+  mobile_scanner: ^7.4.0
 
   # Sharing (PIN + QR code)
   share_plus: ^10.1.4
@@ -99,6 +99,7 @@ dependencies:
   # Identity Verification (National ID + facial liveness) — 'core' variant:
   # no NFC passport reading, ID card/passport scan + selfie liveness only.
   didit_sdk: ^4.5.3
+  country_code_picker: ^3.4.1
 
 dev_dependencies:
   flutter_test:
@@ -119,6 +120,13 @@ flutter_launcher_icons:
     generate: false
   windows:
     generate: false
+
+# Vendored so ios/didit_sdk/Package.swift can be removed — see
+# third_party/didit_sdk/VENDORED.md for why (Swift Package Manager /
+# CocoaPods duplicate-framework conflict with the Podfile's DiditSDK pin).
+dependency_overrides:
+  didit_sdk:
+    path: third_party/didit_sdk
 
 flutter:
   uses-material-design: true

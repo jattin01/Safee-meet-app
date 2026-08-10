@@ -8,7 +8,7 @@ class MemberEntity extends Equatable {
   final int trustScore;
   final String verificationLevel;
   final String subscriptionPlan;
-  final double rating;
+  final int safetyScore;
   final int totalMeetings;
   final List<String> badges;
 
@@ -20,7 +20,7 @@ class MemberEntity extends Equatable {
     required this.trustScore,
     required this.verificationLevel,
     required this.subscriptionPlan,
-    required this.rating,
+    required this.safetyScore,
     required this.totalMeetings,
     required this.badges,
   });
@@ -35,5 +35,5 @@ class MemberEntity extends Equatable {
 
   @override
   List<Object?> get props => [id, name, safeePIN, avatarUrl, trustScore,
-        verificationLevel, subscriptionPlan, rating, totalMeetings, badges];
+        verificationLevel, subscriptionPlan, safetyScore, totalMeetings, badges];
 }

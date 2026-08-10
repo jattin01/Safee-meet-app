@@ -170,12 +170,15 @@ class _DarkHeader extends StatelessWidget {
     return 'Good evening';
   }
 
-  String get _verificationLabel => switch (profile.verificationLevel) {
-        'high' => 'Level 3 Verified',
-        'medium' => 'Level 2 Verified',
-        'low' => 'Level 1 Verified',
-        _ => 'Verification Pending',
-      };
+  String get _verificationLabel {
+    if (profile.verificationStatus == 'not_submitted') return 'Unverified';
+    return switch (profile.verificationLevel) {
+      'high' => 'Level 3 Verified',
+      'medium' => 'Level 2 Verified',
+      'low' => 'Level 1 Verified',
+      _ => 'Verification Pending',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -379,7 +382,7 @@ class _DarkHeader extends StatelessWidget {
                         child: _StatTile(
                           icon: Icons.star,
                           iconColor: const Color(0xFFFBBF24),
-                          value: '${profile.rating.toStringAsFixed(1)}★',
+                          value: '${profile.safetyScore}',
                           label: 'Safety',
                         ),
                       ),

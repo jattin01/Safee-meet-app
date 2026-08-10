@@ -203,6 +203,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
 
                       _RecentSearchesSection(
                         members: state.recentSearches,
+                        isLoading: state.isLoadingRecentSearches,
                         selectedMemberId:
                             state is MemberSearchFound ? state.member.id : null,
                         onSelect: _selectRecent,
@@ -544,17 +545,26 @@ class _HintCard extends StatelessWidget {
 
 class _RecentSearchesSection extends StatelessWidget {
   final List<MemberEntity> members;
+  // While true, the fetch behind [members] hasn't resolved yet — show a
+  // spinner in its place instead of silently rendering nothing (which
+  // looked identical to "no recent searches" and made the screen feel
+  // unresponsive on first open).
+  final bool isLoading;
   final String? selectedMemberId;
   final ValueChanged<MemberEntity> onSelect;
   const _RecentSearchesSection({
     required this.members,
+    this.isLoading = false,
     this.selectedMemberId,
     required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (members.isEmpty) return const SizedBox.shrink();
+    // Once resolved, an empty list still means nothing to show — same as
+    // before. Only collapse to nothing when we're sure there's neither a
+    // fetch in flight nor any data.
+    if (!isLoading && members.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -569,26 +579,46 @@ class _RecentSearchesSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < members.length; i++) ...[
-                _RecentMemberTile(
-                  member: members[i],
-                  isSelected: members[i].id == selectedMemberId,
-                  onTap: () => onSelect(members[i]),
+        if (isLoading)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 22),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: AppColors.primary,
                 ),
-                if (i != members.length - 1)
-                  Divider(height: 1, color: AppColors.border),
+              ),
+            ),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < members.length; i++) ...[
+                  _RecentMemberTile(
+                    member: members[i],
+                    isSelected: members[i].id == selectedMemberId,
+                    onTap: () => onSelect(members[i]),
+                  ),
+                  if (i != members.length - 1)
+                    Divider(height: 1, color: AppColors.border),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -940,8 +970,8 @@ class _MemberResultCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _StatTile(
-                      value: '${member.rating.toStringAsFixed(1)}★',
-                      label: 'Safety Rating',
+                      value: '${member.safetyScore}',
+                      label: 'Safety Score',
                       color: AppColors.success,
                     ),
                   ),

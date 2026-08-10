@@ -17,7 +17,7 @@ final _profile = ProfileEntity(
   trustScore: 85,
   verificationLevel: 'level1',
   subscriptionPlan: 'premium',
-  rating: 4.6,
+  safetyScore: 92,
   totalMeetings: 22,
   totalReviews: 8,
   badges: const ['verified'],

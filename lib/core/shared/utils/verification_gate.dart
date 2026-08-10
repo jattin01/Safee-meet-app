@@ -12,33 +12,43 @@ import '../widgets/app_snackbar.dart';
 /// chat, PIN sharing, reviews). Returns `true` and does nothing if the
 /// signed-in user is verified, so the caller can proceed as normal.
 ///
-/// If unverified, shows the standard "Verification Required" snackbar,
-/// pushes the Verification screen, and returns `false` so the caller can
-/// bail out of whatever action triggered the check.
+/// If unverified, shows the standard "Verification Required" snackbar, then
+/// pushes the Upload Verification (start) screen only if nothing has ever
+/// been submitted (`verificationStatus == 'not_submitted'`) — every other
+/// status (unverified/pending/rejected/etc.) goes to the Verification
+/// Status screen instead. Returns `false` so the caller can bail out of
+/// whatever action triggered the check.
 ///
 /// This is the UX-friendly layer (visible feedback before navigating) that
 /// sits in front of AppRouter's own redirect guard, which silently blocks
 /// the same restricted routes as a backstop for entry points that don't go
 /// through a tap handler (deep links, notification taps, back navigation).
 bool requireVerification(BuildContext context) {
-  if (context.read<CurrentUserCubit>().isVerified) return true;
+  final cubit = context.read<CurrentUserCubit>();
+  if (cubit.isVerified) return true;
 
   AppSnackbar.info(
     context,
-    'Complete your verification to access this feature..',
+    'Complete your verification to access this feature.',
     title: 'Verification Required',
     duration: const Duration(seconds: 1),
   );
-  context.push(AppRoutes.verification);
+
+  final verificationStatus = cubit.state.profile?.verificationStatus;
+  context.push(
+    verificationStatus == 'not_submitted'
+        ? AppRoutes.verification
+        : AppRoutes.verificationStatus,
+  );
   return false;
 }
 
 /// Fetches the caller's live verification status and routes to the right
-/// screen: the Verification Status page only when it's actually `approved`;
-/// the Upload Verification flow for every other case — not submitted,
-/// pending, rejected, or the status lookup itself failing — so the user
-/// always lands somewhere they can (re)submit rather than on a status page
-/// with nothing to show.
+/// screen: the Upload Verification (start) flow only when nothing has ever
+/// been submitted; the Verification Status page for every other case —
+/// pending, rejected, approved, or the status lookup itself failing — so a
+/// resubmission (e.g. after rejection) goes through the status page's own
+/// "Verify Again" action rather than skipping straight back to upload.
 Future<void> openVerificationScreen(BuildContext context) async {
   showDialog<void>(
     context: context,
@@ -51,13 +61,15 @@ Future<void> openVerificationScreen(BuildContext context) async {
   if (!context.mounted) return;
   Navigator.of(context, rootNavigator: true).pop();
 
-  final isApproved = result.fold(
-    (_) => false,
-    (status) => status.kycStatus == 'approved',
+  // kycStatus is the backend's verificationStatus, normalized so the raw
+  // 'not_submitted' becomes 'not_started' — see VerificationRepositoryImpl._parseStatus.
+  final isNotSubmitted = result.fold(
+    (_) => true,
+    (status) => status.kycStatus == 'not_started',
   );
 
   if (!context.mounted) return;
   context.push(
-    isApproved ? AppRoutes.verificationStatus : AppRoutes.verification,
+    isNotSubmitted ? AppRoutes.verification : AppRoutes.verificationStatus,
   );
 }

@@ -16,7 +16,9 @@ import '../../domain/use_cases/google_login_use_case.dart';
 import '../../domain/use_cases/login_use_case.dart';
 import '../../domain/use_cases/logout_use_case.dart';
 import '../../domain/use_cases/register_user_use_case.dart';
+import '../../domain/use_cases/resend_otp_use_case.dart';
 import '../../domain/use_cases/send_otp_use_case.dart';
+import '../../domain/use_cases/send_register_otp_use_case.dart';
 import '../../domain/use_cases/verify_otp_use_case.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
@@ -33,6 +35,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final CheckUserExistsUseCase checkUserExists;
   final GetCurrentUserUseCase  getCurrentUser;
   final SendOtpUseCase         sendOtp;
+  final ResendOtpUseCase       resendOtp;
+  final SendRegisterOtpUseCase sendRegisterOtp;
   final VerifyOtpUseCase       verifyOtp;
 
   // Firebase is only here to get the ID token — not for business logic.
@@ -53,6 +57,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.checkUserExists,
     required this.getCurrentUser,
     required this.sendOtp,
+    required this.resendOtp,
+    required this.sendRegisterOtp,
     required this.verifyOtp,
     GoogleSignIn? googleSignIn,
     FirebaseAuth? firebaseAuth,
@@ -68,6 +74,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<LogoutRequested>(_onLogout);
     // Legacy handlers
     on<SendOtpRequested>(_onSendOtp);
+    on<ResendOtpRequested>(_onResendOtp);
+    on<SendRegisterOtpRequested>(_onSendRegisterOtp);
     on<OtpVerificationRequested>(_onVerifyOtp);
     on<SendEmailOtpRequested>(_onSendEmailOtp);
     on<EmailOtpVerificationRequested>(_onVerifyEmailOtp);
@@ -150,6 +158,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await login(LoginParams(
       provider:      event.provider,
       providerToken: event.providerToken,
+      phone:         event.phone,
     ));
     result.fold(
       (failure) => emit(_mapFailureToState(failure)),
@@ -176,16 +185,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return;
       }
 
-      // Step 2: Send to backend — backend validates and returns Sanctum token
-      final result = await googleLogin(idToken);
-      result.fold(
-        (failure) => emit(_mapFailureToState(failure)),
-        (response) => emit(LoginSuccess(
-          user:        response.user,
-          accessToken: response.accessToken,
-          isNewUser:   response.isNewUser,
-        )),
-      );
+      // Backend requires a verified phone on every /login call — hand off
+      // to the UI's phone-OTP flow instead of logging in directly.
+      emit(SocialTokenObtained(provider: 'google', providerToken: idToken));
     } catch (e) {
       emit(AuthFailureState(e.toString()));
     }
@@ -206,16 +208,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return;
       }
 
-      // Step 2: Send to backend — backend validates and returns Sanctum token
-      final result = await appleLogin(idToken);
-      result.fold(
-        (failure) => emit(_mapFailureToState(failure)),
-        (response) => emit(LoginSuccess(
-          user:        response.user,
-          accessToken: response.accessToken,
-          isNewUser:   response.isNewUser,
-        )),
-      );
+      // Backend requires a verified phone on every /login call — hand off
+      // to the UI's phone-OTP flow instead of logging in directly.
+      emit(SocialTokenObtained(provider: 'apple', providerToken: idToken));
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
         emit(const AuthInitial()); // user cancelled
@@ -309,6 +304,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _onSendOtp(SendOtpRequested event, Emitter<AuthState> emit) async {
     emit(const AuthLoading());
     final result = await sendOtp(event.phone);
+    result.fold(
+      (f) => emit(_mapFailureToState(f)),
+      (expiresIn) => emit(OtpSent(event.phone, expiresIn)),
+    );
+  }
+
+  Future<void> _onResendOtp(ResendOtpRequested event, Emitter<AuthState> emit) async {
+    emit(const AuthLoading());
+    final result = await resendOtp(event.phone);
+    result.fold(
+      (f) => emit(_mapFailureToState(f)),
+      (expiresIn) => emit(OtpResent(event.phone, expiresIn)),
+    );
+  }
+
+  Future<void> _onSendRegisterOtp(SendRegisterOtpRequested event, Emitter<AuthState> emit) async {
+    emit(const AuthLoading());
+    final result = await sendRegisterOtp(event.phone);
     result.fold(
       (f) => emit(_mapFailureToState(f)),
       (expiresIn) => emit(OtpSent(event.phone, expiresIn)),

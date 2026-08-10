@@ -23,15 +23,13 @@ class ReviewsPage extends StatelessWidget {
   }
 }
 
-// Chip label -> the ReviewsFilter it triggers. Kept exactly as originally
-// designed (All / 5★ / 4★ / Marketplace / Dating) — only the data behind
-// each chip changed, not the chip set itself.
+// Chip label -> the ReviewsFilter it triggers. The Marketplace/Dating
+// category chips were removed — that filtering is no longer offered on
+// this screen — leaving just the star-rating filters.
 const Map<String, ReviewsFilter> _kFilterOptions = {
   'All': ReviewsFilter.all,
   '5 ★': ReviewsFilter(stars: 5),
   '4 ★': ReviewsFilter(stars: 4),
-  'Marketplace': ReviewsFilter(category: 'marketplace'),
-  'Dating': ReviewsFilter(category: 'dating'),
 };
 
 class _ReviewsView extends StatefulWidget {

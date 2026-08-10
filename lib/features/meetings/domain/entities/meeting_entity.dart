@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-enum MeetingStatus { scheduled, enRoute, arrived, completed, cancelled, pendingApproval, declined }
+enum MeetingStatus { scheduled, enRoute, arrived, completed, cancelled, pendingApproval, declined, incidentReported }
 enum MeetingPurpose {
   coffee,
   marketplace,

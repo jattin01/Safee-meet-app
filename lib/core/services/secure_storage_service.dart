@@ -8,7 +8,7 @@ import 'package:injectable/injectable.dart';
 class SecureStorageService {
   final FlutterSecureStorage _storage;
 
-  const SecureStorageService(this._storage);
+  SecureStorageService(this._storage);
 
   // Keys must match TokenStorageService constants
   static const _kAccessToken  = 'sm_access_token';
@@ -16,6 +16,17 @@ class SecureStorageService {
   static const _kUserId       = 'sm_user_id';
   static const _kUserPhone    = 'sm_user_phone';
   static const _kAuthStatus   = 'sm_auth_status';
+
+  // Deliberately NOT cached in memory. This class and TokenStorageService
+  // are two separate Dart objects that happen to read/write the same
+  // FlutterSecureStorage keys (see the class doc above) — the actual
+  // login/session-save path writes through AuthSessionManager ->
+  // TokenStorageService, not through this class. An in-memory cache here
+  // was tried once and reverted: it got poisoned with a stale "logged
+  // out" value read before login (e.g. by the router's auth guard on
+  // app start) and then never saw TokenStorageService's writes, so
+  // isAuthenticated() kept reporting false — and the post-login redirect
+  // to Home — right after a fully successful login. Always read through.
 
   // ── Token Management ─────────────────────────────────────────────────────
 
@@ -59,7 +70,7 @@ class SecureStorageService {
 
   /// True only if a Sanctum access token AND auth status are both stored.
   Future<bool> isAuthenticated() async {
-    final token  = await _storage.read(key: _kAccessToken);
+    final token  = await getAccessToken();
     final status = await _storage.read(key: _kAuthStatus);
     return token != null && token.isNotEmpty && status == 'authenticated';
   }

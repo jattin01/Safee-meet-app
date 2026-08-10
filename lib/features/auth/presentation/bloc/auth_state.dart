@@ -86,6 +86,21 @@ class AuthFailureState extends AuthState {
   List<Object?> get props => [message, code];
 }
 
+/// Google/Apple sign-in completed and a Firebase ID token was obtained, but
+/// the backend requires a verified phone on every /login call — the UI now
+/// collects a phone number and runs it through send-otp/verify-otp before
+/// dispatching the actual LoginRequested with this [providerToken].
+class SocialTokenObtained extends AuthState {
+  final String provider;
+  final String providerToken;
+  const SocialTokenObtained({
+    required this.provider,
+    required this.providerToken,
+  });
+  @override
+  List<Object?> get props => [provider, providerToken];
+}
+
 /// Phone OTP verified against the backend — carries the Firebase ID token
 /// (obtained via signInWithCustomToken) that the UI then sends straight to
 /// LoginRequested/RegisterRequested, exactly like the Google/Apple flows do.
@@ -102,6 +117,16 @@ class OtpSent extends AuthState {
   final String phone;
   final int? expiresIn;
   const OtpSent(this.phone, [this.expiresIn]);
+  @override
+  List<Object?> get props => [phone, expiresIn];
+}
+
+/// OTP resent via the dedicated resend endpoint — the UI stays on the OTP
+/// verification screen when this is emitted (unlike navigating in on [OtpSent]).
+class OtpResent extends AuthState {
+  final String phone;
+  final int? expiresIn;
+  const OtpResent(this.phone, [this.expiresIn]);
   @override
   List<Object?> get props => [phone, expiresIn];
 }

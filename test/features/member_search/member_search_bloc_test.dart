@@ -17,7 +17,7 @@ final _member = MemberEntity(
   trustScore: 92,
   verificationLevel: 'level2',
   subscriptionPlan: 'premium',
-  rating: 4.9,
+  safetyScore: 98,
   totalMeetings: 45,
   badges: const ['verified', 'premium'],
 );
@@ -91,6 +91,7 @@ void main() {
       },
       act: (bloc) => bloc.add(const RecentSearchesRequested()),
       expect: () => [
+        const MemberSearchInitial(isLoadingRecentSearches: true),
         MemberSearchInitial(recentSearches: [_member]),
       ],
     );

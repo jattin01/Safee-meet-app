@@ -12,15 +12,17 @@ class LoginUseCase {
       _repository.login(
         provider: params.provider,
         providerToken: params.providerToken,
+        phone: params.phone,
       );
 }
 
 class LoginParams extends Equatable {
   final String provider;
   final String providerToken;
+  final String? phone;
 
-  const LoginParams({required this.provider, required this.providerToken});
+  const LoginParams({required this.provider, required this.providerToken, this.phone});
 
   @override
-  List<Object> get props => [provider, providerToken];
+  List<Object?> get props => [provider, providerToken, phone];
 }
