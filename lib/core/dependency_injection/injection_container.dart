@@ -232,7 +232,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<MemberSearchRepository>(
     () => MemberSearchRepositoryImpl(sl()),
   );
-  sl.registerFactory(() => MemberSearchBloc(sl()));
+  sl.registerFactory(() => MemberSearchBloc(sl(), sl(), sl()));
 
   // ── Settings — Emergency Contacts ────────────────────────────────────────
   sl.registerLazySingleton<EmergencyContactRemoteDataSource>(

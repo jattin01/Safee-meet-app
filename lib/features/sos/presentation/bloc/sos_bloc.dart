@@ -86,9 +86,19 @@ class SosInitial extends SosState {
   final List<SosContactEntity> contacts;
   final double? lat;
   final double? lng;
-  const SosInitial({required this.contacts, this.lat, this.lng});
+  // False only for the bloc's very first (pre-fetch) state — lets the UI
+  // tell "still loading the contacts list" apart from "loaded, and it's
+  // genuinely empty" (both would otherwise look identical: an empty
+  // `contacts` list) before showing a "no emergency contact" message.
+  final bool contactsLoaded;
+  const SosInitial({
+    required this.contacts,
+    this.lat,
+    this.lng,
+    this.contactsLoaded = false,
+  });
   @override
-  List<Object?> get props => [contacts, lat, lng];
+  List<Object?> get props => [contacts, lat, lng, contactsLoaded];
 }
 
 class SosHolding extends SosState {
@@ -144,6 +154,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   // timer), so reading `state is SosInitial` there always misses; keep our
   // own reference instead.
   List<SosContactEntity> _contacts = [];
+  bool _contactsLoaded = false;
 
   SosBloc(this._api, this._storage) : super(const SosInitial(contacts: [])) {
     on<SosLoadRequested>(_onLoad);
@@ -168,10 +179,17 @@ class SosBloc extends Bloc<SosEvent, SosState> {
               ))
           .toList();
       _contacts = contacts;
-      emit(SosInitial(contacts: contacts));
+      _contactsLoaded = true;
+      emit(SosInitial(contacts: contacts, contactsLoaded: true));
     } catch (_) {
+      // A failed fetch can't confirm the user actually has zero contacts,
+      // but there's no way to tell that apart from a genuinely-empty list
+      // here either — treat it the same as "none on file" (matching the
+      // subtitle text below, which already did this) rather than leaving
+      // the caller unable to distinguish "still loading" from "checked".
       _contacts = [];
-      emit(const SosInitial(contacts: []));
+      _contactsLoaded = true;
+      emit(const SosInitial(contacts: [], contactsLoaded: true));
     }
   }
 
@@ -233,7 +251,10 @@ class SosBloc extends Bloc<SosEvent, SosState> {
 
   void _onHoldReleased(SosHoldReleased _, Emitter<SosState> emit) {
     _holdTimer?.cancel();
-    emit(const SosInitial(contacts: []));
+    // Was hardcoded to an empty list, discarding the already-loaded
+    // _contacts — every hold-then-release cycle would incorrectly report
+    // "no contacts" back to the idle screen even for a user who has some.
+    emit(SosInitial(contacts: _contacts, contactsLoaded: _contactsLoaded));
   }
 
   Future<void> _onActivated(SosActivated event, Emitter<SosState> emit) async {

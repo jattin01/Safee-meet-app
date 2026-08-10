@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../bloc/sos_bloc.dart';
 
 class SosPage extends StatefulWidget {
@@ -18,12 +19,28 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
 
+  // Persisted here rather than re-derived from `state` on every build:
+  // SosHolding/SosActivatedState/SosDone carry no contacts info of their
+  // own, so a naive switch would read as "0 contacts" while holding the
+  // button or once activated — flashing the "No trusted contacts" subtitle
+  // on and off for users who actually have contacts. Only
+  // SosInitial/SosError ever update this; every other state leaves it as
+  // whatever was last known.
+  int _contactCount = 0;
+
+  // Shows the "No Emergency Contact Added" sheet at most once per visit to
+  // this page — otherwise every SosInitial re-emission with zero contacts
+  // (e.g. releasing an early hold) would pop it open again.
+  bool _contactSheetShown = false;
+
   @override
   void initState() {
     super.initState();
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+    _pulseCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
       ..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 1.0, end: 1.1).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    _pulseAnim = Tween<double>(begin: 1.0, end: 1.1)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
     context.read<SosBloc>().add(const SosLoadRequested());
   }
 
@@ -31,6 +48,20 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
   void dispose() {
     _pulseCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _showNoContactSheet(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _NoEmergencyContactSheet(
+        onAddContact: () {
+          Navigator.of(context).pop();
+          context.push(AppRoutes.emergencyContacts);
+        },
+      ),
+    );
   }
 
   @override
@@ -49,11 +80,30 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
             SnackBar(content: Text(state.message)),
           );
         }
+        // Fires once, the first time we can actually confirm the account
+        // has zero emergency contacts — not on the bloc's un-fetched
+        // super-initial state, and not again on a later SosInitial (e.g.
+        // releasing an early hold) once the sheet's already been shown.
+        final justConfirmedEmpty = state is SosInitial &&
+            state.contactsLoaded &&
+            state.contacts.isEmpty;
+        if (justConfirmedEmpty && !_contactSheetShown) {
+          _contactSheetShown = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showNoContactSheet(context);
+          });
+        }
       },
       builder: (context, state) {
+        if (state is SosInitial) {
+          _contactCount = state.contacts.length;
+        } else if (state is SosError) {
+          _contactCount = state.contacts.length;
+        }
         final activated = state is SosActivatedState;
         return Scaffold(
-          backgroundColor: activated ? const Color(0xFF1A0508) : AppColors.darkBg,
+          backgroundColor:
+              activated ? const Color(0xFF1A0508) : AppColors.darkBg,
           body: SafeArea(
             child: activated
                 ? _ActivatedView(
@@ -63,11 +113,7 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
                   )
                 : _IdleView(
                     progress: state is SosHolding ? state.progress : 0.0,
-                    contactCount: switch (state) {
-                      SosInitial(:final contacts) => contacts.length,
-                      SosError(:final contacts) => contacts.length,
-                      _ => 0,
-                    },
+                    contactCount: _contactCount,
                     pulseAnim: _pulseAnim,
                     onHoldStart: () => context
                         .read<SosBloc>()
@@ -106,15 +152,21 @@ class _TopBar extends StatelessWidget {
             child: Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), shape: BoxShape.circle),
-              child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.08),
+                  shape: BoxShape.circle),
+              child:
+                  const Icon(Icons.arrow_back, color: Colors.white, size: 20),
             ),
           ),
           Expanded(
             child: Text(
               'Emergency SOS',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+              style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800),
             ),
           ),
           const SizedBox(width: 40),
@@ -144,7 +196,10 @@ class _SosBadge extends StatelessWidget {
       child: Center(
         child: Text(
           'SOS',
-          style: GoogleFonts.inter(color: Colors.white, fontSize: size * 0.28, fontWeight: FontWeight.w800),
+          style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: size * 0.28,
+              fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -168,115 +223,373 @@ class _IdleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const _TopBar(),
-        const SizedBox(height: 60),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Text(
-            'Hold the button below to activate emergency alert',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          const _TopBar(),
+          const SizedBox(height: 60),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'Hold the button below to activate emergency alert',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+            ),
           ),
-        ),
-        const SizedBox(height: 56),
-        Center(
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Glow ring
-              Container(
-                width: 230,
-                height: 230,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary, width: 3),
-                  boxShadow: [
-                    BoxShadow(color: AppColors.primary.withOpacity(0.6), blurRadius: 40, spreadRadius: 4),
-                  ],
-                ),
-              ),
-              ScaleTransition(
-                scale: progress > 0 ? const AlwaysStoppedAnimation(1.0) : pulseAnim,
-                child: GestureDetector(
-                  onLongPressStart: (_) => onHoldStart(),
-                  onLongPressEnd: (_) => onHoldEnd(),
-                  child: Container(
-                    width: 190,
-                    height: 190,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [AppColors.primaryLight, AppColors.primary],
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const _SosBadge(),
-                        const SizedBox(height: 10),
-                        Text(
-                          'SOS',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 3,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'HOLD',
-                          style: GoogleFonts.inter(color: Colors.white70, fontSize: 12, letterSpacing: 2),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (progress > 0)
-                SizedBox(
+          const SizedBox(height: 56),
+          Center(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Glow ring
+                Container(
                   width: 230,
                   height: 230,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 4,
-                    backgroundColor: Colors.transparent,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primary, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                          color: AppColors.primary.withOpacity(0.6),
+                          blurRadius: 40,
+                          spreadRadius: 4),
+                    ],
                   ),
                 ),
-            ],
+                ScaleTransition(
+                  scale: progress > 0
+                      ? const AlwaysStoppedAnimation(1.0)
+                      : pulseAnim,
+                  child: GestureDetector(
+                    onLongPressStart: (_) => onHoldStart(),
+                    onLongPressEnd: (_) => onHoldEnd(),
+                    child: Container(
+                      width: 190,
+                      height: 190,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [AppColors.primaryLight, AppColors.primary],
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const _SosBadge(),
+                          const SizedBox(height: 10),
+                          Text(
+                            'SOS',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'HOLD',
+                            style: GoogleFonts.inter(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                letterSpacing: 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (progress > 0)
+                  SizedBox(
+                    width: 230,
+                    height: 230,
+                    child: CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 4,
+                      backgroundColor: Colors.transparent,
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+              ],
+            ),
           ),
+          const SizedBox(height: 48),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                const _InfoRow(
+                  icon: Icons.location_on,
+                  title: 'GPS Location Shared',
+                  subtitle: 'Real-time location sent to contacts',
+                ),
+                const SizedBox(height: 12),
+                _InfoRow(
+                  icon: Icons.phone_in_talk,
+                  title: 'Emergency Contacts Alerted',
+                  subtitle: contactCount > 0
+                      ? '$contactCount trusted contact${contactCount == 1 ? '' : 's'} will be notified instantly'
+                      : 'No trusted contacts on file yet',
+                ),
+                const SizedBox(height: 12),
+                const _InfoRow(
+                  icon: Icons.check_circle_outline,
+                  title: 'Incident Report Created',
+                  subtitle: 'Timestamped record automatically saved',
+                ),
+              ],
+            ),
+          ),
+          // A bare 24 was previously used here — on Android devices where
+          // the 3-button/gesture nav bar's inset isn't (fully) reported
+          // through SafeArea, that left the bottom of the info-row list
+          // sitting right under/behind the nav bar. bottomSafePadding adds
+          // the device's own bottom inset on top of the same visual
+          // breathing room, matching every other scrollable screen in
+          // this app.
+          SizedBox(height: context.bottomSafePadding(24)),
+        ],
+      ),
+    );
+  }
+}
+
+// Bottom sheet shown once per SOS-page visit when the account has zero
+// emergency contacts on file — nudges the user to add one without
+// blocking the SOS button itself (holding it still works with no
+// contacts; the backend/UI elsewhere is whatever already restricts that,
+// if anything does). Matches the Figma bottom-sheet reference: dark card,
+// drag handle + close button, centered warning badge, title/subtitle,
+// three feature rows, a gradient CTA, and a "Remind me later" dismiss.
+class _NoEmergencyContactSheet extends StatelessWidget {
+  final VoidCallback onAddContact;
+  const _NoEmergencyContactSheet({required this.onAddContact});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        // Caps how tall the sheet can grow on a short/landscape viewport —
+        // the scroll view inside then takes over instead of overflowing.
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.92,
         ),
-        const SizedBox(height: 48),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.darkBg2,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              const _InfoRow(
-                icon: Icons.location_on,
-                title: 'GPS Location Shared',
-                subtitle: 'Real-time location sent to contacts',
+              SingleChildScrollView(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                      24, 14, 24, context.bottomSafePadding(24)),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.24),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Center(child: _AlertBadge()),
+                      const SizedBox(height: 20),
+                      Text(
+                        'No Emergency Contact Added',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Add a trusted contact so someone is notified '
+                        'immediately when you activate SOS.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const _SheetFeatureRow(
+                        icon: Icons.notifications,
+                        label: 'Instant alert sent to your contact',
+                      ),
+                      const SizedBox(height: 12),
+                      const _SheetFeatureRow(
+                        icon: Icons.location_on,
+                        label: 'Your GPS location shared in real-time',
+                      ),
+                      const SizedBox(height: 12),
+                      const _SheetFeatureRow(
+                        icon: Icons.access_time,
+                        label: 'Timestamped incident report created',
+                      ),
+                      const SizedBox(height: 24),
+                      GestureDetector(
+                        onTap: onAddContact,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.4),
+                                blurRadius: 24,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.person_add_alt_1,
+                                  color: Colors.white, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Add Emergency Contact',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Center(
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: Text(
+                            'Remind me later',
+                            style: GoogleFonts.inter(
+                              color: AppColors.textTertiary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 12),
-              _InfoRow(
-                icon: Icons.phone_in_talk,
-                title: 'Emergency Contacts Alerted',
-                subtitle: contactCount > 0
-                    ? '$contactCount trusted contact${contactCount == 1 ? '' : 's'} will be notified instantly'
-                    : 'No trusted contacts on file yet',
-              ),
-              const SizedBox(height: 12),
-              const _InfoRow(
-                icon: Icons.check_circle_outline,
-                title: 'Incident Report Created',
-                subtitle: 'Timestamped record automatically saved',
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close,
+                        color: Colors.white70, size: 18),
+                  ),
+                ),
               ),
             ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+// Centered warning badge at the top of the sheet: a soft amber halo
+// behind a dark squircle with an amber shield-alert icon and border.
+class _AlertBadge extends StatelessWidget {
+  const _AlertBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      height: 88,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.warning.withOpacity(0.08),
+      ),
+      child: Container(
+        width: 64,
+        height: 64,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.darkBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.warning, width: 1.5),
+        ),
+        child: const Icon(Icons.gpp_maybe_rounded,
+            color: AppColors.warning, size: 30),
+      ),
+    );
+  }
+}
+
+// One "what happens if you add a contact" row inside the sheet — a small
+// squircle icon tile (tinted with the brand red, matching the CTA below)
+// plus a single line of label text.
+class _SheetFeatureRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _SheetFeatureRow({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.16),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: AppColors.primaryLight, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -286,7 +599,8 @@ class _InfoRow extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _InfoRow({required this.icon, required this.title, required this.subtitle});
+  const _InfoRow(
+      {required this.icon, required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -301,7 +615,9 @@ class _InfoRow extends StatelessWidget {
           Container(
             width: 38,
             height: 38,
-            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.18), shape: BoxShape.circle),
+            decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.18),
+                shape: BoxShape.circle),
             child: Icon(icon, color: AppColors.primaryLight, size: 18),
           ),
           const SizedBox(width: 14),
@@ -310,9 +626,14 @@ class _InfoRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                    style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                Text(subtitle,
+                    style:
+                        TextStyle(color: AppColors.textTertiary, fontSize: 12)),
               ],
             ),
           ),
@@ -348,9 +669,13 @@ class _ActivatedView extends StatelessWidget {
           height: 130,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: RadialGradient(colors: [AppColors.primaryLight, AppColors.primary]),
+            gradient: RadialGradient(
+                colors: [AppColors.primaryLight, AppColors.primary]),
             boxShadow: [
-              BoxShadow(color: AppColors.primary.withOpacity(0.6), blurRadius: 50, spreadRadius: 6),
+              BoxShadow(
+                  color: AppColors.primary.withOpacity(0.6),
+                  blurRadius: 50,
+                  spreadRadius: 6),
             ],
           ),
           child: const Center(child: _SosBadge(size: 44)),
@@ -358,7 +683,11 @@ class _ActivatedView extends StatelessWidget {
         const SizedBox(height: 24),
         Text(
           'SOS ACTIVATED',
-          style: GoogleFonts.inter(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+          style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5),
         ),
         const SizedBox(height: 6),
         Text(
@@ -379,7 +708,10 @@ class _ActivatedView extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 'Emergency services contacted',
-                style: GoogleFonts.inter(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w700),
+                style: GoogleFonts.inter(
+                    color: AppColors.success,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -392,7 +724,8 @@ class _ActivatedView extends StatelessWidget {
               children: [
                 if (state.contacts.isEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
                     margin: const EdgeInsets.only(bottom: 10),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.05),
@@ -400,29 +733,39 @@ class _ActivatedView extends StatelessWidget {
                     ),
                     child: Text(
                       'No trusted contacts on file yet.',
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                   )
                 else
                   ...state.contacts.map((c) => _ContactRow(contact: c)),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, color: Colors.white70, size: 18),
+                      const Icon(Icons.location_on_outlined,
+                          color: Colors.white70, size: 18),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _locationLabel,
-                          style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600),
                         ),
                       ),
-                      Text('Sharing', style: GoogleFonts.inter(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w700)),
+                      Text('Sharing',
+                          style: GoogleFonts.inter(
+                              color: AppColors.success,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
@@ -431,7 +774,13 @@ class _ActivatedView extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.only(bottom: 24, top: 8),
+          // Was a bare 24 — this button sits directly above the Android
+          // nav bar with nothing scrollable below it, so on devices where
+          // that inset isn't fully covered by SafeArea alone it ended up
+          // partly hidden/overlapped. bottomSafePadding adds the device's
+          // own inset on top of the same visual gap.
+          padding:
+              EdgeInsets.only(bottom: context.bottomSafePadding(24), top: 8),
           child: GestureDetector(
             onTap: onCancel,
             child: Container(
@@ -445,7 +794,11 @@ class _ActivatedView extends StatelessWidget {
                 children: [
                   const Icon(Icons.close, color: Colors.white, size: 16),
                   const SizedBox(width: 8),
-                  Text('Cancel SOS', style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                  Text('Cancel SOS',
+                      style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
@@ -472,7 +825,9 @@ class _ContactRow extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            contact.notified ? Icons.check_circle : Icons.radio_button_unchecked,
+            contact.notified
+                ? Icons.check_circle
+                : Icons.radio_button_unchecked,
             color: contact.notified ? AppColors.success : Colors.white54,
             size: 18,
           ),
@@ -483,18 +838,25 @@ class _ContactRow extends StatelessWidget {
               children: [
                 Text(
                   contact.name,
-                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
-                Text(contact.phone, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                Text(contact.phone,
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
           ),
           Row(
             children: [
-              Text(contact.notified ? 'Notified' : 'Pending', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              Text(contact.notified ? 'Notified' : 'Pending',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13)),
               const SizedBox(width: 4),
-              Icon(contact.notified ? Icons.check : Icons.schedule, color: Colors.white70, size: 14),
+              Icon(contact.notified ? Icons.check : Icons.schedule,
+                  color: Colors.white70, size: 14),
             ],
           ),
         ],

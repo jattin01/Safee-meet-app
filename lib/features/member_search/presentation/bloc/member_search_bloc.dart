@@ -1,7 +1,9 @@
 import 'package:dartz/dartz.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/services/secure_storage_service.dart';
 import '../../../../core/shared/failures/failures.dart';
+import '../../../messaging/domain/use_cases/create_or_get_room_use_case.dart';
 import '../../domain/entities/member_entity.dart';
 import '../../domain/repositories/member_search_repository.dart';
 
@@ -111,10 +113,16 @@ class MemberSearchError extends MemberSearchState {
 // ── BLoC ───────────────────────────────────────────────────────────────────
 class MemberSearchBloc extends Bloc<MemberSearchEvent, MemberSearchState> {
   final MemberSearchRepository _repository;
+  // Both already used by MessagingBloc for the identical purpose (ensuring
+  // a chat room exists, and reading the current user's id/name) — reused
+  // here rather than introducing a new service.
+  final CreateOrGetRoomUseCase _createOrGetRoom;
+  final SecureStorageService _session;
   List<MemberEntity> _recent = [];
   bool _recentsLoading = false;
 
-  MemberSearchBloc(this._repository) : super(const MemberSearchInitial()) {
+  MemberSearchBloc(this._repository, this._createOrGetRoom, this._session)
+      : super(const MemberSearchInitial()) {
     on<PINSearchRequested>(_onPIN);
     on<QRSearchRequested>(_onQR);
     on<MemberSearchReset>((event, emit) => emit(MemberSearchInitial(
@@ -122,11 +130,41 @@ class MemberSearchBloc extends Bloc<MemberSearchEvent, MemberSearchState> {
           isLoadingRecentSearches: _recentsLoading,
         )));
     on<RecentSearchesRequested>(_onLoadRecents);
-    on<RecentMemberSelected>((event, emit) => emit(MemberSearchFound(
-          event.member,
-          recentSearches: _recent,
-          isLoadingRecentSearches: _recentsLoading,
-        )));
+    on<RecentMemberSelected>((event, emit) {
+      emit(MemberSearchFound(
+        event.member,
+        recentSearches: _recent,
+        isLoadingRecentSearches: _recentsLoading,
+      ));
+      _addMatchToChatList(event.member);
+    });
+  }
+
+  // Ensures a chat room already exists for (current user, matched member)
+  // the instant a search succeeds, so they show up in the Chat List
+  // without the user having to tap "Message" first. This mirrors exactly
+  // what ChatPage already does when opening a chat (OpenOrCreateChatRoom
+  // -> CreateOrGetRoomUseCase) — createOrGetRoom itself is already
+  // idempotent (it looks up the deterministic sorted-pair room id and only
+  // creates the doc if missing), so calling this repeatedly for the same
+  // pair — e.g. searching the same PIN twice — never creates a duplicate.
+  // Fire-and-forget: any failure here must never surface on the search
+  // screen or affect its own success/error state.
+  Future<void> _addMatchToChatList(MemberEntity member) async {
+    try {
+      final currentUserId = await _session.getUserId();
+      if (currentUserId == null || currentUserId == member.id) return;
+      final currentUserName = await _session.getUserName() ?? 'Me';
+      await _createOrGetRoom(
+        currentUserId: currentUserId,
+        partnerId: member.id,
+        currentUserName: currentUserName,
+        partnerName: member.name,
+        partnerAvatarUrl: member.avatarUrl,
+      );
+    } catch (_) {
+      // Swallowed on purpose — see the doc comment above.
+    }
   }
 
   Future<void> _onLoadRecents(
@@ -189,6 +227,8 @@ class MemberSearchBloc extends Bloc<MemberSearchEvent, MemberSearchState> {
           recentSearches: _recent,
           isLoadingRecentSearches: _recentsLoading,
         ));
+        // Not awaited — see _addMatchToChatList's doc comment.
+        _addMatchToChatList(m);
       },
     );
   }
