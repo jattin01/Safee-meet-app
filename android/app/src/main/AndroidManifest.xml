@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:label="SafeeMeet"
         android:name="${applicationName}"
@@ -33,7 +34,7 @@
             android:value="2" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyAlBdzunKDs7Ut68eeYAZvIs2eRw5I6Zeo" />
+            android:value="AIzaSyDlEZJ-EbfGPUvZX2Dsc-4X7Ej-iyGXMjQ" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -52,6 +53,10 @@
          succeed on Android. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- firebase_analytics pulls this in transitively; the app doesn't serve
+         ads or use the Advertising ID, so it's stripped from the merged
+         manifest to match the Play Console "No" Advertising ID declaration. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>

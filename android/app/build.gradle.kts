@@ -35,11 +35,18 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "/Users/mac/safee_meet_release.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "Parklite@123"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "safee_meet"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "Parklite@123"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
