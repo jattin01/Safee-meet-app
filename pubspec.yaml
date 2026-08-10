@@ -1,7 +1,7 @@
 name: safee_meet
 description: "SAFEE MEET — Trust, Identity Verification & Meeting Protection Platform"
 publish_to: 'none'
-version: 1.0.0+4
+version: 1.0.2+4
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -69,7 +69,7 @@ dependencies:
   dartz: ^0.10.1
 
   # Internationalisation
-  intl: ^0.19.0
+  intl: ^0.20.2
 
   # Real-time Chat
   socket_io_client: ^2.0.3+1
@@ -100,6 +100,9 @@ dependencies:
   # no NFC passport reading, ID card/passport scan + selfie liveness only.
   didit_sdk: ^4.5.3
   country_code_picker: ^3.4.1
+
+  # Device Preview
+  device_preview: ^1.2.0
 
 dev_dependencies:
   flutter_test:

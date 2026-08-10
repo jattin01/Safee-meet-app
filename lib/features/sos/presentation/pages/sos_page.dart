@@ -168,11 +168,18 @@ class _IdleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const _TopBar(),
-        const SizedBox(height: 60),
-        Padding(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Column(
+                children: [
+                  const _TopBar(),
+                  const Spacer(flex: 3),
+                  Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Text(
             'Hold the button below to activate emergency alert',
@@ -180,7 +187,7 @@ class _IdleView extends StatelessWidget {
             style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
           ),
         ),
-        const SizedBox(height: 56),
+        const Spacer(flex: 3),
         Center(
           child: Stack(
             alignment: Alignment.center,
@@ -249,7 +256,7 @@ class _IdleView extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 48),
+        const Spacer(flex: 3),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
@@ -276,7 +283,13 @@ class _IdleView extends StatelessWidget {
             ],
           ),
         ),
-      ],
+        const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

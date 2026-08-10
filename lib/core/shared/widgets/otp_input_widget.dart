@@ -84,60 +84,62 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(widget.length, (i) {
-                  final isFilled = i < _value.length;
-                  final isActive =
-                      i == _value.length && _focusNode.hasFocus;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    curve: Curves.easeOut,
-                    margin: const EdgeInsets.symmetric(horizontal: 5),
-                    width: 46,
-                    height: 56,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isFilled
-                          ? AppColors.primary.withOpacity(0.06)
-                          : AppColors.cardBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isFilled || isActive
-                            ? AppColors.primary
-                            : AppColors.border,
-                        width: isFilled || isActive ? 2 : 1.5,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 340),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(widget.length, (i) {
+                    final isFilled = i < _value.length;
+                    final isActive =
+                        i == _value.length && _focusNode.hasFocus;
+                    return Expanded(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        curve: Curves.easeOut,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        height: 56,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isFilled
+                              ? AppColors.primary.withOpacity(0.06)
+                              : AppColors.cardBg,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isFilled || isActive
+                                ? AppColors.primary
+                                : AppColors.border,
+                            width: isFilled || isActive ? 2 : 1.5,
+                          ),
+                          boxShadow: isActive
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.primary.withOpacity(0.18),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: isFilled
+                            ? Text(
+                                _value[i],
+                                style: GoogleFonts.inter(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                ),
+                              )
+                            : (isActive ? const _BlinkingCaret() : null),
                       ),
-                      boxShadow: isActive
-                          ? [
-                              BoxShadow(
-                                color: AppColors.primary.withOpacity(0.18),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: isFilled
-                        ? Text(
-                            _value[i],
-                            style: GoogleFonts.inter(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.textPrimary,
-                            ),
-                          )
-                        : (isActive ? const _BlinkingCaret() : null),
-                  );
-                }),
+                    );
+                  }),
+                ),
               ),
               // Real input sits on top, fully transparent — it captures
               // taps/typing/autofill; the boxes above are pure display.
-              Opacity(
-                opacity: 0,
-                child: SizedBox(
-                  width: widget.length * 56.0,
-                  height: 56,
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0,
                   child: TextField(
                     controller: _controller,
                     focusNode: _focusNode,
