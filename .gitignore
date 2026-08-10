@@ -10,6 +10,10 @@
 .history
 .svn/
 .swiftpm/
+# Xcode's resolved Swift Package Manager cache — regenerated on every
+# build; .swiftpm/ above doesn't match this (no leading dot on the
+# `swiftpm` dir here), so it kept showing up untracked in git status.
+**/xcshareddata/swiftpm/
 migrate_working_dir/
 
 # IntelliJ related
@@ -43,3 +47,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Vendored third_party/didit_sdk — its own generated build/lock artifacts.
+# The SDK's own pubspec.lock and its example app's are intentionally
+# committed above this; these are the *nested plugin packages'* lockfiles
+# (packages don't commit lockfiles, only apps/examples do) plus the
+# example app's per-build ephemeral files.
+third_party/didit_sdk/example/ios/Flutter/ephemeral/
+third_party/didit_sdk/packages/*/pubspec.lock
