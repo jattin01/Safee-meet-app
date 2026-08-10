@@ -18,6 +18,7 @@ import '../../domain/entities/meeting_entity.dart';
 import '../../domain/repositories/meetings_repository.dart';
 import '../bloc/meetings_bloc.dart';
 import 'location_picker_page.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 /// Meetings whose status blocks their own 15-minute window — everything
 /// else (completed/cancelled/declined/etc.) doesn't affect new bookings.
@@ -348,15 +349,11 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
     final baseLocation = _locationCtrl.text.trim();
 
     if (partnerId == null || partnerId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select who you\'re meeting with first.')),
-      );
+      AppSnackbar.info(context, 'Select who you\'re meeting with first.');
       return;
     }
     if (baseLocation.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location is required.')),
-      );
+      AppSnackbar.info(context, 'Location is required.');
       return;
     }
 
@@ -385,7 +382,7 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
       final message = _isWithinActiveMeetingBlock(_selectedDate, _selectedTime)
           ? _activeMeetingMessage
           : 'Please choose a current or future time.';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      AppSnackbar.info(context, message);
       return;
     }
 
@@ -409,17 +406,13 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
       body: BlocConsumer<MeetingsBloc, MeetingsState>(
         listener: (context, state) {
           if (state is MeetingScheduled) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Meeting created successfully.')),
-            );
+            AppSnackbar.success(context, 'Meeting created successfully.');
             // You're the host of a newly scheduled meeting, so it lands in
             // "Upcoming" (pending the guest's approval) — not "Requests",
             // which only lists incoming requests where you're the guest.
             context.go('${AppRoutes.meetings}?tab=upcoming');
           } else if (state is MeetingsError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
-            );
+            AppSnackbar.info(context, state.message);
           }
         },
         builder: (context, state) {
@@ -490,10 +483,11 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 20),
-                      _Label('MEETING PURPOSE'),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 32),
+                      const _Label('MEETING PURPOSE'),
+                      const SizedBox(height: 8),
                       GridView.count(
+                        padding: EdgeInsets.zero,
                         crossAxisCount: 3,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -532,7 +526,7 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 32),
                       GestureDetector(
                         onTap: _pickLocationOnMap,
                         child: AbsorbPointer(

@@ -19,14 +19,13 @@ import '../../../../core/services/google_auth_service.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
 import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 Future<void> _openUrl(BuildContext context, String url) async {
   final uri = Uri.parse(url);
   if (!await canLaunchUrl(uri)) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link.')),
-      );
+      AppSnackbar.info(context, 'Could not open link.');
     }
     return;
   }
@@ -115,9 +114,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
       setState(() => _locationEnabled = granted);
       await sl<HiveService>().setLocationPermGranted(granted);
       if (!granted && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission was not granted.')),
-        );
+        AppSnackbar.info(context, 'Location permission was not granted.');
       }
     } else {
       final open = await _confirmOpenSettings(

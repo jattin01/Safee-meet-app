@@ -16,6 +16,7 @@ import 'core/config/app_theme.dart';
 import 'core/dependency_injection/injection_container.dart';
 import 'core/routes/app_router.dart';
 import 'features/profile/presentation/cubit/current_user_cubit.dart';
+import 'features/notifications/presentation/cubit/notifications_cubit.dart';
 import 'firebase_options.dart';
 
 // Must be a top-level function. Called by FCM when the app is in
@@ -111,8 +112,11 @@ class SafeeMeetApp extends StatelessWidget {
     // App-root singleton: the router's verification-gate redirect (see
     // AppRouter._guard) and every screen that needs to know/react to the
     // signed-in user's verification status all read this same instance.
-    return BlocProvider.value(
-      value: sl<CurrentUserCubit>()..load(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: sl<CurrentUserCubit>()..load()),
+        BlocProvider.value(value: sl<NotificationsCubit>()..load()),
+      ],
       child: MaterialApp.router(
         title: AppConstants.appName,
         theme: AppTheme.light,

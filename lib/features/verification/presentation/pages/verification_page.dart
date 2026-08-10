@@ -12,6 +12,7 @@ import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/info_banner.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../bloc/verification_bloc.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 /// Identity verification entry point — capture itself (ID scan + facial
 /// liveness) happens entirely inside Didit's native SDK UI, not in this app.
@@ -31,12 +32,11 @@ class _VerificationPageState extends State<VerificationPage> {
 
   void _showMessage(String message, {bool error = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: error ? AppColors.error : AppColors.success,
-      ),
-    );
+    if (error) {
+    AppSnackbar.error(context, message);
+    } else {
+    AppSnackbar.success(context, message);
+    }
   }
 
   Future<void> _launchDiditSdk(BuildContext context, String sessionToken) async {

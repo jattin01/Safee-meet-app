@@ -6,6 +6,7 @@ import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../bloc/sos_bloc.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 class SosPage extends StatefulWidget {
   final String? meetingId;
@@ -76,9 +77,7 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
         // point.
         if (state is SosDone) context.go(AppRoutes.home);
         if (state is SosError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.message)),
-          );
+          AppSnackbar.info(context, state.message);
         }
         // Fires once, the first time we can actually confirm the account
         // has zero emergency contacts — not on the bloc's un-fetched
@@ -402,11 +401,11 @@ class _NoEmergencyContactSheet extends StatelessWidget {
                     children: [
                       Center(
                         child: Container(
-                          width: 40,
-                          height: 4,
+                          width: 48,
+                          height: 5,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.24),
-                            borderRadius: BorderRadius.circular(2),
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(3),
                           ),
                         ),
                       ),
@@ -526,32 +525,85 @@ class _NoEmergencyContactSheet extends StatelessWidget {
   }
 }
 
-// Centered warning badge at the top of the sheet: a soft amber halo
-// behind a dark squircle with an amber shield-alert icon and border.
-class _AlertBadge extends StatelessWidget {
+class _AlertBadge extends StatefulWidget {
   const _AlertBadge();
 
   @override
+  State<_AlertBadge> createState() => _AlertBadgeState();
+}
+
+class _AlertBadgeState extends State<_AlertBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 88,
-      height: 88,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.warning.withOpacity(0.08),
-      ),
-      child: Container(
-        width: 64,
-        height: 64,
+    return SizedBox(
+      width: 120,
+      height: 120,
+      child: Stack(
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.darkBg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.warning, width: 1.5),
-        ),
-        child: const Icon(Icons.gpp_maybe_rounded,
-            color: AppColors.warning, size: 30),
+        children: [
+          // Expanding water drop / ripple border (rounded rectangle shape)
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final size = 64 + (24 * _controller.value);
+              final opacity = 1.0 - _controller.value;
+              return Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18 + (10 * _controller.value)),
+                  border: Border.all(
+                    color: AppColors.warning.withOpacity(0.5 * opacity),
+                    width: 1.2,
+                  ),
+                ),
+              );
+            },
+          ),
+          // Original static outer circle
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.warning.withOpacity(0.08),
+            ),
+          ),
+          // Inner squircle with shield
+          Container(
+            width: 64,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.darkBg,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.warning, width: 1.5),
+            ),
+            child: const Icon(
+              Icons.gpp_maybe_outlined,
+              color: AppColors.warning,
+              size: 30,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -572,6 +624,7 @@ class _SheetFeatureRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.04),
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
       ),
       child: Row(
         children: [

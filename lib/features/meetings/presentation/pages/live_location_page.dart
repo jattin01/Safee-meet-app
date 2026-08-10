@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../gps_tracking/presentation/bloc/gps_tracking_bloc.dart';
 import '../../../messaging/domain/entities/message_entity.dart';
@@ -48,10 +49,12 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
   // a response ever takes ≥10s, the next poll would otherwise fire a
   // duplicate request on top of the still-running one.
   bool _statusFetching = false;
+  late final GpsTrackingBloc _gpsTrackingBloc;
 
   @override
   void initState() {
     super.initState();
+    _gpsTrackingBloc = context.read<GpsTrackingBloc>();
     final meetingId = widget.meetingId;
     if (meetingId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -111,9 +114,7 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
   void _leaveWithMessage(String message) {
     if (!mounted) return;
     context.pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
-    );
+    AppSnackbar.info(context, message);
   }
 
   // Pull-to-refresh: re-fetches both the emergency-share data (partner
@@ -134,7 +135,7 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
   void dispose() {
     _timer?.cancel();
     if (widget.meetingId != null) {
-      context.read<GpsTrackingBloc>().add(const GpsTrackingStopped());
+      _gpsTrackingBloc.add(const GpsTrackingStopped());
     }
     super.dispose();
   }
@@ -181,9 +182,7 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
     setState(() => _ending = false);
 
     result.fold(
-      (failure) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(failure.message)),
-      ),
+      (failure) => AppSnackbar.error(context, failure.message),
       (_) => _goToReviewOrMeetings(meetingId),
     );
   }

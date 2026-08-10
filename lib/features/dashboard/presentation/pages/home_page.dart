@@ -9,12 +9,15 @@ import '../../../../core/shared/widgets/section_header.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
 import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
+import '../../../notifications/presentation/cubit/notifications_cubit.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
-  Future<void> _refresh(BuildContext context) =>
-      context.read<CurrentUserCubit>().load(forceRefresh: true);
+  Future<void> _refresh(BuildContext context) async {
+    context.read<CurrentUserCubit>().load(forceRefresh: true);
+    context.read<NotificationsCubit>().load(forceRefresh: true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -204,21 +207,59 @@ class _DarkHeader extends StatelessWidget {
               const AppLogoWidget(
                   size: LogoSize.sm, variant: LogoVariant.light),
               const Spacer(),
-              GestureDetector(
-                onTap: () => context.push(AppRoutes.notifications),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.notifications_none,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
+              BlocBuilder<NotificationsCubit, NotificationsState>(
+                builder: (context, notifState) {
+                  final unreadCount = notifState.notifications
+                      .where((n) => !n.isRead)
+                      .length;
+
+                  return GestureDetector(
+                    onTap: () => context.push(AppRoutes.notifications),
+                    child: unreadCount > 0
+                        ? Badge(
+                            label: Text(
+                              unreadCount > 99 ? '99+' : '$unreadCount',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                  height: 1.1),
+                            ),
+                            backgroundColor: AppColors.primary,
+                            offset: const Offset(4, -4),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.notifications_none,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          )
+                        : Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.notifications_none,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                  );
+                },
               ),
             ],
           ),

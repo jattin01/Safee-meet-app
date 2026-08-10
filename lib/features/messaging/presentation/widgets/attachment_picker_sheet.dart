@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/config/app_constants.dart';
 import '../../domain/entities/message_entity.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 /// Result returned from [showAttachmentPickerSheet].
 class AttachmentPickResult {
@@ -197,13 +198,7 @@ class _AttachmentPickerSheet extends StatelessWidget {
   }
 
   void _showSizeError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    AppSnackbar.info(context, message);
   }
 
   String? _mimeForExtension(String ext) {

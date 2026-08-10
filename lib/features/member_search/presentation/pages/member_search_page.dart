@@ -13,6 +13,7 @@ import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../messaging/domain/entities/message_entity.dart';
 import '../../domain/entities/member_entity.dart';
 import '../bloc/member_search_bloc.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 class MemberSearchPage extends StatelessWidget {
   /// When true, tapping "Meet" returns the selected [MemberEntity] to the
@@ -99,10 +100,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
       if (!mounted) return;
       if (code == null || code.isEmpty) {
         setState(() => _resolvingGalleryImage = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('No valid QR code found in the selected image.')),
-        );
+        AppSnackbar.info(context, 'No valid QR code found in the selected image.');
         return;
       }
 
@@ -114,10 +112,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _resolvingGalleryImage = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('No valid QR code found in the selected image.')),
-      );
+      AppSnackbar.info(context, 'No valid QR code found in the selected image.');
     }
   }
 

@@ -694,10 +694,11 @@ class _PhoneInput extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Mobile Number',
+        Text('MOBILE NUMBER',
             style: GoogleFonts.inter(
-                fontSize: 13, fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary)),
+                fontSize: 11, fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: AppColors.textSecondary)),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(

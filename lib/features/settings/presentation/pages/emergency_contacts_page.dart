@@ -8,6 +8,7 @@ import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../domain/entities/emergency_contact_entity.dart';
 import '../bloc/emergency_contact_bloc.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 class EmergencyContactsPage extends StatelessWidget {
   const EmergencyContactsPage({super.key});
@@ -48,11 +49,7 @@ class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
     final relationship = _relationshipCtrl.text.trim();
     final phone = _phoneCtrl.text.trim();
     if (name.isEmpty || relationship.isEmpty || phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-                Text('Full name, relationship and phone number are required.')),
-      );
+      AppSnackbar.info(context, 'Full name, relationship and phone number are required.');
       return;
     }
 
@@ -85,9 +82,7 @@ class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
       body: BlocConsumer<EmergencyContactBloc, EmergencyContactState>(
         listener: (context, state) {
           if (state is EmergencyContactError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
-            );
+            AppSnackbar.info(context, state.message);
           }
         },
         builder: (context, state) {

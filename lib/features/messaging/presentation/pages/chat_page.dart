@@ -13,6 +13,7 @@ import '../../domain/entities/message_entity.dart';
 import '../bloc/messaging_bloc.dart';
 import '../widgets/attachment_picker_sheet.dart';
 import 'image_preview_page.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 class ChatPage extends StatelessWidget {
   final String conversationId;
@@ -1403,13 +1404,7 @@ class _DocumentBubble extends StatelessWidget {
     final uri = Uri.parse(url);
     if (!await canLaunchUrl(uri)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Could not open document'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        AppSnackbar.info(context, 'Could not open document');
       }
       return;
     }

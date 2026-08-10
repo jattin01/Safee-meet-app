@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../../core/config/app_colors.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 /// Full-screen image viewer with pinch-zoom and save-to-Downloads.
 /// Pass either [imageUrl] (remote) or [localPath] (local file before upload).
@@ -89,20 +90,7 @@ class _ImagePreviewPageState extends State<ImagePreviewPage> {
 
   void _show(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        backgroundColor: AppColors.darkBg2,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    AppSnackbar.info(context, message);
   }
 
   @override

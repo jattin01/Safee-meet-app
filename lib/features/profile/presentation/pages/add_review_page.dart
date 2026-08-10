@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
+import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../cubit/submit_review_cubit.dart';
@@ -69,9 +70,7 @@ class _AddReviewPageState extends State<AddReviewPage> {
       body: BlocConsumer<SubmitReviewCubit, SubmitReviewState>(
         listener: (context, state) {
           if (state.status == SubmitReviewStatus.success) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Review submitted successfully.')),
-            );
+            AppSnackbar.success(context, 'Review submitted successfully.');
             _leaveFlow();
           } else if (state.status == SubmitReviewStatus.error) {
             ScaffoldMessenger.of(context).showSnackBar(

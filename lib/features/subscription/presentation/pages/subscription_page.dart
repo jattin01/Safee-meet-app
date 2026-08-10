@@ -15,6 +15,7 @@ import '../bloc/subscription_state.dart';
 import '../cubit/current_subscription_cubit.dart';
 import '../cubit/subscription_comparison_cubit.dart';
 import '../widgets/feature_comparison_section.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 // Prices, features and plan branding come from GET /v1/subscriptions/plans.
 // Checkout (POST /v1/subscriptions/subscribe + Stripe's native Payment
@@ -143,15 +144,10 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
           listener: (context, state) {
             if (state is! SubscriptionLoaded) return;
             if (state.checkoutStatus == CheckoutStatus.success) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Subscription activated successfully.')),
-              );
+              AppSnackbar.success(context, 'Subscription activated successfully.');
               context.go(AppRoutes.subscription);
             } else if (state.checkoutErrorMessage != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(state.checkoutErrorMessage!)),
-              );
+              AppSnackbar.error(context, state.checkoutErrorMessage!);
               context.go(AppRoutes.subscription);
             }
           },

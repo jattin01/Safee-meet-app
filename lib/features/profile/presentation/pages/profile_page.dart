@@ -21,14 +21,13 @@ import '../../../subscription/presentation/cubit/current_subscription_cubit.dart
 import '../../domain/entities/profile_entity.dart';
 import '../bloc/profile_bloc.dart';
 import '../cubit/reviews_cubit.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 /// Renders the Safee PIN as a QR PNG and shares it together with the PIN
 /// text through a single OS share sheet.
 Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
   if (pin == null || pin.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Your Safee PIN isn\'t ready yet.')),
-    );
+    AppSnackbar.info(context, 'Your Safee PIN isn\'t ready yet.');
     return;
   }
   try {
@@ -71,10 +70,7 @@ Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
     );
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Unable to share right now. Please try again.')),
-      );
+      AppSnackbar.error(context, 'Unable to share right now. Please try again.');
     }
   }
 }

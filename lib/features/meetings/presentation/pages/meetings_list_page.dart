@@ -7,6 +7,7 @@ import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
+import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../../domain/entities/meeting_entity.dart';
 import '../bloc/meetings_bloc.dart';
@@ -90,9 +91,7 @@ class _MeetingsListViewState extends State<_MeetingsListView>
       child: BlocConsumer<MeetingsBloc, MeetingsState>(
         listener: (context, state) {
           if (state is MeetingsError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message)),
-            );
+            AppSnackbar.error(context, state.message);
           }
           if (state is MeetingsListLoaded) {
             setState(() => _meetings = state.meetings);
@@ -268,13 +267,9 @@ class _MeetingCard extends StatelessWidget {
 
   void _onTap(BuildContext context) {
     if (meeting.status != MeetingStatus.scheduled) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(
-            "This meeting isn't ready yet. Please wait for approval before accessing it.",
-          ),
-        ),
+      AppSnackbar.info(
+        context,
+        "This meeting isn't ready yet. Please wait for approval before accessing it.",
       );
       return;
     }

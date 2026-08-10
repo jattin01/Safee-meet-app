@@ -8,6 +8,7 @@ import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../domain/entities/notification_entity.dart';
 import '../cubit/notifications_cubit.dart';
 import '../notification_navigation_handler.dart';
+import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -71,9 +72,7 @@ class _NotificationsViewState extends State<_NotificationsView> {
                   current.errorMessage != null &&
                   previous.errorMessage != current.errorMessage,
               listener: (context, state) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(state.errorMessage!)),
-                );
+                AppSnackbar.error(context, state.errorMessage!);
               },
               builder: (context, state) {
                 if ((state.status == NotificationsStatus.initial ||
