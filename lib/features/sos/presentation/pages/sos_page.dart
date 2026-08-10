@@ -223,134 +223,142 @@ class _IdleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const _TopBar(),
-          const SizedBox(height: 60),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              'Hold the button below to activate emergency alert',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
-            ),
-          ),
-          const SizedBox(height: 56),
-          Center(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Glow ring
-                Container(
-                  width: 230,
-                  height: 230,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.primary, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                          color: AppColors.primary.withOpacity(0.6),
-                          blurRadius: 40,
-                          spreadRadius: 4),
-                    ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Column(
+                children: [
+                  const _TopBar(),
+                  const Spacer(flex: 3),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'Hold the button below to activate emergency alert',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 15),
+                    ),
                   ),
-                ),
-                ScaleTransition(
-                  scale: progress > 0
-                      ? const AlwaysStoppedAnimation(1.0)
-                      : pulseAnim,
-                  child: GestureDetector(
-                    onLongPressStart: (_) => onHoldStart(),
-                    onLongPressEnd: (_) => onHoldEnd(),
-                    child: Container(
-                      width: 190,
-                      height: 190,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [AppColors.primaryLight, AppColors.primary],
+                  const Spacer(flex: 3),
+                  Center(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Glow ring
+                        Container(
+                          width: 230,
+                          height: 230,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border:
+                                Border.all(color: AppColors.primary, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.6),
+                                  blurRadius: 40,
+                                  spreadRadius: 4),
+                            ],
+                          ),
                         ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const _SosBadge(),
-                          const SizedBox(height: 10),
-                          Text(
-                            'SOS',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 3,
+                        ScaleTransition(
+                          scale: progress > 0
+                              ? const AlwaysStoppedAnimation(1.0)
+                              : pulseAnim,
+                          child: GestureDetector(
+                            onLongPressStart: (_) => onHoldStart(),
+                            onLongPressEnd: (_) => onHoldEnd(),
+                            child: Container(
+                              width: 190,
+                              height: 190,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: RadialGradient(
+                                  colors: [
+                                    AppColors.primaryLight,
+                                    AppColors.primary
+                                  ],
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const _SosBadge(),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    'SOS',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 3,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'HOLD',
+                                    style: GoogleFonts.inter(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                        letterSpacing: 2),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'HOLD',
-                            style: GoogleFonts.inter(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                letterSpacing: 2),
+                        ),
+                        if (progress > 0)
+                          SizedBox(
+                            width: 230,
+                            height: 230,
+                            child: CircularProgressIndicator(
+                              value: progress,
+                              strokeWidth: 4,
+                              backgroundColor: Colors.transparent,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Colors.white),
+                            ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
-                ),
-                if (progress > 0)
-                  SizedBox(
-                    width: 230,
-                    height: 230,
-                    child: CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 4,
-                      backgroundColor: Colors.transparent,
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(Colors.white),
+                  const Spacer(flex: 3),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      children: [
+                        const _InfoRow(
+                          icon: Icons.location_on,
+                          title: 'GPS Location Shared',
+                          subtitle: 'Real-time location sent to contacts',
+                        ),
+                        const SizedBox(height: 12),
+                        _InfoRow(
+                          icon: Icons.phone_in_talk,
+                          title: 'Emergency Contacts Alerted',
+                          subtitle: contactCount > 0
+                              ? '$contactCount trusted contact${contactCount == 1 ? '' : 's'} will be notified instantly'
+                              : 'No trusted contacts on file yet',
+                        ),
+                        const SizedBox(height: 12),
+                        const _InfoRow(
+                          icon: Icons.check_circle_outline,
+                          title: 'Incident Report Created',
+                          subtitle: 'Timestamped record automatically saved',
+                        ),
+                      ],
                     ),
                   ),
-              ],
+                  const SizedBox(height: 32),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 48),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                const _InfoRow(
-                  icon: Icons.location_on,
-                  title: 'GPS Location Shared',
-                  subtitle: 'Real-time location sent to contacts',
-                ),
-                const SizedBox(height: 12),
-                _InfoRow(
-                  icon: Icons.phone_in_talk,
-                  title: 'Emergency Contacts Alerted',
-                  subtitle: contactCount > 0
-                      ? '$contactCount trusted contact${contactCount == 1 ? '' : 's'} will be notified instantly'
-                      : 'No trusted contacts on file yet',
-                ),
-                const SizedBox(height: 12),
-                const _InfoRow(
-                  icon: Icons.check_circle_outline,
-                  title: 'Incident Report Created',
-                  subtitle: 'Timestamped record automatically saved',
-                ),
-              ],
-            ),
-          ),
-          // A bare 24 was previously used here — on Android devices where
-          // the 3-button/gesture nav bar's inset isn't (fully) reported
-          // through SafeArea, that left the bottom of the info-row list
-          // sitting right under/behind the nav bar. bottomSafePadding adds
-          // the device's own bottom inset on top of the same visual
-          // breathing room, matching every other scrollable screen in
-          // this app.
-          SizedBox(height: context.bottomSafePadding(24)),
-        ],
-      ),
+        );
+      },
     );
   }
 }
