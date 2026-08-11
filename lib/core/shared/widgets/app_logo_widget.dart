@@ -63,7 +63,7 @@ class AppLogoWidget extends StatelessWidget {
                     fontSize: _textSize,
                     fontWeight: FontWeight.w900,
                     color: _safeeColor,
-                    letterSpacing: 0.04 * _textSize,
+                    letterSpacing: -0.5,
                   ),
                 ),
                 Text(
@@ -72,7 +72,7 @@ class AppLogoWidget extends StatelessWidget {
                     fontSize: _textSize,
                     fontWeight: FontWeight.w900,
                     color: AppColors.primary,
-                    letterSpacing: 0.04 * _textSize,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ],

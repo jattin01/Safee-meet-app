@@ -147,7 +147,7 @@ class _OnboardingPageState extends State<OnboardingPage> with TickerProviderStat
               child: PrimaryButton(
                 label: isLast ? 'Get Started' : 'Continue',
                 onPressed: _next,
-                icon: const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+                icon: const Icon(Icons.chevron_right, color: Colors.white, size: 20),
               ),
             ),
           ],
@@ -208,9 +208,9 @@ class _SlideView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
-          SizedBox(height: 300, child: Center(child: _illustration)),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
+          _illustration,
+          const SizedBox(height: 80),
           Row(
             children: List.generate(total, (i) {
               final isActive = i == currentIndex;
@@ -218,8 +218,8 @@ class _SlideView extends StatelessWidget {
                 onTap: () => onDotTap(i),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.only(right: 6),
-                  width: isActive ? 24 : 8,
+                  margin: const EdgeInsets.only(right: 8),
+                  width: isActive ? 28 : 8,
                   height: 8,
                   decoration: BoxDecoration(
                     color: isActive ? slide.accentColor : AppColors.border,
@@ -229,27 +229,28 @@ class _SlideView extends StatelessWidget {
               );
             }),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
             slide.title,
             style: GoogleFonts.inter(
               color: AppColors.textPrimary,
-              fontSize: 30,
+              fontSize: 36,
               fontWeight: FontWeight.w800,
-              height: 1.15,
+              height: 1.1,
+              letterSpacing: -1.0,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             slide.tagline,
             style: GoogleFonts.inter(
               color: slide.accentColor,
               fontSize: 13,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.6,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           Text(
             slide.subtitle,
             style: TextStyle(
@@ -258,6 +259,7 @@ class _SlideView extends StatelessWidget {
               height: 1.6,
             ),
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -272,7 +274,7 @@ class _LogoIllustration extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40),
+      height: 310,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(28),
@@ -285,7 +287,7 @@ class _LogoIllustration extends StatelessWidget {
         ],
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset('assets/images/brand_logo_icon.png', width: 90, fit: BoxFit.contain),
           const SizedBox(height: 18),
@@ -297,19 +299,19 @@ class _LogoIllustration extends StatelessWidget {
               Text(
                 'SAFEE ',
                 style: GoogleFonts.inter(
-                  fontSize: 24,
+                  fontSize: 28,
                   fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                   color: AppColors.textPrimary,
-                  letterSpacing: 1,
                 ),
               ),
               Text(
                 'MEET',
                 style: GoogleFonts.inter(
-                  fontSize: 24,
+                  fontSize: 28,
                   fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                   color: AppColors.primary,
-                  letterSpacing: 1,
                 ),
               ),
             ],
@@ -360,6 +362,7 @@ class _IdentityIllustration extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
+      height: 310,
       decoration: BoxDecoration(
         color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(28),
@@ -542,6 +545,7 @@ class _MapIllustration extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
+      height: 310,
       decoration: BoxDecoration(
         color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(28),

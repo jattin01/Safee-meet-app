@@ -590,7 +590,7 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const AppLogoWidget(size: LogoSize.sm, variant: LogoVariant.light),
+          const AppLogoWidget(size: LogoSize.md, variant: LogoVariant.light),
           const SizedBox(height: 28),
           Text(
             title,
