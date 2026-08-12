@@ -16,8 +16,8 @@ class ReviewsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<ReviewsCubit>()..load(),
+    return BlocProvider.value(
+      value: sl<ReviewsCubit>()..load(),
       child: const _ReviewsView(),
     );
   }

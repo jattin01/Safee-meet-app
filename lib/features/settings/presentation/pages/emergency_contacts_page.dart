@@ -6,6 +6,7 @@ import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../domain/entities/emergency_contact_entity.dart';
 import '../bloc/emergency_contact_bloc.dart';
 import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
@@ -15,8 +16,8 @@ class EmergencyContactsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<EmergencyContactBloc>()
+    return BlocProvider.value(
+      value: sl<EmergencyContactBloc>()
         ..add(const EmergencyContactsLoadRequested()),
       child: const _EmergencyContactsView(),
     );
@@ -136,30 +137,43 @@ class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        if (isLoading)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 40),
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        else if (contacts.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 24),
-                            child: Center(
-                              child: Text(
-                                'No emergency contacts yet.',
-                                style: TextStyle(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 13),
-                              ),
-                            ),
-                          )
-                        else
-                          ...contacts.map((c) => _ContactRow(
-                                contact: c,
-                                onDelete: () => context
-                                    .read<EmergencyContactBloc>()
-                                    .add(EmergencyContactDeleteRequested(c.id)),
-                              )),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          child: isLoading
+                              ? const Padding(
+                                  key: ValueKey('loading'),
+                                  padding: EdgeInsets.only(top: 20),
+                                  child: _EmergencyContactsSkeletonState(),
+                                )
+                              : (contacts.isEmpty
+                                  ? Padding(
+                                      key: const ValueKey('empty'),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 24),
+                                      child: Center(
+                                        child: Text(
+                                          'No emergency contacts yet.',
+                                          style: TextStyle(
+                                              color: AppColors.textTertiary,
+                                              fontSize: 13),
+                                        ),
+                                      ),
+                                    )
+                                  : Column(
+                                      key: ValueKey(
+                                          'contacts_${contacts.length}'),
+                                      children: contacts
+                                          .map((c) => _ContactRow(
+                                                contact: c,
+                                                onDelete: () => context
+                                                    .read<EmergencyContactBloc>()
+                                                    .add(
+                                                        EmergencyContactDeleteRequested(
+                                                            c.id)),
+                                              ))
+                                          .toList(),
+                                    )),
+                        ),
                         if (_showAddForm)
                           _AddContactForm(
                             nameCtrl: _nameCtrl,
@@ -412,6 +426,46 @@ class _FormField extends StatelessWidget {
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmergencyContactsSkeletonState extends StatelessWidget {
+  const _EmergencyContactsSkeletonState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        2,
+        (index) => Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              const SkeletonItem(width: 44, height: 44, borderRadius: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    SkeletonItem(width: 120, height: 15, borderRadius: 4),
+                    SizedBox(height: 8),
+                    SkeletonItem(width: 80, height: 12, borderRadius: 4),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              const SkeletonItem(width: 36, height: 36, borderRadius: 18),
+            ],
+          ),
         ),
       ),
     );

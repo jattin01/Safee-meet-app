@@ -238,7 +238,7 @@ class _LoginViewState extends State<_LoginView> {
                   _Header(isOtpStep: _isOtpStep, isSocialPhoneStep: _isSocialPhoneStep),
                   Padding(
                     padding: EdgeInsets.fromLTRB(
-                        24, 28, 24, context.bottomSafePadding(32)),
+                        24, 48, 24, context.bottomSafePadding(32)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -590,7 +590,7 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const AppLogoWidget(size: LogoSize.md, variant: LogoVariant.light),
+          const AppLogoWidget(size: LogoSize.sm, variant: LogoVariant.light),
           const SizedBox(height: 28),
           Text(
             title,
@@ -729,9 +729,6 @@ class _PhoneInput extends StatelessWidget {
                     fontSize: 15, color: AppColors.textPrimary),
                 searchStyle: GoogleFonts.inter(
                     fontSize: 15, color: AppColors.textPrimary),
-                // Package default is a bare, unstyled InputDecoration — no
-                // hint, no icon, no border — which renders as an empty box
-                // users can't tell is a search field. Give it a real look.
                 searchDecoration: InputDecoration(
                   hintText: 'Search country',
                   hintStyle: GoogleFonts.inter(

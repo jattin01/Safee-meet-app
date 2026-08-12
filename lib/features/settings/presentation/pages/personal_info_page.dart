@@ -6,6 +6,7 @@ import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
 
@@ -14,8 +15,8 @@ class PersonalInfoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<CurrentUserCubit>()..load(),
+    return BlocProvider.value(
+      value: sl<CurrentUserCubit>()..load(),
       child: const _PersonalInfoView(),
     );
   }
@@ -32,7 +33,7 @@ class _PersonalInfoView extends StatelessWidget {
         builder: (context, state) {
           if (state.status == CurrentUserStatus.loading &&
               state.profile == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const _PersonalInfoSkeletonState();
           }
 
           if (state.status == CurrentUserStatus.error &&
@@ -312,6 +313,41 @@ class _PlainRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PersonalInfoSkeletonState extends StatelessWidget {
+  const _PersonalInfoSkeletonState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          color: AppColors.darkBg,
+          padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 20, 20, 24),
+          child: const SkeletonItem(width: 150, height: 28, borderRadius: 8, color: Colors.white12),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SkeletonItem(width: 100, height: 20, borderRadius: 6),
+                const SizedBox(height: 12),
+                const SkeletonItem(height: 56, borderRadius: 12),
+                const SizedBox(height: 24),
+                const SkeletonItem(width: 140, height: 20, borderRadius: 6),
+                const SizedBox(height: 12),
+                const SkeletonItem(height: 56, borderRadius: 12),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

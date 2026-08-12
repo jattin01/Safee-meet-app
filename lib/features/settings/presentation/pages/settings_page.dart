@@ -16,6 +16,8 @@ import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../../../features/auth/presentation/bloc/auth_event.dart';
 import '../../../../core/services/google_auth_service.dart';
+import '../../../../core/shared/widgets/section_header.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
 import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
@@ -161,7 +163,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
             state.profile == null) {
           return const Scaffold(
             backgroundColor: AppColors.lightBg,
-            body: Center(child: CircularProgressIndicator()),
+            body: _SettingsSkeletonState(),
           );
         }
 
@@ -665,6 +667,41 @@ class _ToggleTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SettingsSkeletonState extends StatelessWidget {
+  const _SettingsSkeletonState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          color: AppColors.darkBg,
+          padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 20, 20, 20),
+          child: const SkeletonItem(width: 120, height: 28, borderRadius: 8, color: Colors.white12),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SkeletonItem(width: 100, height: 20, borderRadius: 6),
+                const SizedBox(height: 12),
+                const SkeletonItem(height: 80, borderRadius: 16),
+                const SizedBox(height: 24),
+                const SkeletonItem(width: 140, height: 20, borderRadius: 6),
+                const SizedBox(height: 12),
+                const SkeletonItem(height: 160, borderRadius: 16),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

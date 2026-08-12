@@ -158,15 +158,15 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.verification,
-        builder: (_, __) => BlocProvider(
-          create: (_) => sl<VerificationBloc>(),
+        builder: (_, __) => BlocProvider.value(
+          value: sl<VerificationBloc>(),
           child: const VerificationPage(),
         ),
       ),
       GoRoute(
         path: AppRoutes.verificationStatus,
-        builder: (_, __) => BlocProvider(
-          create: (_) => sl<VerificationBloc>(),
+        builder: (_, __) => BlocProvider.value(
+          value: sl<VerificationBloc>(),
           child: const VerificationStatusPage(),
         ),
       ),

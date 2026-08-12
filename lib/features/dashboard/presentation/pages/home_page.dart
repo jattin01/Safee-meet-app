@@ -11,6 +11,8 @@ import '../../../profile/presentation/cubit/current_user_cubit.dart';
 import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../../../notifications/presentation/cubit/notifications_cubit.dart';
 
+import '../../../../core/shared/widgets/skeleton_item.dart';
+
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -22,12 +24,12 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.lightBg,
       body: BlocBuilder<CurrentUserCubit, CurrentUserState>(
         builder: (context, state) {
           if (state.status == CurrentUserStatus.loading &&
               state.profile == null) {
-            return const Center(child: CircularProgressIndicator());
+            return const _HomeSkeletonState();
           }
 
           if (state.status == CurrentUserStatus.error &&
@@ -89,6 +91,123 @@ class HomePage extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _HomeSkeletonState extends StatelessWidget {
+  const _HomeSkeletonState();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              color: AppColors.darkBg,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(28),
+                bottomRight: Radius.circular(28),
+              ),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              MediaQuery.of(context).padding.top + 16,
+              20,
+              24,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Row(
+                  children: [
+                    SkeletonItem(
+                        width: 100,
+                        height: 24,
+                        borderRadius: 12,
+                        color: Colors.white12),
+                    Spacer(),
+                    SkeletonItem(
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        color: Colors.white12),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkBg2,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: const Row(
+                    children: [
+                      SkeletonItem(
+                          width: 56,
+                          height: 56,
+                          borderRadius: 16,
+                          color: Colors.white12),
+                      SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SkeletonItem(
+                                width: 100,
+                                height: 14,
+                                borderRadius: 6,
+                                color: Colors.white12),
+                            SizedBox(height: 8),
+                            SkeletonItem(
+                                width: 160,
+                                height: 20,
+                                borderRadius: 8,
+                                color: Colors.white12),
+                            SizedBox(height: 12),
+                            SkeletonItem(
+                                width: 80,
+                                height: 18,
+                                borderRadius: 8,
+                                color: Colors.white12),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SkeletonItem(width: 120, height: 20, borderRadius: 8),
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(child: SkeletonItem(height: 80, borderRadius: 16)),
+                    SizedBox(width: 12),
+                    Expanded(child: SkeletonItem(height: 80, borderRadius: 16)),
+                    SizedBox(width: 12),
+                    Expanded(child: SkeletonItem(height: 80, borderRadius: 16)),
+                  ],
+                ),
+                SizedBox(height: 24),
+                SkeletonItem(width: 120, height: 20, borderRadius: 8),
+                SizedBox(height: 16),
+                SkeletonItem(height: 140, borderRadius: 16),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -209,9 +328,8 @@ class _DarkHeader extends StatelessWidget {
               const Spacer(),
               BlocBuilder<NotificationsCubit, NotificationsState>(
                 builder: (context, notifState) {
-                  final unreadCount = notifState.notifications
-                      .where((n) => !n.isRead)
-                      .length;
+                  final unreadCount =
+                      notifState.notifications.where((n) => !n.isRead).length;
 
                   return GestureDetector(
                     onTap: () => context.push(AppRoutes.notifications),
@@ -601,14 +719,29 @@ class _QuickActionTile extends StatelessWidget {
         context.push(action.route);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: action.color.withOpacity(0.1),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.textPrimary.withOpacity(0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           children: [
-            Icon(action.icon, color: action.color, size: 24),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: action.color.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(action.icon, color: action.color, size: 22),
+            ),
             const SizedBox(height: 8),
             Text(
               action.label,
@@ -649,7 +782,14 @@ class _SafetyCenter extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -767,25 +907,33 @@ class _MeetingSyncCard extends StatelessWidget {
         context.push(AppRoutes.meetings);
       },
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: AppColors.border, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.textPrimary.withOpacity(0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.blue.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.event_note, color: AppColors.blue),
+              child:
+                  const Icon(Icons.event_note, color: AppColors.blue, size: 24),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -805,15 +953,18 @@ class _MeetingSyncCard extends StatelessWidget {
                         : 'No live meeting history is available from the current profile API yet.',
                     style: const TextStyle(
                       color: AppColors.textSecondary,
-                      fontSize: 12,
-                      height: 1.45,
+                      fontSize: 13,
+                      height: 1.4,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
-                color: AppColors.textTertiary, size: 20),
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Icon(Icons.chevron_right,
+                  color: AppColors.textTertiary, size: 20),
+            ),
           ],
         ),
       ),
@@ -821,19 +972,76 @@ class _MeetingSyncCard extends StatelessWidget {
   }
 }
 
-class _UpgradeCard extends StatelessWidget {
+class _UpgradeCard extends StatefulWidget {
   final CurrentSubscriptionState state;
   const _UpgradeCard({required this.state});
 
   @override
+  State<_UpgradeCard> createState() => _UpgradeCardState();
+}
+
+class _UpgradeCardState extends State<_UpgradeCard>
+    with TickerProviderStateMixin {
+  late final AnimationController _slideController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+  );
+
+  late final AnimationController _shimmerController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3000),
+  )..repeat();
+
+  late final Animation<Offset> _slideAnimation = Tween<Offset>(
+    begin: const Offset(-0.3, 0),
+    end: Offset.zero,
+  ).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutQuart));
+
+  late final Animation<double> _fadeAnimation = Tween<double>(
+    begin: 0.0,
+    end: 1.0,
+  ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+
+  ScrollPosition? _scrollPosition;
+  bool _hasAnimated = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scrollPosition?.removeListener(_onScroll);
+    _scrollPosition = Scrollable.maybeOf(context)?.position;
+    _scrollPosition?.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
+  }
+
+  @override
+  void dispose() {
+    _scrollPosition?.removeListener(_onScroll);
+    _slideController.dispose();
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_hasAnimated || !mounted) return;
+    final renderObject = context.findRenderObject();
+    if (renderObject is RenderBox) {
+      final position = renderObject.localToGlobal(Offset.zero);
+      final screenHeight = MediaQuery.of(context).size.height;
+      if (position.dy < screenHeight - 60) {
+        _hasAnimated = true;
+        _slideController.forward();
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final sub = state.subscription;
+    final sub = widget.state.subscription;
     final hasPaidAccess = sub?.hasActiveAccess ?? false;
     final isFree = !hasPaidAccess;
-    // Already on the highest-tier plan (by sortOrder, cross-checked against
-    // the live plan catalog) — there's nothing left to upgrade to, so no
-    // upgrade CTA is shown at all, just the plan itself.
-    final isHighestPlan = state.isOnHighestPlan;
+    final isHighestPlan = widget.state.isOnHighestPlan;
     final planName = sub?.planLabel ?? 'Free';
 
     final String title;
@@ -849,53 +1057,107 @@ class _UpgradeCard extends StatelessWidget {
       subtitle = 'Review billing and subscription details';
     }
 
-    return GestureDetector(
-      onTap: isHighestPlan ? null : () => context.push(AppRoutes.subscription),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.darkBg,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(12),
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: GestureDetector(
+          onTap:
+              isHighestPlan ? null : () => context.push(AppRoutes.subscription),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.darkGradient,
               ),
-              child: Icon(
-                isHighestPlan ? Icons.workspace_premium : Icons.trending_up,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            isHighestPlan
+                                ? Icons.workspace_premium
+                                : Icons.trending_up,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (!isHighestPlan)
+                          const Icon(Icons.chevron_right,
+                              color: Colors.white60, size: 22),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
+                  // Sweeping light shimmer effect
+                  if (!isHighestPlan)
+                    Positioned.fill(
+                      child: AnimatedBuilder(
+                        animation: _shimmerController,
+                        builder: (context, child) {
+                          final slide = (_shimmerController.value * 3) - 1.5;
+                          return FractionalTranslation(
+                            translation: Offset(slide, 0),
+                            child: child,
+                          );
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.white.withOpacity(0.0),
+                                Colors.white.withOpacity(0.12),
+                                Colors.white.withOpacity(0.0),
+                              ],
+                              stops: const [0.2, 0.5, 0.8],
+                              begin: const Alignment(-1.0, -0.3),
+                              end: const Alignment(1.0, 0.3),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-            if (!isHighestPlan)
-              const Icon(Icons.chevron_right, color: Colors.white60, size: 22),
-          ],
+          ),
         ),
       ),
     );

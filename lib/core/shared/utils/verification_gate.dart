@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import '../../dependency_injection/injection_container.dart';
 import '../../routes/app_routes.dart';
 import '../../../features/profile/presentation/cubit/current_user_cubit.dart';
-import '../../../features/verification/domain/repositories/verification_repository.dart';
 import '../widgets/app_snackbar.dart';
 
 /// Call at the top of a tap handler for any verification-gated feature
@@ -45,31 +43,14 @@ bool requireVerification(BuildContext context) {
 
 /// Fetches the caller's live verification status and routes to the right
 /// screen: the Upload Verification (start) flow only when nothing has ever
-/// been submitted; the Verification Status page for every other case —
-/// pending, rejected, approved, or the status lookup itself failing — so a
-/// resubmission (e.g. after rejection) goes through the status page's own
-/// "Verify Again" action rather than skipping straight back to upload.
-Future<void> openVerificationScreen(BuildContext context) async {
-  showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => const Center(child: CircularProgressIndicator()),
-  );
-
-  final result = await sl<VerificationRepository>().getVerificationStatus();
-
-  if (!context.mounted) return;
-  Navigator.of(context, rootNavigator: true).pop();
-
-  // kycStatus is the backend's verificationStatus, normalized so the raw
-  // 'not_submitted' becomes 'not_started' — see VerificationRepositoryImpl._parseStatus.
-  final isNotSubmitted = result.fold(
-    (_) => true,
-    (status) => status.kycStatus == 'not_started',
-  );
-
-  if (!context.mounted) return;
+/// been submitted; the Verification Status page for every other case.
+void openVerificationScreen(BuildContext context) {
+  final cubit = context.read<CurrentUserCubit>();
+  final verificationStatus = cubit.state.profile?.verificationStatus;
+  
   context.push(
-    isNotSubmitted ? AppRoutes.verification : AppRoutes.verificationStatus,
+    verificationStatus == 'not_submitted' || verificationStatus == 'none'
+        ? AppRoutes.verification
+        : AppRoutes.verificationStatus,
   );
 }

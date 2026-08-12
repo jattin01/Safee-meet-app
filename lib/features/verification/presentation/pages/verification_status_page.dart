@@ -9,6 +9,7 @@ import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../domain/entities/verification_entity.dart';
 import '../bloc/verification_bloc.dart';
 
@@ -41,7 +42,7 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
         if (state is VerificationLoading || state is VerificationInitial) {
           return const Scaffold(
             backgroundColor: AppColors.lightBg,
-            body: Center(child: CircularProgressIndicator()),
+            body: _VerificationSkeletonState(),
           );
         }
 
@@ -76,7 +77,7 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
         if (state is! VerificationStatusLoaded) {
           return const Scaffold(
             backgroundColor: AppColors.lightBg,
-            body: Center(child: CircularProgressIndicator()),
+            body: _VerificationSkeletonState(),
           );
         }
 
@@ -635,6 +636,48 @@ class _ScoreBar extends StatelessWidget {
     );
   }
 }
+
+class _VerificationSkeletonState extends StatelessWidget {
+  const _VerificationSkeletonState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          color: AppColors.darkBg,
+          padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 20, 20, 24),
+          child: Column(
+            children: [
+              const SkeletonItem(width: 200, height: 28, borderRadius: 8, color: Colors.white12),
+              const SizedBox(height: 20),
+              const SkeletonItem(height: 80, borderRadius: 16, color: Colors.white12),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SkeletonItem(width: 140, height: 20, borderRadius: 6),
+                const SizedBox(height: 16),
+                const SkeletonItem(height: 70, borderRadius: 16),
+                const SizedBox(height: 12),
+                const SkeletonItem(height: 70, borderRadius: 16),
+                const SizedBox(height: 12),
+                const SkeletonItem(height: 70, borderRadius: 16),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 
 class _ActionCard extends StatelessWidget {
   final VerificationStatusEntity status;

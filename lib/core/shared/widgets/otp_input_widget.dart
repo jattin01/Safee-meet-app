@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -31,10 +32,29 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
   late final FocusNode _focusNode;
   String _value = '';
   bool _completedFired = false;
+  Timer? _timer;
+  int _secondsLeft = 60;
+
+  void _startTimer() {
+    _secondsLeft = 60;
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          if (_secondsLeft > 0) {
+            _secondsLeft--;
+          } else {
+            _timer?.cancel();
+          }
+        });
+      }
+    });
+  }
 
   @override
   void initState() {
     super.initState();
+    _startTimer();
     _controller = TextEditingController();
     _focusNode = FocusNode();
     // Auto-focus so the keyboard (and the OS's one-time-code suggestion,
@@ -47,6 +67,7 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -173,13 +194,16 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
                 ),
               ),
               GestureDetector(
-                onTap: widget.onResend,
+                onTap: _secondsLeft == 0 ? () {
+                  widget.onResend?.call();
+                  _startTimer();
+                } : null,
                 child: Text(
-                  'Resend OTP',
+                  _secondsLeft == 0 ? 'Resend OTP' : 'Resend OTP in ${_secondsLeft}s',
                   style: GoogleFonts.inter(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                    color: _secondsLeft == 0 ? AppColors.primary : AppColors.textTertiary,
                   ),
                 ),
               ),

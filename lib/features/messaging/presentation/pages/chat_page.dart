@@ -8,12 +8,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/shared/widgets/app_snackbar.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../domain/entities/message_entity.dart';
 import '../bloc/messaging_bloc.dart';
 import '../widgets/attachment_picker_sheet.dart';
 import 'image_preview_page.dart';
-import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 class ChatPage extends StatelessWidget {
   final String conversationId;
@@ -198,11 +199,40 @@ class _ChatViewState extends State<_ChatView> {
                 lastSeen: null,
               ),
               _EncryptedBanner(),
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.primary,
-                    strokeWidth: 2.5,
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Partner message skeleton
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const SkeletonItem(width: 32, height: 32, borderRadius: 16),
+                          const SizedBox(width: 8),
+                          const SkeletonItem(width: 200, height: 60, borderRadius: 16),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      // My message skeleton
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: const [
+                          SkeletonItem(width: 220, height: 80, borderRadius: 16),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      // Partner message skeleton
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const SkeletonItem(width: 32, height: 32, borderRadius: 16),
+                          const SizedBox(width: 8),
+                          const SkeletonItem(width: 150, height: 50, borderRadius: 16),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),

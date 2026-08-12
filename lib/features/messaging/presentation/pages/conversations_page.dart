@@ -8,6 +8,7 @@ import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/services/presence_service.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../domain/entities/message_entity.dart';
 import '../bloc/messaging_bloc.dart';
 
@@ -189,11 +190,32 @@ class _ConversationsViewState extends State<_ConversationsView> {
   }
 
   Widget _buildBody(BuildContext context, MessagingState state) {
-    if (state is MessagingLoading) {
-      return const Padding(
-        padding: EdgeInsets.only(top: 80),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
+    if (state is MessagingInitial || state is MessagingLoading) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(
+          children: List.generate(
+            5,
+            (index) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const SkeletonItem(width: 50, height: 50, borderRadius: 25),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        SkeletonItem(width: 150, height: 16),
+                        SizedBox(height: 8),
+                        SkeletonItem(width: 100, height: 12),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       );
     }

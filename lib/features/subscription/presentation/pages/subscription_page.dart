@@ -8,6 +8,8 @@ import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
+import '../../../../core/shared/widgets/app_snackbar.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../domain/entities/subscription_plan_entity.dart';
 import '../bloc/subscription_bloc.dart';
 import '../bloc/subscription_event.dart';
@@ -28,12 +30,11 @@ class SubscriptionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider(
-          create: (_) =>
-              sl<SubscriptionBloc>()..add(const SubscriptionPlansRequested()),
+        BlocProvider.value(
+          value: sl<SubscriptionBloc>()..add(const SubscriptionPlansRequested()),
         ),
-        BlocProvider(
-          create: (_) => sl<SubscriptionComparisonCubit>()..load(),
+        BlocProvider.value(
+          value: sl<SubscriptionComparisonCubit>()..load(),
         ),
         // Top-level route (outside the bottom-nav shell), so the shell's
         // BlocProvider.value for this singleton isn't in scope here —
@@ -153,7 +154,7 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
           },
           builder: (context, state) {
             if (state is SubscriptionLoading || state is SubscriptionInitial) {
-              return const Center(child: CircularProgressIndicator());
+              return const _SubscriptionSkeletonState();
             }
 
             if (state is SubscriptionError) {
@@ -508,6 +509,52 @@ class _PlanCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SubscriptionSkeletonState extends StatelessWidget {
+  const _SubscriptionSkeletonState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          color: AppColors.darkBg,
+          padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 20, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SkeletonItem(width: 140, height: 28, borderRadius: 8, color: Colors.white12),
+              const SizedBox(height: 12),
+              const SkeletonItem(height: 16, borderRadius: 6, color: Colors.white12),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  const Expanded(child: SkeletonItem(height: 48, borderRadius: 12, color: Colors.white12)),
+                  const SizedBox(width: 12),
+                  const Expanded(child: SkeletonItem(height: 48, borderRadius: 12, color: Colors.white12)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SkeletonItem(height: 220, borderRadius: 24),
+                const SizedBox(height: 24),
+                const SkeletonItem(height: 60, borderRadius: 16),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

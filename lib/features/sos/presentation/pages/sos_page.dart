@@ -578,15 +578,6 @@ class _AlertBadgeState extends State<_AlertBadge>
               );
             },
           ),
-          // Original static outer circle
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.warning.withOpacity(0.08),
-            ),
-          ),
           // Inner squircle with shield
           Container(
             width: 64,

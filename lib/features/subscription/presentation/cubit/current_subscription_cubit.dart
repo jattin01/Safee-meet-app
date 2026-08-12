@@ -60,10 +60,15 @@ class CurrentSubscriptionCubit extends Cubit<CurrentSubscriptionState> {
   Future<void> load({bool forceRefresh = false}) async {
     if (state.status == CurrentSubscriptionStatus.loading) return;
 
-    emit(state.copyWith(
-      status: CurrentSubscriptionStatus.loading,
-      clearError: true,
-    ));
+    // Only emit a blocking 'loading' status if we don't already have data.
+    // If we already have data, we just fetch silently in the background
+    // (Stale-While-Revalidate / Cache-First UX).
+    if (state.status != CurrentSubscriptionStatus.loaded) {
+      emit(state.copyWith(
+        status: CurrentSubscriptionStatus.loading,
+        clearError: true,
+      ));
+    }
 
     // Started together (Dart futures run eagerly) and awaited separately,
     // since the two calls return differently-typed Eithers.

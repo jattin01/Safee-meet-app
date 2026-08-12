@@ -22,6 +22,7 @@ import '../../domain/entities/profile_entity.dart';
 import '../bloc/profile_bloc.dart';
 import '../cubit/reviews_cubit.dart';
 import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 
 /// Renders the Safee PIN as a QR PNG and shares it together with the PIN
 /// text through a single OS share sheet.
@@ -35,24 +36,56 @@ Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
       data: pin,
       version: QrVersions.auto,
       gapless: true,
-      eyeStyle: const QrEyeStyle(color: Color(0xFF000000)),
-      dataModuleStyle: const QrDataModuleStyle(color: Color(0xFF000000)),
+      eyeStyle: const QrEyeStyle(
+        color: Color(0xFF000000),
+        eyeShape: QrEyeShape.square,
+      ),
+      dataModuleStyle: const QrDataModuleStyle(
+        color: Color(0xFF000000),
+        dataModuleShape: QrDataModuleShape.square,
+      ),
     );
 
-    // Paint onto an explicit white background ourselves — QrPainter only
-    // draws the black modules and leaves everything else transparent, which
-    // several share targets composite against black, making the code look
-    // like a solid black square once shared.
-    const size = 600.0;
+    // Create a beautiful shareable card image
+    const width = 600.0;
+    const height = 670.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    canvas.drawRect(
-      const Rect.fromLTWH(0, 0, size, size),
+    
+    // Draw the white background
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(const Rect.fromLTWH(0, 0, width, height), const Radius.circular(32)),
       Paint()..color = Colors.white,
     );
-    painter.paint(canvas, const Size(size, size));
+
+    // Draw Title text
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: 'SAFEE PROFILE PIN',
+        style: TextStyle(
+          color: Colors.black,
+          fontSize: 40,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset((width - textPainter.width) / 2, 50),
+    );
+
+    // Add a quiet zone (padding) around the QR code.
+    const padding = 60.0;
+    const qrSize = width - padding * 2;
+    canvas.translate(padding, 130);
+    painter.paint(canvas, const Size(qrSize, qrSize));
+    
+    // Removed subtitle text as requested
+
     final picture = recorder.endRecording();
-    final image = await picture.toImage(size.toInt(), size.toInt());
+    final image = await picture.toImage(width.toInt(), height.toInt());
     final imageData = await image.toByteData(format: ui.ImageByteFormat.png);
     final bytes = imageData!.buffer.asUint8List();
     final dir = await getTemporaryDirectory();
@@ -88,7 +121,7 @@ class ProfilePage extends StatelessWidget {
         // Backs the review stats (rating/count) and the review preview
         // card below — both come from GET /v1/reviews, not from the
         // /v1/auth/me-backed ProfileBloc.
-        BlocProvider(create: (_) => sl<ReviewsCubit>()..load()),
+        BlocProvider.value(value: sl<ReviewsCubit>()..load()),
       ],
       child: const _ProfileView(),
     );
@@ -167,10 +200,7 @@ class _ProfileView extends StatelessWidget {
                 title: 'My Profile',
                 titleFontSize: 18,
                 child: profileLoading
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 32),
-                        child: CircularProgressIndicator(color: Colors.white54),
-                      )
+                    ? const _ProfileSkeletonState()
                     : _ProfileAvatarSection(profile: profile),
               ),
               Padding(
@@ -277,8 +307,17 @@ class _ProfileAvatarSection extends StatelessWidget {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                  color: AppColors.blue,
-                  borderRadius: BorderRadius.circular(22)),
+                color: AppColors.blue,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: avatar != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(22),
@@ -389,7 +428,14 @@ class _PinCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -424,11 +470,36 @@ class _PinCard extends StatelessWidget {
               builder: (_) => Dialog(
                 backgroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(20)),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: QrImageView(
-                      data: displayPin, version: QrVersions.auto, size: 200),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Share Profile',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      QrImageView(
+                        data: pin ?? '',
+                        version: QrVersions.auto,
+                        size: 220,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Let others scan this to view your profile',
+                        style: TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -502,12 +573,26 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 8),
           Text(value,
               style: GoogleFonts.inter(
                   color: AppColors.textPrimary,
@@ -535,7 +620,14 @@ class _TrustScoreRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -584,9 +676,26 @@ class _TrustScoreRow extends StatelessWidget {
   }
 }
 
-class _CurrentPlanCard extends StatelessWidget {
+class _CurrentPlanCard extends StatefulWidget {
   final CurrentSubscriptionState state;
   const _CurrentPlanCard({required this.state});
+
+  @override
+  State<_CurrentPlanCard> createState() => _CurrentPlanCardState();
+}
+
+class _CurrentPlanCardState extends State<_CurrentPlanCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _shimmerController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2500),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
 
   static String _formatDate(DateTime d) => DateFormat('MMM d, yyyy').format(d);
 
@@ -609,91 +718,126 @@ class _CurrentPlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sub = state.subscription;
-    final isLoading = state.status == CurrentSubscriptionStatus.loading &&
-        !state.hasLoadedOnce;
+    final sub = widget.state.subscription;
+    final isLoading = widget.state.status == CurrentSubscriptionStatus.loading &&
+        !widget.state.hasLoadedOnce;
     final label = isLoading ? '—' : (sub?.planLabel ?? 'Free');
     final hasPaidAccess = sub?.hasActiveAccess ?? false;
     final subtitle = isLoading
         ? 'Loading plan…'
         : (sub != null ? _subtitleFor(sub) : "You're on the Free plan");
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.darkBg,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Stack(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.workspace_premium,
-                color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              color: AppColors.darkBg,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
               children: [
-                Text(
-                  'CURRENT PLAN',
-                  style: GoogleFonts.inter(
-                      color: AppColors.textTertiary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(14)),
+                  child: const Icon(Icons.workspace_premium,
+                      color: Colors.white, size: 24),
                 ),
-                const SizedBox(height: 2),
-                Text(label,
-                    style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800)),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          color: AppColors.textTertiary, fontSize: 11)),
-                ],
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'CURRENT PLAN',
+                        style: GoogleFonts.inter(
+                            color: AppColors.textTertiary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(label,
+                          style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800)),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(subtitle,
+                            style: const TextStyle(
+                                color: AppColors.textTertiary, fontSize: 11)),
+                      ],
+                    ],
+                  ),
+                ),
+                // No plan above the user's current one — there's nothing left to
+                // upgrade to, so the Upgrade/Manage CTA is hidden entirely and
+                // only the plan itself (already rendered above) is shown.
+                if (!widget.state.isOnHighestPlan)
+                  GestureDetector(
+                    onTap: () => context.push(AppRoutes.subscription),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                            colors: [AppColors.primary, AppColors.primaryLight]),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(hasPaidAccess ? 'Manage' : 'Upgrade',
+                          style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child:
+                        const Icon(Icons.check, color: AppColors.success, size: 18),
+                  ),
               ],
             ),
           ),
-          // No plan above the user's current one — there's nothing left to
-          // upgrade to, so the Upgrade/Manage CTA is hidden entirely and
-          // only the plan itself (already rendered above) is shown.
-          if (!state.isOnHighestPlan)
-            GestureDetector(
-              onTap: () => context.push(AppRoutes.subscription),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryLight]),
-                  borderRadius: BorderRadius.circular(20),
+          // Sweeping light shimmer effect
+          if (!widget.state.isOnHighestPlan)
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _shimmerController,
+                builder: (context, child) {
+                  final slide = (_shimmerController.value * 3) - 1.5;
+                  return FractionalTranslation(
+                    translation: Offset(slide, 0),
+                    child: child,
+                  );
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.0),
+                        Colors.white.withOpacity(0.12),
+                        Colors.white.withOpacity(0.0),
+                      ],
+                      stops: const [0.2, 0.5, 0.8],
+                      begin: const Alignment(-1.0, -0.3),
+                      end: const Alignment(1.0, 0.3),
+                    ),
+                  ),
                 ),
-                child: Text(hasPaidAccess ? 'Manage' : 'Upgrade',
-                    style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700)),
               ),
-            )
-          else
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child:
-                  const Icon(Icons.check, color: AppColors.success, size: 18),
             ),
         ],
       ),
@@ -758,3 +902,28 @@ class _NavTile extends StatelessWidget {
   }
 }
 
+class _ProfileSkeletonState extends StatelessWidget {
+  const _ProfileSkeletonState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const SkeletonItem(width: 88, height: 88, borderRadius: 22, color: Colors.white12),
+        const SizedBox(height: 14),
+        const SkeletonItem(width: 140, height: 24, borderRadius: 8, color: Colors.white12),
+        const SizedBox(height: 8),
+        const SkeletonItem(width: 180, height: 16, borderRadius: 6, color: Colors.white12),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SkeletonItem(width: 80, height: 26, borderRadius: 20, color: Colors.white12),
+            const SizedBox(width: 8),
+            const SkeletonItem(width: 80, height: 26, borderRadius: 20, color: Colors.white12),
+          ],
+        ),
+      ],
+    );
+  }
+}

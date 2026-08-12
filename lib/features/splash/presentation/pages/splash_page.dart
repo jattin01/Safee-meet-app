@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -25,9 +27,18 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   late Animation<double> _textOpacity;
   late Animation<double> _glowOpacity;
 
+  int _dotIndex = 0;
+  Timer? _dotTimer;
+
   @override
   void initState() {
     super.initState();
+
+    _dotTimer = Timer.periodic(const Duration(milliseconds: 400), (timer) {
+      if (mounted) {
+        setState(() => _dotIndex = (_dotIndex + 1) % 3);
+      }
+    });
 
     _phase1Ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _phase2Ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
@@ -75,6 +86,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _dotTimer?.cancel();
     _phase1Ctrl.dispose();
     _phase2Ctrl.dispose();
     _glowCtrl.dispose();
@@ -206,7 +218,7 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
               animation: _phase2Ctrl,
               builder: (_, __) => Opacity(
                 opacity: _textOpacity.value,
-                child: const _PaginationDots(activeIndex: 0, count: 3),
+                child: _PaginationDots(activeIndex: _dotIndex, count: 3),
               ),
             ),
           ),
@@ -229,14 +241,14 @@ class _PaginationDots extends StatelessWidget {
       children: List.generate(count, (i) {
         final isActive = i == activeIndex;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: isActive ? 22 : 7,
-            height: 7,
+            width: 8,
+            height: 8,
             decoration: BoxDecoration(
               color: isActive ? AppColors.primary : Colors.white.withOpacity(0.25),
-              borderRadius: BorderRadius.circular(4),
+              shape: BoxShape.circle,
             ),
           ),
         );

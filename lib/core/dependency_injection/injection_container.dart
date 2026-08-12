@@ -223,7 +223,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<VerificationRepository>(
     () => VerificationRepositoryImpl(sl()),
   );
-  sl.registerFactory(() => VerificationBloc(sl()));
+  sl.registerLazySingleton(() => VerificationBloc(sl()));
 
   // ── Member Search ─────────────────────────────────────────────────────────
   sl.registerLazySingleton<MemberSearchRemoteDataSource>(
@@ -241,7 +241,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<EmergencyContactRepository>(
     () => EmergencyContactRepositoryImpl(sl()),
   );
-  sl.registerFactory(() => EmergencyContactBloc(sl()));
+  sl.registerLazySingleton(() => EmergencyContactBloc(sl()));
 
   // ── Messaging (Firebase Firestore) ────────────────────────────────────────
   sl.registerLazySingleton<ChatRemoteDataSource>(
@@ -301,7 +301,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton(() => SubmitReviewUseCase(sl()));
   sl.registerFactory(() => SubmitReviewCubit(sl()));
   sl.registerLazySingleton(() => GetReviewsListUseCase(sl()));
-  sl.registerFactory(() => ReviewsCubit(sl(), sl(), sl()));
+  sl.registerLazySingleton(() => ReviewsCubit(sl(), sl(), sl()));
 
   // ── GPS Tracking ──────────────────────────────────────────────────────────
   sl.registerFactory(() => GpsTrackingBloc(sl()));
@@ -323,8 +323,8 @@ Future<void> configureDependencies() async {
   // Singleton (not a factory): the whole app must share one cached
   // current-subscription state instead of each screen fetching its own.
   sl.registerLazySingleton(() => CurrentSubscriptionCubit(sl(), sl()));
-  sl.registerFactory(() => SubscriptionBloc(sl(), sl(), sl(), sl()));
-  sl.registerFactory(() => SubscriptionComparisonCubit(sl()));
+  sl.registerLazySingleton(() => SubscriptionBloc(sl(), sl(), sl(), sl()));
+  sl.registerLazySingleton(() => SubscriptionComparisonCubit(sl()));
 
   // ── Notifications ─────────────────────────────────────────────────────────
   sl.registerLazySingleton<NotificationsRemoteDataSource>(
