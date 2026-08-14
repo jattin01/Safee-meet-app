@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/verification_gate.dart';
@@ -82,7 +83,7 @@ class HomePage extends StatelessWidget {
                           builder: (context, subState) =>
                               _UpgradeCard(state: subState),
                         ),
-                        const SizedBox(height: 100),
+                        const SizedBox(height: 140),
                       ],
                     ),
                   ),
@@ -295,194 +296,192 @@ class _DarkHeader extends StatelessWidget {
   String get _verificationLabel {
     if (profile.verificationStatus == 'not_submitted') return 'Unverified';
     return switch (profile.verificationLevel) {
-      'high' => 'Level 3 Verified',
-      'medium' => 'Level 2 Verified',
-      'low' => 'Level 1 Verified',
-      _ => 'Verification Pending',
+      'level3' => 'Level 3 Verified',
+      'level2' => 'Level 2 Verified',
+      'level1' => 'Level 1 Verified',
+      _ => 'Unverified',
     };
   }
 
   @override
   Widget build(BuildContext context) {
+    String _greeting = 'Good evening';
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      _greeting = 'Good morning';
+    } else if (hour < 17) {
+      _greeting = 'Good afternoon';
+    }
+
+    final _verificationLabel = 'Level 1 Verified';
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.darkBg,
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
-          bottomRight: Radius.circular(28),
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
         ),
       ),
       padding: EdgeInsets.fromLTRB(
         20,
         MediaQuery.of(context).padding.top + 16,
         20,
-        24,
+        28,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const AppLogoWidget(
-                  size: LogoSize.sm, variant: LogoVariant.light),
-              const Spacer(),
+              const AppLogoWidget(size: LogoSize.sm, variant: LogoVariant.light),
               BlocBuilder<NotificationsCubit, NotificationsState>(
                 builder: (context, notifState) {
-                  final unreadCount =
-                      notifState.notifications.where((n) => !n.isRead).length;
-
+                  final hasUnread =
+                      notifState.notifications.any((n) => !n.isRead);
                   return GestureDetector(
-                    onTap: () => context.push(AppRoutes.notifications),
-                    child: unreadCount > 0
-                        ? Badge(
-                            label: Text(
-                              unreadCount > 99 ? '99+' : '$unreadCount',
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 10,
-                                  height: 1.1),
-                            ),
-                            backgroundColor: AppColors.primary,
-                            offset: const Offset(4, -4),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.notifications_none,
-                                  color: Colors.white,
-                                  size: 20,
+                    onTap: () {
+                      if (!requireVerification(context)) return;
+                      context.push(AppRoutes.notifications);
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.06),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          const Icon(
+                            Icons.notifications_none_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                          if (hasUnread)
+                            Positioned(
+                              top: 10,
+                              right: 12,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: AppColors.darkBg, width: 1.5),
                                 ),
                               ),
                             ),
-                          )
-                        : Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.08),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.notifications_none,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                          ),
+                        ],
+                      ),
+                    ),
                   );
                 },
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
+          
+          // Balanced Premium Profile Card
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: AppColors.darkBg2,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              color: const Color(0xFF151E32), // Deep balanced dark blue
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.06),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: AppColors.blue,
-                            borderRadius: BorderRadius.circular(16),
+                    // Elegant Avatar
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.blue.withOpacity(0.6),
+                          width: 2,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.blue.withOpacity(0.2),
+                            blurRadius: 12,
+                            spreadRadius: 2,
                           ),
-                          child: profile.avatarUrl != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Image.network(
-                                    profile.avatarUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Center(
-                                      child: Text(
-                                        profile.initials,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : Center(
+                        ],
+                      ),
+                      child: profile.avatarUrl != null
+                          ? ClipOval(
+                              child: Image.network(
+                                profile.avatarUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Center(
                                   child: Text(
                                     profile.initials,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 20,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
-                        ),
-                        Positioned(
-                          right: -4,
-                          bottom: -4,
-                          child: Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: AppColors.success,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                  color: AppColors.darkBg2, width: 2),
+                              ),
+                            )
+                          : Center(
+                              child: Text(
+                                profile.initials,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.check,
-                              color: Colors.white,
-                              size: 12,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                _greeting,
-                                style: const TextStyle(
-                                  color: AppColors.textTertiary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Text('👋', style: TextStyle(fontSize: 13)),
-                            ],
+                          Text(
+                            '$_greeting 👋',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w400,
+                            ),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 4),
                           Text(
                             profile.name,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 19,
+                              fontSize: 20,
                               fontWeight: FontWeight.w700,
+                              letterSpacing: 0.1,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           _HeaderBadge(
                             label: _verificationLabel,
                             color: AppColors.blue,
@@ -491,29 +490,36 @@ class _DarkHeader extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
+                    // Elegant Trust Score Block
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(14),
+                        color: const Color(0xFF2C1920), // Very dark red tint
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.primary.withOpacity(0.2),
+                          width: 1,
+                        ),
                       ),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             '${profile.trustScore}',
                             style: const TextStyle(
                               color: AppColors.primary,
-                              fontSize: 22,
+                              fontSize: 26,
                               fontWeight: FontWeight.w800,
+                              height: 1.1,
                             ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
                             'TRUST',
                             style: TextStyle(
-                              color: AppColors.primary.withOpacity(0.8),
-                              fontSize: 10,
+                              color: AppColors.primary.withOpacity(0.9),
+                              fontSize: 9,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
                             ),
@@ -523,35 +529,36 @@ class _DarkHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                // Premium Stats Row
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
                         child: _StatTile(
-                          icon: Icons.calendar_today,
+                          icon: Icons.calendar_today_rounded,
                           iconColor: AppColors.primary,
                           value: '${profile.totalMeetings}',
                           label: 'Meetings',
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: _StatTile(
-                          icon: Icons.star,
-                          iconColor: const Color(0xFFFBBF24),
+                          icon: Icons.shield_rounded,
+                          iconColor: const Color(0xFFFBBF24), // Amber
                           value: '${profile.safetyScore}',
                           label: 'Safety',
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: _StatTile(
-                          icon: Icons.person_search,
-                          iconColor: const Color(0xFFFBBF24),
+                          icon: Icons.search_rounded,
+                          iconColor: AppColors.blueLight,
                           value: '${profile.pinSearchCount}',
-                          label: 'Safee PIN Searches',
+                          label: 'PIN Searches',
                         ),
                       ),
                     ],
@@ -579,20 +586,27 @@ class _HeaderBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.check_rounded, color: textColor, size: 10),
         ),
-      ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: textColor.withOpacity(0.9),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -614,34 +628,44 @@ class _StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+          width: 1,
+        ),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: iconColor, size: 18),
-          const SizedBox(height: 6),
+          Icon(icon, color: iconColor, size: 22),
+          const SizedBox(height: 12),
           Text(
             value,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
             label,
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.1,
+            ),
           ),
         ],
       ),
@@ -778,68 +802,41 @@ class _SafetyCenter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.textPrimary.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _SafetyRow(
-            icon: Icons.warning_amber_rounded,
-            iconColor: AppColors.primary,
-            iconBg: AppColors.primary.withOpacity(0.1),
-            title: 'Emergency SOS',
-            subtitle: 'Tap to activate an emergency alert',
-            onTap: () {
-              if (!requireVerification(context)) return;
-              context.push(AppRoutes.sos);
-            },
-          ),
-          const _RowDivider(),
-          _SafetyRow(
-            icon: Icons.people_outline,
-            iconColor: AppColors.blue,
-            iconBg: AppColors.blue.withOpacity(0.1),
-            title: 'Trusted Contacts',
-            subtitle: 'Manage emergency contacts and alerts',
-            onTap: () => context.push(AppRoutes.emergencyContacts),
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        _FloatingRow(
+          icon: Icons.emergency_share_rounded,
+          color: AppColors.primary,
+          title: 'Emergency SOS',
+          subtitle: 'Tap to activate an emergency alert',
+          onTap: () {
+            if (!requireVerification(context)) return;
+            context.push(AppRoutes.sos);
+          },
+        ),
+        const SizedBox(height: 12),
+        _FloatingRow(
+          icon: Icons.health_and_safety_rounded,
+          color: AppColors.blue,
+          title: 'Trusted Contacts',
+          subtitle: 'Manage emergency contacts and alerts',
+          onTap: () => context.push(AppRoutes.emergencyContacts),
+        ),
+      ],
     );
   }
 }
 
-class _RowDivider extends StatelessWidget {
-  const _RowDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Divider(height: 1, thickness: 1, color: AppColors.borderLight);
-  }
-}
-
-class _SafetyRow extends StatelessWidget {
+class _FloatingRow extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
-  final Color iconBg;
+  final Color color;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
 
-  const _SafetyRow({
+  const _FloatingRow({
     required this.icon,
-    required this.iconColor,
-    required this.iconBg,
+    required this.color,
     required this.title,
     required this.subtitle,
     required this.onTap,
@@ -847,31 +844,42 @@ class _SafetyRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(12),
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: iconColor, size: 20),
+              child: Icon(icon, color: color, size: 24),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: GoogleFonts.inter(
                       color: AppColors.textPrimary,
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -880,14 +888,21 @@ class _SafetyRow extends StatelessWidget {
                     subtitle,
                     style: const TextStyle(
                       color: AppColors.textSecondary,
-                      fontSize: 12,
+                      fontSize: 13,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right,
-                color: AppColors.textTertiary, size: 22),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.05),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.textTertiary, size: 20),
+            ),
           ],
         ),
       ),
@@ -901,73 +916,17 @@ class _MeetingSyncCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return _FloatingRow(
+      icon: Icons.sync_rounded,
+      color: AppColors.blue,
+      title: 'Meeting History Sync',
+      subtitle: profile.totalMeetings > 0
+          ? '${profile.totalMeetings} meetings securely recorded'
+          : 'No meetings synced yet',
       onTap: () {
         if (!requireVerification(context)) return;
         context.push(AppRoutes.meetings);
       },
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.textPrimary.withOpacity(0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.blue.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child:
-                  const Icon(Icons.event_note, color: AppColors.blue, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Meeting history sync',
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    profile.totalMeetings > 0
-                        ? 'You have ${profile.totalMeetings} meetings recorded. Detailed history will appear here as dashboard data becomes available.'
-                        : 'No live meeting history is available from the current profile API yet.',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: Icon(Icons.chevron_right,
-                  color: AppColors.textTertiary, size: 20),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

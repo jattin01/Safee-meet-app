@@ -160,19 +160,16 @@ class _ConversationsViewState extends State<_ConversationsView> {
                         filled: true,
                         fillColor: Colors.white,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide:
-                              BorderSide(color: AppColors.border, width: 1),
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide:
-                              BorderSide(color: AppColors.border, width: 1),
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide:
-                              BorderSide(color: AppColors.primary, width: 1.5),
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(color: AppColors.primary.withOpacity(0.3), width: 1.5),
                         ),
                         contentPadding:
                             const EdgeInsets.symmetric(vertical: 10),
@@ -380,14 +377,21 @@ class _ConversationTile extends StatelessWidget {
           color: conversation.isPinned
               ? AppColors.primary.withOpacity(0.04)
               : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: hasUnread
                 ? AppColors.primary.withOpacity(0.3)
                 : (conversation.isPinned
                     ? AppColors.primary.withOpacity(0.2)
-                    : AppColors.border),
+                    : Colors.black.withOpacity(0.04)),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [

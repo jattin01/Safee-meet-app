@@ -369,14 +369,30 @@ class _PlanCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onSelect,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
               color: selected ? color : AppColors.border,
               width: selected ? 2 : 1),
+          boxShadow: [
+            if (selected)
+              BoxShadow(
+                color: color.withOpacity(0.15),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              )
+            else
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+          ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -393,7 +409,7 @@ class _PlanCard extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.star, color: Colors.white, size: 14),
+                    const Icon(Icons.star_rounded, color: Colors.white, size: 16),
                     const SizedBox(width: 6),
                     Text(
                       'MOST POPULAR',
@@ -441,18 +457,18 @@ class _PlanCard extends StatelessWidget {
                         children: [
                           if (yearly && plan.yearlySavingsPercent > 0)
                             Container(
-                              margin: const EdgeInsets.only(bottom: 2),
+                              margin: const EdgeInsets.only(bottom: 4),
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                                  horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: AppColors.success.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(100),
                               ),
                               child: Text(
                                 'Save ${plan.yearlySavingsPercent}%',
                                 style: GoogleFonts.inter(
                                     color: AppColors.success,
-                                    fontSize: 10,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w800),
                               ),
                             ),
@@ -478,18 +494,23 @@ class _PlanCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   ...visibleFeatures.map((f) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.only(bottom: 10),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.check, color: color, size: 16),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1),
+                              child: Icon(Icons.check_circle_rounded, color: color, size: 16),
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(f,
                                   style: GoogleFonts.inter(
                                       color: AppColors.textSecondary,
                                       fontSize: 13,
+                                      height: 1.3,
                                       fontWeight: FontWeight.w600)),
                             ),
                           ],

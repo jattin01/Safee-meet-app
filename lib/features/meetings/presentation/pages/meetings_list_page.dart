@@ -19,7 +19,7 @@ class MeetingsListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider.value(
-      value: sl<MeetingsBloc>()..add(const MeetingsLoadRequested()),
+      value: sl<MeetingsBloc>(),
       child: _MeetingsListView(initialTab: initialTab),
     );
   }
@@ -52,6 +52,8 @@ class _MeetingsListViewState extends State<_MeetingsListView>
       vsync: this,
       initialIndex: _getTabIndex(widget.initialTab),
     );
+    // Force a data sync immediately when the screen opens
+    context.read<MeetingsBloc>().add(const MeetingsLoadRequested());
   }
 
   @override
@@ -287,13 +289,13 @@ class _MeetingCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.black.withOpacity(0.04)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -363,6 +365,10 @@ class _MeetingCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (clickable) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+                ],
               ],
             ),
             const SizedBox(height: 14),

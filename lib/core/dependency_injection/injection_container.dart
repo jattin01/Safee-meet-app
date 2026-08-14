@@ -232,7 +232,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<MemberSearchRepository>(
     () => MemberSearchRepositoryImpl(sl()),
   );
-  sl.registerFactory(() => MemberSearchBloc(sl(), sl(), sl()));
+  sl.registerLazySingleton(() => MemberSearchBloc(sl(), sl(), sl())..add(const RecentSearchesRequested()));
 
   // ── Settings — Emergency Contacts ────────────────────────────────────────
   sl.registerLazySingleton<EmergencyContactRemoteDataSource>(
@@ -274,7 +274,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<MeetingsRepository>(
     () => MeetingsRepositoryImpl(sl(), sl()),
   );
-  sl.registerLazySingleton(() => MeetingsBloc(sl()));
+  sl.registerLazySingleton(() => MeetingsBloc(sl())..add(const MeetingsLoadRequested()));
 
   // ── Meetings — Emergency Share ────────────────────────────────────────────
   sl.registerLazySingleton<EmergencyShareRemoteDataSource>(
@@ -292,7 +292,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<ProfileRepository>(
     () => ProfileRepositoryImpl(sl(), sl()),
   );
-  sl.registerFactory(() => ProfileBloc(sl()));
+  sl.registerLazySingleton(() => ProfileBloc(sl())..add(const ProfileLoadRequested()));
   // Singleton (not a factory): the verification-gate router guard and every
   // screen need to read the *same* instance so verification status stays in
   // sync app-wide — see AppRoutes' restricted-route redirect and

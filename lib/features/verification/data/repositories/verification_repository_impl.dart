@@ -66,7 +66,7 @@ class VerificationRepositoryImpl implements VerificationRepository {
   String _levelLabel(int? level) => switch (level) {
         1 => 'level1',
         2 => 'level2',
-        3 => 'professional',
+        3 => 'level3',
         _ => 'none',
       };
 

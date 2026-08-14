@@ -57,11 +57,8 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
     _startTimer();
     _controller = TextEditingController();
     _focusNode = FocusNode();
-    // Auto-focus so the keyboard (and the OS's one-time-code suggestion,
-    // where supported) appears the moment this step is shown.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
-    });
+    // Auto-focus removed to prevent OS from suggesting cached OTPs on screen load.
+    // The user will tap the field manually when the SMS arrives.
     _focusNode.addListener(() => setState(() {}));
   }
 
@@ -159,8 +156,7 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
               // Real input sits on top, fully transparent — it captures
               // taps/typing/autofill; the boxes above are pure display.
               Positioned.fill(
-                child: Opacity(
-                  opacity: 0,
+                child: AutofillGroup(
                   child: TextField(
                     controller: _controller,
                     focusNode: _focusNode,
@@ -169,11 +165,15 @@ class _OtpInputWidgetState extends State<OtpInputWidget> {
                     textInputAction: TextInputAction.done,
                     maxLength: widget.length,
                     showCursor: false,
+                    cursorColor: Colors.transparent,
+                    style: const TextStyle(color: Colors.transparent, fontSize: 1),
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     onChanged: _onChanged,
                     decoration: const InputDecoration(
                       counterText: '',
                       border: InputBorder.none,
+                      filled: true,
+                      fillColor: Colors.transparent,
                     ),
                   ),
                 ),

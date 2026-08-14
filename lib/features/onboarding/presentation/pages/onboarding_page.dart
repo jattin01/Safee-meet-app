@@ -97,9 +97,27 @@ class _OnboardingPageState extends State<OnboardingPage> with TickerProviderStat
     final isLast = _current == _slides.length - 1;
     return Scaffold(
       backgroundColor: AppColors.lightBg,
-      body: SafeArea(
-        child: Column(
-          children: [
+      body: Stack(
+        children: [
+          // Dark Header matching Home Screen
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: MediaQuery.of(context).size.height * 0.48,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppColors.darkBg,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(40),
+                  bottomRight: Radius.circular(40),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
             // Skip
             Align(
               alignment: Alignment.topRight,
@@ -110,7 +128,7 @@ class _OnboardingPageState extends State<OnboardingPage> with TickerProviderStat
                   child: Text(
                     'Skip',
                     style: GoogleFonts.inter(
-                      color: AppColors.textPrimary,
+                      color: Colors.white70,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -152,6 +170,8 @@ class _OnboardingPageState extends State<OnboardingPage> with TickerProviderStat
             ),
           ],
         ),
+      ),
+        ],
       ),
     );
   }
@@ -203,65 +223,72 @@ class _SlideView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 24),
-          _illustration,
-          const SizedBox(height: 80),
-          Row(
-            children: List.generate(total, (i) {
-              final isActive = i == currentIndex;
-              return GestureDetector(
-                onTap: () => onDotTap(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.only(right: 8),
-                  width: isActive ? 28 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: isActive ? slide.accentColor : AppColors.border,
-                    borderRadius: BorderRadius.circular(4),
+    return CustomScrollView(
+      slivers: [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                _illustration,
+                const Spacer(),
+                Row(
+                  children: List.generate(total, (i) {
+                    final isActive = i == currentIndex;
+                    return GestureDetector(
+                      onTap: () => onDotTap(i),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        margin: const EdgeInsets.only(right: 8),
+                        width: isActive ? 28 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: isActive ? slide.accentColor : AppColors.border,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  slide.title,
+                  style: GoogleFonts.inter(
+                    color: AppColors.textPrimary,
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                    letterSpacing: -1.0,
                   ),
                 ),
-              );
-            }),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            slide.title,
-            style: GoogleFonts.inter(
-              color: AppColors.textPrimary,
-              fontSize: 36,
-              fontWeight: FontWeight.w800,
-              height: 1.1,
-              letterSpacing: -1.0,
+                const SizedBox(height: 8),
+                Text(
+                  slide.tagline,
+                  style: GoogleFonts.inter(
+                    color: slide.accentColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  slide.subtitle,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 32),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            slide.tagline,
-            style: GoogleFonts.inter(
-              color: slide.accentColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            slide.subtitle,
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 15,
-              height: 1.6,
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -272,22 +299,24 @@ class _LogoIllustration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
     return Container(
       width: double.infinity,
-      height: 310,
+      height: h < 700 ? 220 : 280,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.darkBg2,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withOpacity(0.15),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
         ],
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: _FloatingWidget(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset('assets/images/brand_logo_icon.png', width: 90, fit: BoxFit.contain),
           const SizedBox(height: 18),
@@ -302,7 +331,7 @@ class _LogoIllustration extends StatelessWidget {
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.5,
-                  color: AppColors.textPrimary,
+                  color: Colors.white,
                 ),
               ),
               Text(
@@ -334,7 +363,7 @@ class _LogoIllustration extends StatelessWidget {
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondary,
+                  color: Colors.white70,
                 ),
               ),
               const SizedBox(width: 8),
@@ -350,6 +379,7 @@ class _LogoIllustration extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -360,24 +390,32 @@ class _IdentityIllustration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
     return Container(
       width: double.infinity,
-      height: 310,
+      height: h < 700 ? 220 : 280,
       decoration: BoxDecoration(
-        color: AppColors.cardBg,
+        color: AppColors.darkBg2,
         borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
           // Soft glow behind the card
           Container(
-            width: 220,
-            height: 220,
+            width: 280,
+            height: 280,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
-                colors: [AppColors.blue.withOpacity(0.12), AppColors.blue.withOpacity(0.0)],
+                colors: [AppColors.blue.withOpacity(0.2), Colors.transparent],
               ),
             ),
           ),
@@ -397,14 +435,15 @@ class _IdentityIllustration extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 // ID card
-                Container(
-                  width: 200,
+                _FloatingWidget(
+                  child: Container(
+                    width: 200,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.darkBg,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withOpacity(0.3),
                         blurRadius: 18,
                         offset: const Offset(0, 8),
                       ),
@@ -479,6 +518,7 @@ class _IdentityIllustration extends StatelessWidget {
                     ],
                   ),
                 ),
+                ),
               ],
             ),
           ),
@@ -498,7 +538,7 @@ class _Bar extends StatelessWidget {
       width: width,
       height: 6,
       decoration: BoxDecoration(
-        color: AppColors.border,
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(3),
       ),
     );
@@ -543,35 +583,44 @@ class _MapIllustration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
     return Container(
       width: double.infinity,
-      height: 310,
+      height: h < 700 ? 220 : 280,
       decoration: BoxDecoration(
-        color: AppColors.cardBg,
+        color: AppColors.darkBg2,
         borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
           Container(
-            width: 220,
-            height: 220,
+            width: 280,
+            height: 280,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
-                colors: [AppColors.success.withOpacity(0.12), AppColors.success.withOpacity(0.0)],
+                colors: [AppColors.success.withOpacity(0.2), Colors.transparent],
               ),
             ),
           ),
-          Container(
-            width: 230,
-            height: 180,
+          _FloatingWidget(
+            child: Container(
+              width: 230,
+              height: 180,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.darkBg,
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withOpacity(0.3),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -603,6 +652,7 @@ class _MapIllustration extends StatelessWidget {
               ],
             ),
           ),
+          ),
         ],
       ),
     );
@@ -613,7 +663,7 @@ class _MapMockPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = AppColors.border.withOpacity(0.6)
+      ..color = Colors.white.withOpacity(0.05)
       ..strokeWidth = 1;
     const step = 28.0;
     for (double x = 0; x < size.width; x += step) {
@@ -674,3 +724,42 @@ class _MapMockPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
+class _FloatingWidget extends StatefulWidget {
+  final Widget child;
+  const _FloatingWidget({required this.child});
+
+  @override
+  State<_FloatingWidget> createState() => _FloatingWidgetState();
+}
+
+class _FloatingWidgetState extends State<_FloatingWidget> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat(reverse: true);
+    _anim = Tween<double>(begin: -8, end: 8).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutSine));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, _anim.value),
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
+}
+

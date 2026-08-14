@@ -156,58 +156,53 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
     _loadActiveMeetings();
   }
 
-  // Pulls the meeting history (GET /v1/meetings) directly from the
-  // repository rather than through MeetingsBloc — that bloc's state
-  // machine is shared with the create-meeting submission below, and
-  // routing this check through it would flip the same MeetingsLoading
-  // state the "Creating…" button relies on.
+  void _processMeetings(List<MeetingEntity> meetings) {
+    final now = DateTime.now();
+    final active = meetings
+        .where((m) =>
+            _activeStatuses.contains(m.status) &&
+            now.isBefore(m.scheduledAt.add(const Duration(minutes: 15))))
+        .toList()
+      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+    
+    if (mounted) {
+      setState(() {
+        _checkingActiveMeeting = false;
+        _activeMeetings = active;
+        final combined = DateTime(_selectedDate.year, _selectedDate.month,
+            _selectedDate.day, _selectedTime.hour, _selectedTime.minute);
+        final allowed = _nextAvailableSlot(combined);
+        if (allowed.isAfter(combined)) {
+          _selectedDate = DateTime(allowed.year, allowed.month, allowed.day);
+          _selectedTime = TimeOfDay(hour: allowed.hour, minute: allowed.minute);
+        }
+      });
+      
+      if (active.isEmpty) return;
+      // Each window's end is a hard deadline that lapses while this page
+      // might just be sitting open — poll for that instead of only ever
+      // re-deriving it from a fresh API response.
+      _activeMeetingRecheckTimer ??= Timer.periodic(
+        _activeMeetingRecheckInterval,
+        (_) => _pruneLapsedActiveMeetings(),
+      );
+    }
+  }
+
   Future<void> _loadActiveMeetings() async {
+    final blocState = sl<MeetingsBloc>().state;
+    if (blocState is MeetingsListLoaded) {
+      _processMeetings(blocState.meetings);
+      return;
+    }
+
     final result = await sl<MeetingsRepository>().getMeetings();
     if (!mounted) return;
     result.fold(
       (_) {
-        // A failed history fetch shouldn't block meeting creation — fall
-        // back to no restriction rather than surfacing an error here.
         setState(() => _checkingActiveMeeting = false);
       },
-      (meetings) {
-        // A meeting only counts as "active" while its own 15-minute block
-        // window is still running — a `scheduled`/`pending_approval`
-        // meeting whose window has already lapsed (e.g. the backend hasn't
-        // flipped it to completed/expired yet) shouldn't warn or restrict
-        // anything. Every meeting that qualifies blocks its own window
-        // independently — there can be several at once, at different times.
-        final now = DateTime.now();
-        final active = meetings
-            .where((m) =>
-                _activeStatuses.contains(m.status) &&
-                now.isBefore(m.scheduledAt.add(const Duration(minutes: 15))))
-            .toList()
-          ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
-        setState(() {
-          _checkingActiveMeeting = false;
-          _activeMeetings = active;
-          // The current selection may now fall inside one of the
-          // newly-known block windows — bump it forward past whichever
-          // (possibly chained) windows it lands in, same as the past-time
-          // bump above. Times outside every window are unaffected.
-          final combined = DateTime(_selectedDate.year, _selectedDate.month,
-              _selectedDate.day, _selectedTime.hour, _selectedTime.minute);
-          final allowed = _nextAvailableSlot(combined);
-          if (allowed.isAfter(combined)) {
-            _selectedDate = DateTime(allowed.year, allowed.month, allowed.day);
-            _selectedTime = TimeOfDay(hour: allowed.hour, minute: allowed.minute);
-          }
-        });
-        if (active.isEmpty) return;
-        // Each window's end is a hard deadline that lapses while this page
-        // might just be sitting open — poll for that instead of only ever
-        // re-deriving it from a fresh API response.
-        _activeMeetingRecheckTimer ??= Timer.periodic(
-          _activeMeetingRecheckInterval,
-          (_) => _pruneLapsedActiveMeetings(),
-        );
-      },
+      (meetings) => _processMeetings(meetings),
     );
   }
 
@@ -652,7 +647,7 @@ class _PartnerCard extends StatelessWidget {
   // and every other verification-level display in the app (settings,
   // profile, home) already switches on — just abbreviated to fit this
   // compact inline badge.
-  static const _levelLabels = {'low': 'L1', 'medium': 'L2', 'high': 'L3'};
+  static const _levelLabels = {'level1': 'L1', 'level2': 'L2', 'level3': 'L3'};
 
   @override
   Widget build(BuildContext context) {

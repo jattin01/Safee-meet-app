@@ -268,17 +268,18 @@ class _RatingSummary extends StatelessWidget {
                   Text(summary.averageRating.toStringAsFixed(1),
                       style: GoogleFonts.inter(
                           color: Colors.white,
-                          fontSize: 40,
-                          fontWeight: FontWeight.w800)),
+                          fontSize: 44,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -1)),
                   Row(
                     children: List.generate(
                         5,
-                        (i) => const Icon(Icons.star,
-                            color: AppColors.warning, size: 14)),
+                        (i) => const Icon(Icons.star_rounded,
+                            color: AppColors.warning, size: 16)),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text('${summary.totalReviews} reviews',
-                      style: TextStyle(
+                      style: const TextStyle(
                           color: AppColors.textTertiary, fontSize: 11)),
                 ],
               ),
@@ -292,19 +293,19 @@ class _RatingSummary extends StatelessWidget {
                         child: Row(
                           children: [
                             Text('$star',
-                                style: TextStyle(
+                                style: const TextStyle(
                                     color: AppColors.textTertiary,
                                     fontSize: 11)),
                             const SizedBox(width: 3),
-                            const Icon(Icons.star,
-                                color: AppColors.warning, size: 10),
+                            const Icon(Icons.star_rounded,
+                                color: AppColors.warning, size: 12),
                             const SizedBox(width: 6),
                             Expanded(
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(3),
+                                borderRadius: BorderRadius.circular(10),
                                 child: LinearProgressIndicator(
                                   value: (summary.breakdown[star] ?? 0) / maxCount,
-                                  minHeight: 5,
+                                  minHeight: 6,
                                   backgroundColor:
                                       Colors.white.withOpacity(0.08),
                                   valueColor: const AlwaysStoppedAnimation(
@@ -317,7 +318,7 @@ class _RatingSummary extends StatelessWidget {
                               width: 18,
                               child: Text('${summary.breakdown[star] ?? 0}',
                                   textAlign: TextAlign.right,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                       color: AppColors.textTertiary,
                                       fontSize: 11)),
                             ),
@@ -411,34 +412,50 @@ class _FilterChips extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 62,
+      height: 64, // Slightly taller to accommodate shadow
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         children: filters.map((f) {
           final active = selected == f;
           return Padding(
-            padding: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
               onTap: () => onSelect(f),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                decoration: BoxDecoration(
-                  color: active ? AppColors.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: active ? AppColors.primary : AppColors.border),
-                ),
-                child: Text(
-                  f,
-                  softWrap: false,
-                  overflow: TextOverflow.visible,
-                  style: GoogleFonts.inter(
-                    color: active ? Colors.white : AppColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                    height: 1.0,
+              child: Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: active ? AppColors.primary : Colors.white,
+                    borderRadius: BorderRadius.circular(100),
+                    border: Border.all(
+                        color: active ? AppColors.primary : AppColors.border),
+                    boxShadow: [
+                      if (!active)
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.02),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      if (active)
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
+                  ),
+                  child: Text(
+                    f,
+                    softWrap: false,
+                    overflow: TextOverflow.visible,
+                    style: GoogleFonts.inter(
+                      color: active ? Colors.white : AppColors.textSecondary,
+                      fontSize: 13.5,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ),
@@ -486,8 +503,15 @@ class _ReviewCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -527,10 +551,10 @@ class _ReviewCard extends StatelessWidget {
                         Tooltip(
                           message: _verificationLabel(review.authorVerificationLevel),
                           child: Icon(
-                            verified ? Icons.verified : Icons.shield_outlined,
+                            verified ? Icons.verified_rounded : Icons.shield_outlined,
                             color:
                                 verified ? AppColors.blue : AppColors.textTertiary,
-                            size: 14,
+                            size: 15,
                           ),
                         ),
                       ],
@@ -542,10 +566,10 @@ class _ReviewCard extends StatelessWidget {
                             5,
                             (i) => Icon(
                                   i < review.rating.round()
-                                      ? Icons.star
-                                      : Icons.star_border,
+                                      ? Icons.star_rounded
+                                      : Icons.star_border_rounded,
                                   color: AppColors.warning,
-                                  size: 13,
+                                  size: 14,
                                 )),
                         const SizedBox(width: 6),
                         Text('· ${DateFormat('MMM d, yyyy').format(review.createdAt)}',
@@ -601,33 +625,35 @@ class _ReviewCard extends StatelessWidget {
                 onTap: onHelpful,
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: AppColors.cardBg,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(100),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.thumb_up_outlined,
-                          color: AppColors.textSecondary, size: 13),
+                      const Icon(Icons.thumb_up_outlined,
+                          color: AppColors.textSecondary, size: 14),
                       const SizedBox(width: 6),
                       Text('Helpful (${review.helpfulCount})',
-                          style: TextStyle(
-                              color: AppColors.textSecondary, fontSize: 12)),
+                          style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               if (review.verifiedMeeting) ...[
-                Icon(Icons.check_circle, color: AppColors.success, size: 14),
+                const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 16),
                 const SizedBox(width: 4),
                 Text(
                   'Verified Meeting',
                   style: GoogleFonts.inter(
                       color: AppColors.success,
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w700),
                 ),
               ],
@@ -649,17 +675,17 @@ class _RecommendationBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: AppColors.success.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(100),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle, color: AppColors.success, size: 12),
+          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 14),
           const SizedBox(width: 4),
           Text(
             label,
             style: GoogleFonts.inter(
-                color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w700),
+                color: AppColors.success, fontSize: 11.5, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -735,7 +761,7 @@ class _ReviewCardSkeleton extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(

@@ -91,14 +91,21 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   }
 
   Future<void> _onLoad(ProfileLoadRequested _, Emitter<ProfileState> emit) async {
-    // Skip the full-screen loading state on a pull-to-refresh (already have
-    // a ProfileLoaded to keep showing) — only the very first load should
-    // blank the screen while it fetches.
-    if (state is! ProfileLoaded) emit(const ProfileLoading());
+    final currentState = state;
+    if (currentState is! ProfileLoaded) {
+      emit(const ProfileLoading());
+    }
+    
     final result = await _repository.getProfile();
     result.fold(
       (f) => emit(ProfileError(f.message)),
-      (p) => emit(ProfileLoaded(profile: p)),
+      (p) {
+        if (currentState is ProfileLoaded) {
+          emit(currentState.copyWith(profile: p));
+        } else {
+          emit(ProfileLoaded(profile: p));
+        }
+      },
     );
   }
 

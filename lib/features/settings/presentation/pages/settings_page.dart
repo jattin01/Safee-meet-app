@@ -400,10 +400,10 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
   }
 
   String _verificationLabel(String level) => switch (level) {
-        'high' => 'Level 3 Verified',
-        'medium' => 'Level 2 Verified',
-        'low' => 'Level 1 Verified',
-        _ => 'Verification not completed',
+        'level3' => 'Level 3 Verified',
+        'level2' => 'Level 2 Verified',
+        'level1' => 'Level 1 Verified',
+        _ => 'Unverified',
       };
 
   Future<void> _logout() async {
@@ -483,7 +483,7 @@ class _ProfileMiniCard extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${profile.verificationLevel == 'none' ? 'Unverified' : profile.verificationLevel.toUpperCase()} · #${profile.safeePIN}',
+                '${profile.verificationLevel == 'level3' ? 'Level 3' : profile.verificationLevel == 'level2' ? 'Level 2' : profile.verificationLevel == 'level1' ? 'Level 1' : 'Unverified'} · #${profile.safeePIN}',
                 style: const TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 13,

@@ -115,8 +115,8 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider(
-          create: (_) => sl<ProfileBloc>()..add(const ProfileLoadRequested()),
+        BlocProvider.value(
+          value: sl<ProfileBloc>(),
         ),
         // Backs the review stats (rating/count) and the review preview
         // card below — both come from GET /v1/reviews, not from the
@@ -146,11 +146,10 @@ class _ProfileView extends StatelessWidget {
   }
 
   String? _verificationLabel(String? level) => switch (level) {
-        'high' => 'Level 3 Verified',
-        'medium' => 'Level 2 Verified',
-        'low' => 'Level 1 Verified',
-        'none' => 'Not verified yet',
-        _ => null,
+        'level3' => 'Level 3 Verified',
+        'level2' => 'Level 2 Verified',
+        'level1' => 'Level 1 Verified',
+        _ => 'Not verified yet',
       };
 
   String _membershipSubtitle(CurrentSubscriptionState state) {
@@ -308,13 +307,13 @@ class _ProfileAvatarSection extends StatelessWidget {
               height: 88,
               decoration: BoxDecoration(
                 color: AppColors.blue,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white, width: 2),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: AppColors.blue.withOpacity(0.6), width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    color: AppColors.blue.withOpacity(0.25),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
@@ -365,15 +364,15 @@ class _ProfileAvatarSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (level == 'low' || level == 'medium' || level == 'high')
+            if (level == 'level1' || level == 'level2' || level == 'level3')
               const _Badge(
                   emoji: '🟢', label: 'Level 1', color: AppColors.success),
-            if (level == 'medium' || level == 'high') ...[
+            if (level == 'level2' || level == 'level3') ...[
               const SizedBox(width: 8),
               const _Badge(
                   emoji: '🔵', label: 'Level 2', color: AppColors.blue),
             ],
-            if (level == 'high') ...[
+            if (level == 'level3') ...[
               const SizedBox(width: 8),
               const _Badge(
                   emoji: '⭐', label: 'Level 3', color: AppColors.warning),
@@ -427,13 +426,13 @@ class _PinCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border, width: 1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withOpacity(0.04), width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppColors.textPrimary.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -491,11 +490,15 @@ class _PinCard extends StatelessWidget {
                         size: 220,
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'Let others scan this to view your profile',
-                        style: TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 13,
+                       const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Let others scan this to view your profile',
+                          style: TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ],
@@ -572,13 +575,13 @@ class _StatCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border, width: 1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.04), width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppColors.textPrimary.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -619,13 +622,13 @@ class _TrustScoreRow extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border, width: 1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withOpacity(0.04), width: 1),
         boxShadow: [
           BoxShadow(
-            color: AppColors.textPrimary.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -736,6 +739,13 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
             decoration: BoxDecoration(
               color: AppColors.darkBg,
               borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Row(
               children: [

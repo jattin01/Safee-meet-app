@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -192,14 +194,25 @@ class _TrustScoreCard extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                SizedBox.expand(
-                  child: CircularProgressIndicator(
-                    value: (status.trustScore / 100).clamp(0.0, 1.0),
-                    strokeWidth: 12,
-                    strokeCap: StrokeCap.round,
-                    backgroundColor: Colors.white.withOpacity(0.1),
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.2),
+                        blurRadius: 24,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: CustomPaint(
+                    painter: _GradientCircularProgressPainter(
+                      progress: (status.trustScore / 100).clamp(0.0, 1.0),
+                      strokeWidth: 14,
+                      trackColor: Colors.white.withOpacity(0.06),
+                      gradientColors: const [Color(0xFFFF6B6B), AppColors.primary],
+                    ),
+                    child: const SizedBox.expand(),
                   ),
                 ),
                 // A lone Text as the Stack's only other child is centered by
@@ -210,8 +223,9 @@ class _TrustScoreCard extends StatelessWidget {
                   '${status.trustScore}',
                   style: GoogleFonts.inter(
                       color: Colors.white,
-                      fontSize: 40,
-                      fontWeight: FontWeight.w800),
+                      fontSize: 44,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1),
                 ),
               ],
             ),
@@ -236,36 +250,40 @@ class _TrustScoreCard extends StatelessWidget {
           Text(
             _subheadline(status),
             style: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: WrapAlignment.center,
-            children: [
-              _MiniBadge(
-                label: status.level1Complete
-                    ? 'Level 1 Active'
-                    : 'Level 1 Pending',
-                color: status.level1Complete
-                    ? AppColors.success
-                    : AppColors.warning,
+          if (status.kycStatus == 'approved') ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.success.withOpacity(0.2)),
               ),
-              _MiniBadge(
-                label: status.verificationLevel == 'none'
-                    ? 'No badge yet'
-                    : '${status.verificationLevel.toUpperCase()} tier',
-                color: status.verificationLevel == 'high'
-                    ? AppColors.blue
-                    : AppColors.primary,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.verified_user_rounded,
+                      color: AppColors.success, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Level ${status.verificationLevel == 'level3' ? '3' : status.verificationLevel == 'level2' ? '2' : '1'} Verified',
+                    style: const TextStyle(
+                      color: AppColors.success,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
   }
-
   String _headline(VerificationStatusEntity status) =>
       switch (status.kycStatus) {
         'approved' => 'Identity verified',
@@ -277,11 +295,11 @@ class _TrustScoreCard extends StatelessWidget {
 
   String _subheadline(VerificationStatusEntity status) =>
       switch (status.kycStatus) {
-        'approved' => 'Your Level 1 verification is active',
-        'pending' => 'Our team is reviewing your documents',
-        'rejected' => 'Update and resubmit your documents',
-        'draft' => 'Finish the remaining steps to submit',
-        _ => 'Complete identity verification to earn trust',
+        'approved' => 'You have successfully passed all identity checks.',
+        'pending' => 'Your documents are currently being reviewed',
+        'rejected' => 'Please update the requested information to proceed',
+        'draft' => 'Complete your verification to access all features',
+        _ => 'Start the verification process to get verified',
       };
 }
 
@@ -343,41 +361,106 @@ class _StatusBanner extends StatelessWidget {
                   'Complete Level 1 verification to strengthen your trust profile.',
               };
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(0.35)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Stack(
         children: [
-          Icon(
-            status.kycStatus == 'approved'
-                ? Icons.verified
-                : status.kycStatus == 'rejected'
-                    ? Icons.error_outline
-                    : Icons.hourglass_top,
-            color: color,
+          // Top Left Colored Aura Blob
+          Positioned(
+            left: -40,
+            top: -40,
+            child: Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.25), // Glowing aura
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: GoogleFonts.inter(
-                        color: AppColors.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                Text(body,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                        height: 1.4)),
-              ],
+          // Bottom Right Aura Blob
+          Positioned(
+            right: -20,
+            bottom: -20,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          // The Frosted Glass Card
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.65), // Translucent white glass
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white, width: 1.5), // Crisp glass edge
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.05),
+                    blurRadius: 10,
+                  )
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Icon sitting in a solid white pill on top of the glass
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withOpacity(0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      status.kycStatus == 'approved'
+                          ? Icons.verified_rounded
+                          : status.kycStatus == 'rejected'
+                              ? Icons.error_outline_rounded
+                              : Icons.hourglass_top_rounded,
+                      color: color,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(title,
+                            style: GoogleFonts.inter(
+                                color: AppColors.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 2),
+                        Text(
+                          body,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -418,6 +501,13 @@ class _LevelCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -481,8 +571,8 @@ class _LevelCard extends StatelessWidget {
                           children: [
                             Icon(
                               item.done
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
+                                  ? Icons.check_circle_rounded
+                                  : Icons.radio_button_unchecked_rounded,
                               color: item.done
                                   ? AppColors.success
                                   : AppColors.textTertiary,
@@ -491,8 +581,13 @@ class _LevelCard extends StatelessWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(item.text,
-                                  style: const TextStyle(
-                                      color: AppColors.textSecondary,
+                                  style: TextStyle(
+                                      color: item.done
+                                          ? AppColors.textPrimary
+                                          : AppColors.textSecondary,
+                                      fontWeight: item.done
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
                                       fontSize: 13)),
                             ),
                           ],
@@ -519,6 +614,13 @@ class _LockedLevelCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: ListTile(
         leading: Container(
@@ -527,7 +629,7 @@ class _LockedLevelCard extends StatelessWidget {
           decoration: BoxDecoration(
               color: AppColors.warning.withOpacity(0.14),
               shape: BoxShape.circle),
-          child: const Icon(Icons.lock_outline, color: AppColors.warning),
+          child: const Icon(Icons.lock_outline_rounded, color: AppColors.warning),
         ),
         title: Text(title,
             style: GoogleFonts.inter(
@@ -562,6 +664,13 @@ class _SafetyScoreBreakdown extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,5 +827,61 @@ class _ActionCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _GradientCircularProgressPainter extends CustomPainter {
+  final double progress;
+  final double strokeWidth;
+  final Color trackColor;
+  final List<Color> gradientColors;
+
+  _GradientCircularProgressPainter({
+    required this.progress,
+    required this.strokeWidth,
+    required this.trackColor,
+    required this.gradientColors,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = (size.width - strokeWidth) / 2;
+
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    if (progress > 0) {
+      final sweepAngle = 2 * math.pi * progress;
+      final progressPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: gradientColors,
+        ).createShader(rect)
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = strokeWidth;
+
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        -math.pi / 2,
+        sweepAngle,
+        false,
+        progressPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GradientCircularProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.trackColor != trackColor ||
+        oldDelegate.gradientColors != gradientColors ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }

@@ -177,9 +177,9 @@ class ProfileRepositoryImpl implements ProfileRepository {
   String _resolveVerificationLevel(Map<String, dynamic> d) {
     if (d['verificationStatus'] != 'approved') return 'none';
     return switch ((d['verificationLevel'] as num?)?.toInt()) {
-      1 => 'low',
-      2 => 'medium',
-      3 => 'high',
+      1 => 'level1',
+      2 => 'level2',
+      3 => 'level3',
       _ => 'none',
     };
   }

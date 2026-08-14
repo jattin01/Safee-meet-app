@@ -6,7 +6,7 @@ abstract final class AppColors {
   static const Color primaryLight = Color(0xFFE00000);
 
   // ── Dark Backgrounds ─────────────────────────────────────────────────────
-  static const Color darkBg = Color(0xFF0F172A);
+  static const Color darkBg = Color(0xFF151E32);
   static const Color darkBg2 = Color(0xFF1E293B);
   static const Color darkBg3 = Color(0xFF2D2D2D);
 

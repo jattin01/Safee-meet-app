@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
@@ -28,9 +29,8 @@ class MemberSearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) =>
-          sl<MemberSearchBloc>()..add(const RecentSearchesRequested()),
+    return BlocProvider.value(
+      value: sl<MemberSearchBloc>(),
       child: _MemberSearchView(pickerMode: pickerMode, initialTab: initialTab),
     );
   }
@@ -55,6 +55,21 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
   final _resultSectionKey = GlobalKey();
 
   @override
+  void initState() {
+    super.initState();
+    // Reset search state on open
+    context.read<MemberSearchBloc>().add(const MemberSearchReset());
+
+    // Clear old result/error when user types a new PIN
+    _pinCtrl.addListener(() {
+      final state = context.read<MemberSearchBloc>().state;
+      if (state is MemberSearchError || state is MemberSearchFound) {
+        context.read<MemberSearchBloc>().add(const MemberSearchReset());
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _pinCtrl.dispose();
     _scannerController.dispose();
@@ -63,7 +78,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
 
   void _search() {
     final pin = _pinCtrl.text.trim().toUpperCase();
-    if (pin.isEmpty) return;
+    if (pin.length != 10 || !pin.startsWith('SM')) return;
     context.read<MemberSearchBloc>().add(PINSearchRequested(pin));
   }
 
@@ -94,13 +109,13 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     try {
       final result = await _scannerController.analyzeImage(picked.path);
       final barcodes = result?.barcodes ?? const [];
-      final code =
-          barcodes.isNotEmpty ? barcodes.first.rawValue?.trim() : null;
+      final code = barcodes.isNotEmpty ? barcodes.first.rawValue?.trim() : null;
 
       if (!mounted) return;
       if (code == null || code.isEmpty) {
         setState(() => _resolvingGalleryImage = false);
-        AppSnackbar.info(context, 'No valid QR code found in the selected image.');
+        AppSnackbar.info(
+            context, 'No valid QR code found in the selected image.');
         return;
       }
 
@@ -112,7 +127,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _resolvingGalleryImage = false);
-      AppSnackbar.info(context, 'No valid QR code found in the selected image.');
+      AppSnackbar.info(
+          context, 'No valid QR code found in the selected image.');
     }
   }
 
@@ -180,9 +196,27 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                 DarkScreenHeader(
                   title: 'Search Member',
                   childGap: 20,
-                  child: _TabPillRow(
-                    activeTab: _activeTab,
-                    onTabChanged: (i) => setState(() => _activeTab = i),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _TabPillRow(
+                        activeTab: _activeTab,
+                        onTabChanged: (i) {
+                          if (_activeTab != i) {
+                            setState(() => _activeTab = i);
+                            context.read<MemberSearchBloc>().add(MemberSearchReset());
+                            if (i == 1) {
+                              _pinCtrl.clear();
+                            }
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      if (_activeTab == 0)
+                        _buildPinTab(state)
+                      else
+                        _buildQrTab(state),
+                    ],
                   ),
                 ),
                 Padding(
@@ -191,11 +225,6 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (_activeTab == 0)
-                        _buildPinTab(state)
-                      else
-                        _buildQrTab(state),
-
                       _RecentSearchesSection(
                         members: state.recentSearches,
                         isLoading: state.isLoadingRecentSearches,
@@ -231,26 +260,53 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                                         context.push(AppRoutes.subscription),
                                   )
                                 : Container(
-                                    padding: const EdgeInsets.all(16),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 32, horizontal: 24),
                                     decoration: BoxDecoration(
-                                      color: AppColors.error
-                                          .withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(14),
+                                      color: AppColors.error.withValues(alpha: 0.02),
+                                      borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                          color: AppColors.error
-                                              .withValues(alpha: 0.3)),
+                                          color: AppColors.error.withValues(alpha: 0.1)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.error.withValues(alpha: 0.05),
+                                          blurRadius: 24,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ],
                                     ),
-                                    child: Row(children: [
-                                      Icon(Icons.error_outline,
-                                          color: AppColors.error, size: 20),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(state.message,
-                                            style: TextStyle(
-                                                color: AppColors.error,
-                                                fontSize: 14)),
-                                      ),
-                                    ]),
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.error.withValues(alpha: 0.1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(Icons.person_off_outlined,
+                                              color: AppColors.error, size: 32),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          state.message,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Double-check the PIN or ask the person to share their QR code.',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: AppColors.textTertiary,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                           ],
                         ],
@@ -296,8 +352,15 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.black.withOpacity(0.04)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(children: [
@@ -312,7 +375,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                     color: AppColors.textPrimary, fontSize: 15),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
-                  LengthLimitingTextInputFormatter(12),
+                  LengthLimitingTextInputFormatter(10),
                 ],
                 decoration: InputDecoration(
                   hintText: 'Enter SAFEE PIN (e.g. SMHIPZTWPS)',
@@ -327,10 +390,16 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
           ]),
         ),
         const SizedBox(height: 16),
-        _SearchButton(
-          label:
-              state is MemberSearchLoading ? 'Searching...' : 'Search Member',
-          onTap: state is MemberSearchLoading ? () {} : _search,
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _pinCtrl,
+          builder: (context, value, child) {
+            final pin = value.text.trim().toUpperCase();
+            final isValid = pin.length == 10 && pin.startsWith('SM');
+            return _SearchButton(
+              label: state is MemberSearchLoading ? 'Searching...' : 'Search Member',
+              onTap: (!isValid || state is MemberSearchLoading) ? null : _search,
+            );
+          },
         ),
       ],
     );
@@ -345,8 +414,16 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
         Container(
           padding: const EdgeInsets.symmetric(vertical: 32),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.black.withOpacity(0.04)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(children: [
             CustomPaint(
@@ -523,8 +600,15 @@ class _HintCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.black.withOpacity(0.04)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(children: [
           Icon(icon, color: AppColors.primary, size: 20),
@@ -576,19 +660,40 @@ class _RecentSearchesSection extends StatelessWidget {
         const SizedBox(height: 12),
         if (isLoading)
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 22),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.border),
             ),
-            child: const Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.4,
-                  color: AppColors.primary,
+            child: Column(
+              children: List.generate(
+                2,
+                (index) => Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      child: Row(
+                        children: [
+                          const SkeletonItem(
+                              width: 40, height: 40, borderRadius: 12),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                SkeletonItem(width: 120, height: 14),
+                                SizedBox(height: 6),
+                                SkeletonItem(width: 80, height: 12),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (index == 0)
+                      const Divider(height: 1, color: AppColors.border),
+                  ],
                 ),
               ),
             ),
@@ -597,8 +702,15 @@ class _RecentSearchesSection extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.black.withOpacity(0.04)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Column(
               children: [
@@ -652,8 +764,7 @@ class _RecentMemberTile extends StatelessWidget {
             child: member.avatarUrl != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child:
-                        Image.network(member.avatarUrl!, fit: BoxFit.cover),
+                    child: Image.network(member.avatarUrl!, fit: BoxFit.cover),
                   )
                 : Center(
                     child: Text(member.initials,
@@ -684,7 +795,8 @@ class _RecentMemberTile extends StatelessWidget {
           ),
           isSelected
               ? Icon(Icons.check_circle, color: AppColors.primary, size: 18)
-              : Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 18),
+              : Icon(Icons.chevron_right,
+                  color: AppColors.textTertiary, size: 20),
         ]),
       ),
     );
@@ -693,21 +805,25 @@ class _RecentMemberTile extends StatelessWidget {
 
 class _SearchButton extends StatelessWidget {
   final String label;
-  final VoidCallback onTap;
-  const _SearchButton({required this.label, required this.onTap});
+  final VoidCallback? onTap;
+  const _SearchButton({required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final isDisabled = onTap == null;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-              colors: [AppColors.primary, AppColors.primaryLight]),
+          color: isDisabled ? AppColors.border : null,
+          gradient: isDisabled 
+              ? null
+              : const LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryLight]),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
+          boxShadow: isDisabled ? [] : [
             BoxShadow(
                 color: AppColors.primary.withValues(alpha: 0.3),
                 blurRadius: 20,
@@ -717,7 +833,7 @@ class _SearchButton extends StatelessWidget {
         child: Center(
           child: Text(label,
               style: GoogleFonts.inter(
-                  color: Colors.white,
+                  color: isDisabled ? AppColors.textTertiary : Colors.white,
                   fontSize: 15,
                   fontWeight: FontWeight.w700)),
         ),
@@ -826,8 +942,6 @@ class _TabPill extends StatelessWidget {
       );
 }
 
-// ── Real Member Result Card ───────────────────────────────────────────────────
-
 class _MemberResultCard extends StatelessWidget {
   final MemberEntity member;
   final VoidCallback onChat;
@@ -845,198 +959,220 @@ class _MemberResultCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Stack(
-            clipBehavior: Clip.none,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header gradient
+              // Header Banner
               Container(
-                height: 96,
+                height: 70,
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [AppColors.blue, AppColors.blueLight],
+                    colors: [AppColors.darkBg, Color(0xFF1A1F2B)],
                   ),
-                ),
-                child: Align(
-                  alignment: Alignment.topRight,
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.military_tech,
-                            color: Colors.white, size: 14),
-                        const SizedBox(width: 4),
-                        Text('Trust Score ${member.trustScore}',
-                            style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700)),
-                      ]),
-                    ),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
                   ),
                 ),
               ),
-              // Avatar
-              Positioned(
-                left: 16,
-                top: 64,
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: AppColors.darkBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white, width: 3),
-                  ),
-                  child: member.avatarUrl != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(13),
-                          child: Image.network(member.avatarUrl!,
-                              fit: BoxFit.cover),
-                        )
-                      : Center(
-                          child: Text(member.initials,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700)),
+              // Body
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 44, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(member.name,
+                                  style: GoogleFonts.inter(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 2),
+                              Text('SAFEE PIN: ${member.safeePIN}',
+                                  style: const TextStyle(
+                                      color: AppColors.textTertiary,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
+                              if (member.badges.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 4,
+                                  runSpacing: 4,
+                                  children: member.badges
+                                      .map((b) => _MiniBadge(b))
+                                      .toList(),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
+                        // Trust Score Pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.military_tech,
+                                color: AppColors.primary, size: 14),
+                            const SizedBox(width: 4),
+                            Text('Trust: ${member.trustScore}',
+                                style: GoogleFonts.inter(
+                                    color: AppColors.primary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700)),
+                          ]),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    // Stats
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _StatTile(
+                            value: '${member.trustScore}',
+                            label: 'Trust',
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _StatTile(
+                            value: '${member.safetyScore}',
+                            label: 'Safety',
+                            color: AppColors.success,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _StatTile(
+                            value: '${member.totalMeetings}',
+                            label: 'Meetings',
+                            color: AppColors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: onChat,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              foregroundColor: AppColors.textPrimary,
+                              side: const BorderSide(color: AppColors.border),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                            ),
+                            child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.chat_bubble_outline, size: 16),
+                                  const SizedBox(width: 6),
+                                  Text('Message',
+                                      style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13)),
+                                ]),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: onMeet,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 2,
+                              shadowColor: AppColors.primary.withOpacity(0.3),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                            ),
+                            child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.calendar_today_outlined,
+                                      size: 16),
+                                  const SizedBox(width: 6),
+                                  Text('Meet',
+                                      style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13)),
+                                ]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-              // Action buttons
-              Positioned(
-                right: 16,
-                top: 64,
-                child: Row(children: [
-                  _PillButton(
-                    icon: Icons.chat_bubble_outline,
-                    label: 'Message',
-                    filled: true,
-                    onTap: onChat,
-                  ),
-                  const SizedBox(width: 8),
-                  _PillButton(
-                    icon: Icons.calendar_today_outlined,
-                    label: 'Meet',
-                    filled: false,
-                    onTap: onMeet,
-                  ),
-                ]),
               ),
             ],
           ),
-          // Info section
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(member.name,
-                    style: GoogleFonts.inter(
-                        color: AppColors.textPrimary,
-                        fontSize: 19,
-                        fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                Text('SAFEE PIN: ${member.safeePIN}',
-                    style:
-                        TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(
-                    child: _StatTile(
-                      value: '${member.trustScore}',
-                      label: 'Trust Score',
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _StatTile(
-                      value: '${member.safetyScore}',
-                      label: 'Safety Score',
-                      color: AppColors.success,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _StatTile(
-                      value: '${member.totalMeetings}',
-                      label: 'Meetings',
-                      color: AppColors.blue,
-                    ),
-                  ),
-                ]),
-                if (member.badges.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    children: member.badges
-                        .map((b) =>
-                            _VerifiedPill(label: b, color: AppColors.primary))
-                        .toList(),
+          // Avatar
+          Positioned(
+            top: 36,
+            left: 16,
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.cardBg,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
                 ],
-              ],
+              ),
+              child: member.avatarUrl != null
+                  ? ClipOval(
+                      child: Image.network(member.avatarUrl!,
+                          fit: BoxFit.cover),
+                    )
+                  : Center(
+                      child: Text(member.initials,
+                          style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800)),
+                    ),
             ),
           ),
         ],
       ),
     );
   }
-}
-
-class _PillButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool filled;
-  final VoidCallback onTap;
-  const _PillButton(
-      {required this.icon,
-      required this.label,
-      required this.filled,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: filled ? AppColors.primary : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4))
-            ],
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon,
-                size: 14, color: filled ? Colors.white : AppColors.textPrimary),
-            const SizedBox(width: 6),
-            Text(label,
-                style: GoogleFonts.inter(
-                  color: filled ? Colors.white : AppColors.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                )),
-          ]),
-        ),
-      );
 }
 
 class _StatTile extends StatelessWidget {
@@ -1048,20 +1184,40 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(children: [
           Text(value,
               style: GoogleFonts.inter(
-                  color: color, fontSize: 17, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
+                  color: color, fontSize: 16, fontWeight: FontWeight.w800)),
           Text(label,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+              style: TextStyle(
+                  color: color.withOpacity(0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600)),
         ]),
       );
+}
+
+class _MiniBadge extends StatelessWidget {
+  final String label;
+  const _MiniBadge(this.label);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8)),
+        child: Text(label,
+            style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 9,
+                fontWeight: FontWeight.bold)));
+  }
 }
 
 class _VerifiedPill extends StatelessWidget {

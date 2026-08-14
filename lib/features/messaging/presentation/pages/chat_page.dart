@@ -14,6 +14,7 @@ import '../../../../core/dependency_injection/injection_container.dart';
 import '../../domain/entities/message_entity.dart';
 import '../bloc/messaging_bloc.dart';
 import '../widgets/attachment_picker_sheet.dart';
+import '../../../../features/profile/presentation/cubit/current_user_cubit.dart';
 import 'image_preview_page.dart';
 
 class ChatPage extends StatelessWidget {
@@ -32,10 +33,14 @@ class ChatPage extends StatelessWidget {
       create: (_) {
         final bloc = sl<MessagingBloc>();
         if (conversation != null) {
+          final currentUserState = context.read<CurrentUserCubit>().state;
+          final currentUserName = currentUserState.profile?.name ?? 'Me';
+
           bloc.add(OpenOrCreateChatRoom(
             partnerId: conversation!.partnerId,
             partnerName: conversation!.partnerName,
             partnerAvatarUrl: conversation!.partnerAvatarUrl,
+            currentUserName: currentUserName,
           ));
         }
         return bloc;
@@ -897,20 +902,27 @@ class _TextBubble extends StatelessWidget {
           BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.68),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isMine ? AppColors.primary : Colors.white,
+        gradient: isMine
+            ? const LinearGradient(
+                colors: [Color(0xFFE50000), Color(0xFFCC0000)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: isMine ? null : Colors.white,
         borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(18),
-          topRight: const Radius.circular(18),
+          topLeft: const Radius.circular(20),
+          topRight: const Radius.circular(20),
           bottomLeft:
-              Radius.circular(isMine ? 18 : (isLastInGroup ? 4 : 18)),
+              Radius.circular(isMine ? 20 : (isLastInGroup ? 4 : 20)),
           bottomRight:
-              Radius.circular(isMine ? (isLastInGroup ? 4 : 18) : 18),
+              Radius.circular(isMine ? (isLastInGroup ? 4 : 20) : 20),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            color: isMine ? AppColors.primary.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -960,20 +972,27 @@ class _ImageBubble extends StatelessWidget {
       constraints:
           BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.68),
       decoration: BoxDecoration(
-        color: isMine ? AppColors.primary : Colors.white,
+        gradient: isMine
+            ? const LinearGradient(
+                colors: [Color(0xFFE50000), Color(0xFFCC0000)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: isMine ? null : Colors.white,
         borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(18),
-          topRight: const Radius.circular(18),
+          topLeft: const Radius.circular(20),
+          topRight: const Radius.circular(20),
           bottomLeft:
-              Radius.circular(isMine ? 18 : (isLastInGroup ? 4 : 18)),
+              Radius.circular(isMine ? 20 : (isLastInGroup ? 4 : 20)),
           bottomRight:
-              Radius.circular(isMine ? (isLastInGroup ? 4 : 18) : 18),
+              Radius.circular(isMine ? (isLastInGroup ? 4 : 20) : 20),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            color: isMine ? AppColors.primary.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -1273,20 +1292,27 @@ class _DocumentBubble extends StatelessWidget {
           BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isMine ? AppColors.primary : Colors.white,
+        gradient: isMine
+            ? const LinearGradient(
+                colors: [Color(0xFFE50000), Color(0xFFCC0000)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: isMine ? null : Colors.white,
         borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(18),
-          topRight: const Radius.circular(18),
+          topLeft: const Radius.circular(20),
+          topRight: const Radius.circular(20),
           bottomLeft:
-              Radius.circular(isMine ? 18 : (isLastInGroup ? 4 : 18)),
+              Radius.circular(isMine ? 20 : (isLastInGroup ? 4 : 20)),
           bottomRight:
-              Radius.circular(isMine ? (isLastInGroup ? 4 : 18) : 18),
+              Radius.circular(isMine ? (isLastInGroup ? 4 : 20) : 20),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            color: isMine ? AppColors.primary.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
