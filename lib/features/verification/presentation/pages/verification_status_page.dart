@@ -31,6 +31,8 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
     });
   }
 
+
+
   Future<void> _refresh(BuildContext context) {
     final done = Completer<void>();
     context.read<VerificationBloc>().add(VerificationStatusRequested(done: done));
@@ -135,16 +137,22 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        const _LockedLevelCard(
+                        _LockedLevelCard(
                           title: 'Level 2 Verification',
                           subtitle:
-                              'Background and enhanced checks can be added later',
+                              'Criminal background and enhanced checks can be added later',
+                          onTap: () {
+                            context.push(AppRoutes.subscription, extra: 'premium');
+                          },
                         ),
                         const SizedBox(height: 16),
-                        const _LockedLevelCard(
+                        _LockedLevelCard(
                           title: 'Professional Verification',
                           subtitle:
                               'Business and credentials review is not enabled yet',
+                          onTap: () {
+                            context.push(AppRoutes.subscription, extra: 'professional');
+                          },
                         ),
                         const SizedBox(height: 20),
                         _SafetyScoreBreakdown(status: status),
@@ -605,7 +613,12 @@ class _LevelCard extends StatelessWidget {
 class _LockedLevelCard extends StatelessWidget {
   final String title;
   final String subtitle;
-  const _LockedLevelCard({required this.title, required this.subtitle});
+  final VoidCallback? onTap;
+  const _LockedLevelCard({
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -622,27 +635,44 @@ class _LockedLevelCard extends StatelessWidget {
           ),
         ],
       ),
-      child: ListTile(
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-              color: AppColors.warning.withOpacity(0.14),
-              shape: BoxShape.circle),
-          child: const Icon(Icons.lock_outline_rounded, color: AppColors.warning),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            leading: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.14),
+                  shape: BoxShape.circle),
+              child: const Icon(
+                  Icons.lock_outline_rounded, color: AppColors.warning),
+            ),
+            title: Text(title,
+                style: GoogleFonts.inter(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800)),
+            subtitle: Text(subtitle,
+                style: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            trailing: onTap != null
+                ? const Icon(Icons.chevron_right_rounded,
+                    color: AppColors.textTertiary)
+                : null,
+          ),
         ),
-        title: Text(title,
-            style: GoogleFonts.inter(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w800)),
-        subtitle: Text(subtitle,
-            style:
-                const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
       ),
     );
   }
 }
+
+
 
 class _SafetyScoreBreakdown extends StatelessWidget {
   final VerificationStatusEntity status;

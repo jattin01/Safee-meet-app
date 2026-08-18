@@ -45,13 +45,18 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
   // before treating it as a member record. `code: 'SUBSCRIPTION_REQUIRED'`
   // is how MemberSearchBloc tells this apart from an ordinary business
   // error to decide whether the error card links to the plans page.
+  // The backend may send either `subscription_required: true` OR a
+  // `required_feature` field — both mean the same thing.
   Failure? _businessFailure(Map<String, dynamic> data) {
     if (data['success'] != false) return null;
     final message = data['message'] as String? ??
         'Unable to search for this member right now.';
+    final isSubscriptionLimit =
+        data['subscription_required'] == true ||
+        data['required_feature'] != null;
     return ServerFailure(
       message,
-      code: data['subscription_required'] == true ? 'SUBSCRIPTION_REQUIRED' : null,
+      code: isSubscriptionLimit ? 'SUBSCRIPTION_REQUIRED' : null,
     );
   }
 

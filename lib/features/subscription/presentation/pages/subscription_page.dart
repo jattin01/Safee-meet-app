@@ -24,7 +24,8 @@ import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 // Sheet) is wired up for Stripe TEST mode only — see
 // AppConstants.stripePublishableKey.
 class SubscriptionPage extends StatelessWidget {
-  const SubscriptionPage({super.key});
+  final String? initialPlanSlug;
+  const SubscriptionPage({super.key, this.initialPlanSlug});
 
   @override
   Widget build(BuildContext context) {
@@ -42,13 +43,14 @@ class SubscriptionPage extends StatelessWidget {
         // closed; `.load()` is a cheap no-op if already loaded/fresh.
         BlocProvider.value(value: sl<CurrentSubscriptionCubit>()..load()),
       ],
-      child: const _SubscriptionView(),
+      child: _SubscriptionView(initialPlanSlug: initialPlanSlug),
     );
   }
 }
 
 class _SubscriptionView extends StatefulWidget {
-  const _SubscriptionView();
+  final String? initialPlanSlug;
+  const _SubscriptionView({this.initialPlanSlug});
 
   @override
   State<_SubscriptionView> createState() => _SubscriptionViewState();
@@ -61,38 +63,76 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
   // _ensureSelection must never override it, even after the current-plan
   // lookup below resolves later.
   bool _userSelectedManually = false;
+  bool _hasScrolledToInitial = false;
+  final Map<int, GlobalKey> _planKeys = {};
 
   void _ensureSelection(
     List<SubscriptionPlanEntity> plans,
     CurrentSubscriptionState currentSubscriptionState,
   ) {
     if (plans.isEmpty) return;
+
+    // Once the user manually picks a plan, never override their choice.
     if (_userSelectedManually &&
         _selectedId != null &&
         plans.any((p) => p.id == _selectedId)) {
       return;
     }
 
-    // Don't lock in a default until we know whether the user has an active
-    // subscription — otherwise we'd briefly default to "popular" and then
-    // jump to the real plan once GET /v1/subscriptions/current resolves.
-    if (!currentSubscriptionState.hasLoadedOnce) return;
+    // Determine which plan should be selected.
+    SubscriptionPlanEntity? target;
 
-    SubscriptionPlanEntity? defaultPlan;
-    final currentPlanSlug = currentSubscriptionState.subscription?.plan.slug;
-    if (currentPlanSlug != null) {
-      for (final p in plans) {
-        if (p.slug == currentPlanSlug) {
-          defaultPlan = p;
-          break;
-        }
+    if (widget.initialPlanSlug != null && !_hasScrolledToInitial) {
+      // Caller requested a specific plan — try to find it.
+      try {
+        target = plans.firstWhere((p) => p.slug == widget.initialPlanSlug);
+      } catch (_) {
+        // slug not in list yet — fall through to defaults below
+      }
+
+      if (target != null) {
+        // Lock in the caller's plan and auto-scroll to it.
+        _selectedId = target.id;
+        _hasScrolledToInitial = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future.delayed(const Duration(milliseconds: 200), () {
+            final key = _planKeys[target!.id];
+            if (key?.currentContext != null) {
+              Scrollable.ensureVisible(
+                key!.currentContext!,
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeInOut,
+                alignment: 0.1,
+              );
+            }
+          });
+        });
+        return; // locked in — nothing below should override
       }
     }
-    defaultPlan ??= plans.firstWhere(
+
+    // If initialPlanSlug was already applied on a previous build, don't
+    // let later rebuilds (e.g. when CurrentSubscriptionCubit resolves)
+    // wipe out the selection.
+    if (_hasScrolledToInitial) return;
+
+    // Without an explicit slug, wait until we know the current subscription
+    // before picking a default — prevents a visible flicker from "premium"
+    // to the user's actual plan.
+    if (!currentSubscriptionState.hasLoadedOnce) return;
+
+    // Fall back to: current subscription → premium → first plan.
+    final currentPlanSlug = currentSubscriptionState.subscription?.plan.slug;
+    if (currentPlanSlug != null) {
+      try {
+        target = plans.firstWhere((p) => p.slug == currentPlanSlug);
+      } catch (_) {}
+    }
+    target ??= plans.firstWhere(
       (p) => p.slug == 'premium',
       orElse: () => plans.first,
     );
-    _selectedId = defaultPlan.id;
+    _selectedId = target.id;
   }
 
   Future<void> _refresh(BuildContext context) {
@@ -199,7 +239,10 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          ...plans.map((p) => _PlanCard(
+                          ...plans.map((p) {
+                            final key = _planKeys.putIfAbsent(p.id, () => GlobalKey());
+                            return _PlanCard(
+                                key: key,
                                 plan: p,
                                 yearly: _yearly,
                                 selected: _selectedId == p.id,
@@ -207,7 +250,8 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
                                   _selectedId = p.id;
                                   _userSelectedManually = true;
                                 }),
-                              )),
+                              );
+                          }),
                           const SizedBox(height: 8),
                           const FeatureComparisonSection(),
                           const SizedBox(height: 24),
@@ -351,6 +395,7 @@ class _PlanCard extends StatelessWidget {
   final VoidCallback onSelect;
 
   const _PlanCard({
+    super.key,
     required this.plan,
     required this.yearly,
     required this.selected,
@@ -563,15 +608,18 @@ class _SubscriptionSkeletonState extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SkeletonItem(height: 220, borderRadius: 24),
-                const SizedBox(height: 24),
-                const SkeletonItem(height: 60, borderRadius: 16),
-              ],
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SkeletonItem(height: 220, borderRadius: 24),
+                  const SizedBox(height: 24),
+                  const SkeletonItem(height: 60, borderRadius: 16),
+                ],
+              ),
             ),
           ),
         ),

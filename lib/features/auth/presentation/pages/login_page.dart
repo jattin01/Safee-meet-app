@@ -613,22 +613,52 @@ class _OtpStepIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 64, height: 64,
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [AppColors.primary, AppColors.primaryLight],
-      ),
-      borderRadius: BorderRadius.circular(18),
-      boxShadow: [
-        BoxShadow(
-          color: AppColors.primary.withOpacity(0.35),
-          blurRadius: 20, offset: const Offset(0, 8),
+        width: 76,
+        height: 76,
+        decoration: BoxDecoration(
+          color: AppColors.primary.withOpacity(0.08),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppColors.primary.withOpacity(0.16),
+            width: 1.5,
+          ),
         ),
-      ],
-    ),
-    child: const Center(child: Text('🔐', style: TextStyle(fontSize: 28))),
-  );
+        child: Center(
+          child: Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primary.withOpacity(0.2),
+                  AppColors.primary.withOpacity(0.08),
+                ],
+              ),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.primary.withOpacity(0.35),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.12),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.phonelink_lock_rounded,
+                color: AppColors.primary,
+                size: 26,
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _Footer extends StatelessWidget {

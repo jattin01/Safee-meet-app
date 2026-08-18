@@ -210,8 +210,14 @@ class AppRouter {
         path: AppRoutes.sos,
         pageBuilder: (_, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: BlocProvider(
-            create: (_) => sl<SosBloc>(),
+          // /sos is a top-level route outside the shell's IndexedStack, so
+          // it doesn't inherit the shell's CurrentSubscriptionCubit
+          // provider — SosPage's Trusted Contact Alerts gate needs it too.
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider(create: (_) => sl<SosBloc>()),
+              BlocProvider.value(value: sl<CurrentSubscriptionCubit>()..load()),
+            ],
             child: const SosPage(),
           ),
           transitionsBuilder: (_, anim, __, child) =>
@@ -222,8 +228,11 @@ class AppRouter {
         path: '${AppRoutes.sos}/:id',
         pageBuilder: (_, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: BlocProvider(
-            create: (_) => sl<SosBloc>(),
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider(create: (_) => sl<SosBloc>()),
+              BlocProvider.value(value: sl<CurrentSubscriptionCubit>()..load()),
+            ],
             child: SosPage(meetingId: state.pathParameters['id']),
           ),
           transitionsBuilder: (_, anim, __, child) =>
@@ -232,7 +241,11 @@ class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.subscription,
-        builder: (_, __) => const SubscriptionPage(),
+        builder: (_, state) {
+          final extra = state.extra;
+          final initialPlanSlug = extra is String ? extra : null;
+          return SubscriptionPage(initialPlanSlug: initialPlanSlug);
+        },
       ),
       GoRoute(
         path: AppRoutes.notifications,

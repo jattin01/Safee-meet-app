@@ -9,6 +9,15 @@ class SubscriptionPlanEntity extends Equatable {
   final int? trialDays;
   final int? pinSearchLimit;
   final List<String> features;
+
+  /// Machine-checkable feature slugs this plan unlocks (e.g. `qr_code`,
+  /// `priority_support`) — the subset of [features] whose API entry had a
+  /// non-null `slug`. Free-text perks (like "8 SAFEE PIN Search/Chat") have
+  /// no slug and only ever appear in [features] for display; use this set
+  /// with [hasFeature] to gate actual app behaviour, never string-match
+  /// against [features] display text.
+  final Set<String> featureSlugs;
+
   final String icon;
   final String color;
   final int sortOrder;
@@ -22,10 +31,13 @@ class SubscriptionPlanEntity extends Equatable {
     this.trialDays,
     this.pinSearchLimit,
     required this.features,
+    this.featureSlugs = const {},
     required this.icon,
     required this.color,
     required this.sortOrder,
   });
+
+  bool hasFeature(String featureSlug) => featureSlugs.contains(featureSlug);
 
   double price(bool yearly) => yearly ? yearlyPrice / 12 : monthlyPrice;
 
@@ -51,6 +63,7 @@ class SubscriptionPlanEntity extends Equatable {
         trialDays,
         pinSearchLimit,
         features,
+        featureSlugs,
         icon,
         color,
         sortOrder,

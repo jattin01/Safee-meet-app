@@ -9,6 +9,7 @@ class SubscriptionPlanModel {
   final int? trialDays;
   final int? pinSearchLimit;
   final List<String> features;
+  final Set<String> featureSlugs;
   final String icon;
   final String color;
   final int sortOrder;
@@ -23,6 +24,7 @@ class SubscriptionPlanModel {
     this.trialDays,
     this.pinSearchLimit,
     required this.features,
+    this.featureSlugs = const {},
     required this.icon,
     required this.color,
     required this.sortOrder,
@@ -38,9 +40,15 @@ class SubscriptionPlanModel {
         yearlyPrice: _toDouble(json['yearly_price']),
         trialDays: (json['trial_days'] as num?)?.toInt(),
         pinSearchLimit: (json['pin_search_limit'] as num?)?.toInt(),
-        features: (json['features'] as List<dynamic>? ?? [])
-            .map((e) => e as String)
-            .toList(),
+        features: _parseFeatures(json['features']),
+        // Fresh API responses carry slugs inline on each `features[]`
+        // object; a value round-tripped through the Hive cache instead
+        // carries the separate `feature_slugs` key written by [toJson]
+        // below, since by then `features` has already been flattened to
+        // plain display strings and no longer has slugs to re-parse.
+        featureSlugs: json['feature_slugs'] is List
+            ? Set<String>.from(json['feature_slugs'] as List)
+            : _parseFeatureSlugs(json['features']),
         icon: json['icon'] as String? ?? 'fa-shield-halved',
         color: json['color'] as String? ?? '#6b7280',
         sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
@@ -49,6 +57,40 @@ class SubscriptionPlanModel {
 
   static double _toDouble(dynamic v) =>
       v is String ? double.parse(v) : (v as num).toDouble();
+
+  /// The API now sends each feature as an object (`{id, slug, name}`)
+  /// instead of a plain string, so the label the UI shows lives at
+  /// `name`. Plain strings are still accepted for backward compatibility
+  /// with any cached/older response shape.
+  ///
+  /// A `name` can also contain multiple labels glued together with a
+  /// line/paragraph separator (seen in the Premium plan's "Priority
+  /// Visibility Trusted Contact Alerts") — split those back into
+  /// separate feature lines so each renders as its own checkmark item.
+  static List<String> _parseFeatures(dynamic raw) {
+    final list = raw as List<dynamic>? ?? [];
+    return list
+        .map((e) => e is Map ? (e['name'] as String?) ?? '' : e.toString())
+        .expand((name) => name.split(RegExp('[\u2028\u2029\n]')))
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+  }
+
+  /// Pulls the `slug` out of every feature entry that has one (opaque
+  /// objects, `{id, slug, name}`) — the machine-checkable subset of
+  /// [_parseFeatures]'s display strings. Older/plain-string entries and
+  /// entries with a null slug (free-text perks) are silently skipped since
+  /// there's nothing to gate against.
+  static Set<String> _parseFeatureSlugs(dynamic raw) {
+    final list = raw as List<dynamic>? ?? [];
+    return list
+        .whereType<Map>()
+        .map((e) => e['slug'] as String?)
+        .whereType<String>()
+        .where((slug) => slug.isNotEmpty)
+        .toSet();
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -59,6 +101,7 @@ class SubscriptionPlanModel {
         'trial_days': trialDays,
         'pin_search_limit': pinSearchLimit,
         'features': features,
+        'feature_slugs': featureSlugs.toList(),
         'icon': icon,
         'color': color,
         'sort_order': sortOrder,
@@ -74,6 +117,7 @@ class SubscriptionPlanModel {
         trialDays: trialDays,
         pinSearchLimit: pinSearchLimit,
         features: features,
+        featureSlugs: featureSlugs,
         icon: icon,
         color: color,
         sortOrder: sortOrder,

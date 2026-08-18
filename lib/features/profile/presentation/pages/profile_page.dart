@@ -13,6 +13,7 @@ import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
+import '../../../../core/shared/utils/feature_gate.dart';
 import '../../../../core/shared/utils/verification_gate.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
@@ -51,10 +52,11 @@ Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
     const height = 670.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    
+
     // Draw the white background
     canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(0, 0, width, height), const Radius.circular(32)),
+      RRect.fromRectAndRadius(
+          const Rect.fromLTWH(0, 0, width, height), const Radius.circular(32)),
       Paint()..color = Colors.white,
     );
 
@@ -81,7 +83,7 @@ Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
     const qrSize = width - padding * 2;
     canvas.translate(padding, 130);
     painter.paint(canvas, const Size(qrSize, qrSize));
-    
+
     // Removed subtitle text as requested
 
     final picture = recorder.endRecording();
@@ -103,7 +105,8 @@ Future<void> _shareSafeePinAndScanner(BuildContext context, String? pin) async {
     );
   } catch (_) {
     if (context.mounted) {
-      AppSnackbar.error(context, 'Unable to share right now. Please try again.');
+      AppSnackbar.error(
+          context, 'Unable to share right now. Please try again.');
     }
   }
 }
@@ -238,6 +241,13 @@ class _ProfileView extends StatelessWidget {
                         subtitle: 'Send your PIN and QR code',
                         onTap: () {
                           if (!requireVerification(context)) return;
+                          if (!requireFeature(
+                            context,
+                            PlanFeature.qrCode,
+                            'QR Code Generation',
+                          )) {
+                            return;
+                          }
                           _shareSafeePinAndScanner(context, profile?.safeePIN);
                         },
                       ),
@@ -296,122 +306,422 @@ class _ProfileAvatarSection extends StatelessWidget {
     final phone = profile?.phone;
     final avatar = profile?.avatarUrl;
     final level = profile?.verificationLevel ?? 'none';
+    final isVerifiedLevel =
+        level == 'level1' || level == 'level2' || level == 'level3';
 
-    return Column(
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: AppColors.blue,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.blue.withOpacity(0.6), width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.blue.withOpacity(0.25),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: avatar != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(22),
-                      child: Image.network(avatar,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.person,
-                              color: Colors.white70, size: 44)),
-                    )
-                  : const Icon(Icons.person, color: Colors.white70, size: 44),
-            ),
-            Positioned(
-              right: -4,
-              bottom: -4,
-              child: Container(
-                width: 26,
-                height: 26,
+    final plan =
+        context.watch<CurrentSubscriptionCubit>().state.subscription?.plan;
+    // The checkmark badge and the Premium badge are both plan perks
+    // ("Verified Badge Display" / "Premium Badge" in a plan's features[]),
+    // not automatic consequences of completing verification or paying —
+    // a verified user on a plan without verified_badge still shouldn't see
+    // the checkmark, same idea as every other requireFeature() gate.
+    final showVerifiedBadge = isVerifiedLevel &&
+        (plan?.hasFeature(PlanFeature.verifiedBadge) ?? false);
+    final showPremiumBadge =
+        plan?.hasFeature(PlanFeature.premiumBadge) ?? false;
+
+    // DarkScreenHeader lays out its `child` slot in a start-aligned Column,
+    // so without forcing full width here this section just shrink-wraps to
+    // its widest child and gets left-anchored instead of centered — it only
+    // ever looked centered by coincidence, when some child (e.g. a Row with
+    // the default mainAxisSize.max) happened to force full width itself.
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 88,
+                height: 88,
                 decoration: BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.darkBg, width: 2),
+                  color: AppColors.blue,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                      color: AppColors.blue.withOpacity(0.6), width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.blue.withOpacity(0.25),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: const Icon(Icons.check, color: Colors.white, size: 14),
+                child: avatar != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: Image.network(avatar,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                                Icons.person,
+                                color: Colors.white70,
+                                size: 44)),
+                      )
+                    : const Icon(Icons.person, color: Colors.white70, size: 44),
               ),
-            ),
+              if (showVerifiedBadge)
+                Positioned(
+                  right: -4,
+                  bottom: -4,
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.darkBg, width: 2),
+                    ),
+                    child:
+                        const Icon(Icons.check, color: Colors.white, size: 14),
+                  ),
+                ),
+              if (showPremiumBadge)
+                Positioned(
+                  left: -4,
+                  top: -4,
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: AppColors.warning,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.darkBg, width: 2),
+                    ),
+                    child: const Icon(Icons.workspace_premium,
+                        color: Colors.white, size: 14),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  name.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isVerifiedLevel) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => _showLevelBadge(
+                      context, _levelBadgeFullAsset(level)!, level),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: (level == 'level3'
+                              ? AppColors.warning
+                              : level == 'level2'
+                                  ? AppColors.blue
+                                  : AppColors.primary)
+                          .withOpacity(0.18),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: (level == 'level3'
+                                ? AppColors.warning
+                                : level == 'level2'
+                                    ? AppColors.blue
+                                    : AppColors.primary)
+                            .withOpacity(0.45),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.verified_rounded,
+                      color: level == 'level3'
+                          ? AppColors.warning
+                          : level == 'level2'
+                              ? AppColors.blueLight
+                              : AppColors.primary,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (email != null)
+            Text(email,
+                style: const TextStyle(
+                    color: AppColors.textTertiary, fontSize: 13)),
+          if (phone != null) ...[
+            const SizedBox(height: 2),
+            Text(phone,
+                style: const TextStyle(
+                    color: AppColors.textTertiary, fontSize: 13)),
           ],
-        ),
-        const SizedBox(height: 14),
-        Text(name,
-            style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 21,
-                fontWeight: FontWeight.w800)),
-        const SizedBox(height: 4),
-        if (email != null)
-          Text(email,
-              style:
-                  const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-        if (phone != null) ...[
-          const SizedBox(height: 2),
-          Text(phone,
-              style:
-                  const TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+          const SizedBox(height: 14),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (isVerifiedLevel)
+                _Badge(
+                  icon: Icons.shield_rounded,
+                  label: level == 'level3'
+                      ? 'Level 3 Verified'
+                      : level == 'level2'
+                          ? 'Level 2 Verified'
+                          : 'Level 1 ID Verified',
+                  color: level == 'level3'
+                      ? AppColors.warning
+                      : level == 'level2'
+                          ? AppColors.blue
+                          : const Color(0xFFFF5252),
+                  showArrow: true,
+                  onTap: _levelBadgeFullAsset(level) != null
+                      ? () => _showLevelBadge(
+                          context, _levelBadgeFullAsset(level)!, level)
+                      : null,
+                ),
+              if (showPremiumBadge)
+                const _Badge(
+                  icon: Icons.workspace_premium_rounded,
+                  label: 'Premium Member',
+                  color: AppColors.warning,
+                ),
+            ],
+          ),
         ],
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (level == 'level1' || level == 'level2' || level == 'level3')
-              const _Badge(
-                  emoji: '🟢', label: 'Level 1', color: AppColors.success),
-            if (level == 'level2' || level == 'level3') ...[
-              const SizedBox(width: 8),
-              const _Badge(
-                  emoji: '🔵', label: 'Level 2', color: AppColors.blue),
+      ),
+    );
+  }
+
+  // Level 3 has no dedicated artwork yet — the Level 2 certificate already
+  // reads as the top tier ("Enhanced Trust"), so it doubles as the Level 3
+  // badge until a distinct asset exists.
+  String? _levelBadgeFullAsset(String level) => switch (level) {
+        'level1' => 'assets/images/level1_badge-removebg.png',
+        'level2' || 'level3' => 'assets/images/level2_image-removebg.png',
+        _ => null,
+      };
+
+  void _showLevelBadge(BuildContext context, String asset, String level) {
+    final levelName = level == 'level3'
+        ? 'Level 3 • Professional'
+        : level == 'level2'
+            ? 'Level 2 • Enhanced Trust'
+            : 'Level 1 • Identity Verified';
+    final tierColor = level == 'level3'
+        ? AppColors.warning
+        : level == 'level2'
+            ? AppColors.blue
+            : AppColors.primary;
+
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.85),
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF141927),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: tierColor.withOpacity(0.35), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: tierColor.withOpacity(0.2),
+                blurRadius: 30,
+                spreadRadius: 2,
+              ),
             ],
-            if (level == 'level3') ...[
-              const SizedBox(width: 8),
-              const _Badge(
-                  emoji: '⭐', label: 'Level 3', color: AppColors.warning),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: tierColor.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.verified_user_rounded,
+                          color: tierColor, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Official Trust Certificate',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            levelName,
+                            style: TextStyle(
+                              color: tierColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.of(dialogContext).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close,
+                            color: Colors.white70, size: 18),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 380),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(asset, fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              tierColor,
+                              tierColor.withOpacity(0.8),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(dialogContext).pop();
+                            openVerificationScreen(context);
+                          },
+                          icon: const Icon(Icons.shield_outlined,
+                              size: 18, color: Colors.white),
+                          label: const Text(
+                            'View Verification Details',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
-          ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
 
 class _Badge extends StatelessWidget {
-  final String? emoji;
+  final IconData? icon;
   final String label;
   final Color color;
-  const _Badge({required this.emoji, required this.label, required this.color});
+  final bool showArrow;
+  final VoidCallback? onTap;
+
+  const _Badge({
+    this.icon,
+    required this.label,
+    required this.color,
+    this.showArrow = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    final badge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-          color: color.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(20)),
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.4), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (emoji != null) ...[
-            Text(emoji!, style: const TextStyle(fontSize: 11)),
-            const SizedBox(width: 5)
+          if (icon != null) ...[
+            Icon(icon, color: color, size: 14),
+            const SizedBox(width: 6),
           ],
-          Text(label,
-              style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+          if (showArrow) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_forward_ios_rounded,
+                color: color.withOpacity(0.8), size: 10),
+          ],
         ],
       ),
     );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        child: badge,
+      );
+    }
+    return badge;
   }
 }
 
@@ -464,48 +774,58 @@ class _PinCard extends StatelessWidget {
             ),
           ),
           GestureDetector(
-            onTap: () => showDialog(
-              context: context,
-              builder: (_) => Dialog(
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Share Profile',
-                        style: GoogleFonts.inter(
-                          color: AppColors.textPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      QrImageView(
-                        data: pin ?? '',
-                        version: QrVersions.auto,
-                        size: 220,
-                      ),
-                      const SizedBox(height: 8),
-                       const FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          'Let others scan this to view your profile',
-                          style: TextStyle(
-                            color: AppColors.textTertiary,
-                            fontSize: 13,
+            onTap: () {
+              if (!requireVerification(context)) return;
+              if (!requireFeature(
+                context,
+                PlanFeature.qrCode,
+                'QR Code Generation',
+              )) {
+                return;
+              }
+              showDialog(
+                context: context,
+                builder: (_) => Dialog(
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Share Profile',
+                          style: GoogleFonts.inter(
+                            color: AppColors.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        QrImageView(
+                          data: pin ?? '',
+                          version: QrVersions.auto,
+                          size: 220,
+                        ),
+                        const SizedBox(height: 8),
+                        const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Let others scan this to view your profile',
+                            style: TextStyle(
+                              color: AppColors.textTertiary,
+                              fontSize: 13,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
             child: Container(
               width: 52,
               height: 52,
@@ -722,9 +1042,10 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
   @override
   Widget build(BuildContext context) {
     final sub = widget.state.subscription;
-    final isLoading = widget.state.status == CurrentSubscriptionStatus.loading &&
-        !widget.state.hasLoadedOnce;
-    final label = isLoading ? '—' : (sub?.planLabel ?? 'Free');
+    final isLoading =
+        widget.state.status == CurrentSubscriptionStatus.loading &&
+            !widget.state.hasLoadedOnce;
+    final label = isLoading ? '—' : (sub?.planLabel ?? 'Free / Level 1');
     final hasPaidAccess = sub?.hasActiveAccess ?? false;
     final subtitle = isLoading
         ? 'Loading plan…'
@@ -791,16 +1112,21 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
                 // only the plan itself (already rendered above) is shown.
                 if (!widget.state.isOnHighestPlan)
                   GestureDetector(
-                    onTap: () => context.push(AppRoutes.subscription),
+                    onTap: () => context.push(
+                      AppRoutes.subscription,
+                      extra: hasPaidAccess ? null : 'premium',
+                    ),
                     child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 10),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                            colors: [AppColors.primary, AppColors.primaryLight]),
+                        gradient: LinearGradient(colors: [
+                          AppColors.primary,
+                          AppColors.primaryLight
+                        ]),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(hasPaidAccess ? 'Manage' : 'Upgrade',
+                      child: Text(hasPaidAccess ? 'Manage' : 'Upgrade Level 2',
                           style: GoogleFonts.inter(
                               color: Colors.white,
                               fontSize: 13,
@@ -815,8 +1141,8 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
                       color: AppColors.success.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child:
-                        const Icon(Icons.check, color: AppColors.success, size: 18),
+                    child: const Icon(Icons.check,
+                        color: AppColors.success, size: 18),
                   ),
               ],
             ),
@@ -919,18 +1245,23 @@ class _ProfileSkeletonState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const SkeletonItem(width: 88, height: 88, borderRadius: 22, color: Colors.white12),
+        const SkeletonItem(
+            width: 88, height: 88, borderRadius: 22, color: Colors.white12),
         const SizedBox(height: 14),
-        const SkeletonItem(width: 140, height: 24, borderRadius: 8, color: Colors.white12),
+        const SkeletonItem(
+            width: 140, height: 24, borderRadius: 8, color: Colors.white12),
         const SizedBox(height: 8),
-        const SkeletonItem(width: 180, height: 16, borderRadius: 6, color: Colors.white12),
+        const SkeletonItem(
+            width: 180, height: 16, borderRadius: 6, color: Colors.white12),
         const SizedBox(height: 18),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SkeletonItem(width: 80, height: 26, borderRadius: 20, color: Colors.white12),
+            const SkeletonItem(
+                width: 80, height: 26, borderRadius: 20, color: Colors.white12),
             const SizedBox(width: 8),
-            const SkeletonItem(width: 80, height: 26, borderRadius: 20, color: Colors.white12),
+            const SkeletonItem(
+                width: 80, height: 26, borderRadius: 20, color: Colors.white12),
           ],
         ),
       ],

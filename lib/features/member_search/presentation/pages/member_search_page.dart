@@ -253,11 +253,14 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                             ),
                           ] else if (state is MemberSearchError) ...[
                             const SizedBox(height: 24),
-                            state.upgradeRequired
+                            state.upgradeRequired ||
+                                    state.message.toLowerCase().contains('limit') ||
+                                    state.message.toLowerCase().contains('upgrade') ||
+                                    state.message.toLowerCase().contains('subscription')
                                 ? _UpgradeLimitCard(
                                     message: state.message,
                                     onTap: () =>
-                                        context.push(AppRoutes.subscription),
+                                        context.push(AppRoutes.subscription, extra: 'basic_unlimited'),
                                   )
                                 : Container(
                                     padding: const EdgeInsets.symmetric(
@@ -562,29 +565,86 @@ class _UpgradeLimitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.error.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-          ),
-          child: Row(children: [
-            Icon(Icons.error_outline, color: AppColors.error, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(message,
-                  style: TextStyle(color: AppColors.error, fontSize: 14)),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, color: AppColors.error, size: 20),
-          ]),
-        ),
+            child: Icon(
+              Icons.person_off_outlined,
+              color: AppColors.error,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            message,
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Upgrade your plan to unlock more SAFEE PIN searches.',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: AppColors.textTertiary,
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryLight],
+                ),
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.rocket_launch_rounded,
+                      color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Upgrade Plan',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

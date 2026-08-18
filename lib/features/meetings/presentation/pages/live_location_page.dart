@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geocoding/geocoding.dart';
@@ -50,6 +51,10 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
   // duplicate request on top of the still-running one.
   bool _statusFetching = false;
   late final GpsTrackingBloc _gpsTrackingBloc;
+
+  // Exposed so child widgets (_TrustedContactsCardState) can read it
+  // via findAncestorStateOfType<_LiveLocationPageState>()
+  String? get _meetingId => widget.meetingId;
 
   @override
   void initState() {
@@ -308,7 +313,7 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
           final currentPosition = gpsState is GpsTracking ? gpsState : null;
           return Column(
             children: [
-              _buildHeader(data),
+              _buildHeader(data, currentPosition),
               Expanded(
                 child: RefreshIndicator(
                   color: AppColors.primary,
@@ -324,10 +329,10 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
                         const SizedBox(height: 16),
                         _TrustedContactsCard(contacts: data?.emergencyContacts),
                         const SizedBox(height: 16),
-                        // Always the user's own live GPS position (streamed
-                        // by GpsTrackingBloc), never the meeting's static
-                        // address.
-                        _LiveLocationCard(position: currentPosition),
+                        _LiveLocationCard(
+                          position: currentPosition,
+                          meetingLocation: data?.meeting?.location,
+                        ),
                         const SizedBox(height: 16),
                         _buildActionButtons(data),
                         const SizedBox(height: 16),
@@ -344,11 +349,12 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
     );
   }
 
-  Widget _buildHeader(EmergencyShareEntity? data) {
+  Widget _buildHeader(EmergencyShareEntity? data, GpsTracking? currentPosition) {
     return _Header(
       countdown: _countdownLabel(data?.meeting),
       meeting: data?.meeting,
       partner: data?.partner,
+      currentPosition: currentPosition,
     );
   }
 
@@ -365,7 +371,7 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
     );
   }
 
-  void _openChatWithPartner(
+  String _openChatWithPartner(
       BuildContext context, EmergencyShareUserEntity partner) {
     final conversation = ConversationEntity(
       id: partner.id,
@@ -376,6 +382,7 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
       updatedAt: DateTime.now(),
     );
     context.push('${AppRoutes.chat}/${partner.id}', extra: conversation);
+    return partner.id;
   }
 
   String _countdownLabel(EmergencyShareMeetingEntity? meeting) {
@@ -408,10 +415,12 @@ class _Header extends StatelessWidget {
   final String countdown;
   final EmergencyShareMeetingEntity? meeting;
   final EmergencyShareUserEntity? partner;
+  final GpsTracking? currentPosition;
   const _Header({
     required this.countdown,
     required this.meeting,
     required this.partner,
+    this.currentPosition,
   });
 
   @override
@@ -468,6 +477,7 @@ class _Header extends StatelessWidget {
             countdown: countdown,
             meeting: meeting,
             partner: partner,
+            currentPosition: currentPosition,
           ),
         ],
       ),
@@ -498,26 +508,26 @@ class _PartnerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.darkBg2,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
           // Avatar
           Container(
-            width: 52,
-            height: 52,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: AppColors.blue,
               shape: BoxShape.circle,
             ),
             child: const Center(
-              child: Icon(Icons.person, color: Colors.white, size: 26),
+              child: Icon(Icons.person, color: Colors.white, size: 20),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -526,23 +536,44 @@ class _PartnerCard extends StatelessWidget {
                   _partnerName,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 17,
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 if (_subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Row(
                     children: [
-                      Icon(Icons.info_outline,
-                          color: AppColors.textTertiary, size: 13),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.info_outline,
+                          color: AppColors.textTertiary, size: 12),
+                      const SizedBox(width: 3),
                       Expanded(
                         child: Text(
                           _subtitle,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: AppColors.textTertiary, fontSize: 12),
+                          style: const TextStyle(
+                              color: AppColors.textTertiary, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (meeting?.location != null && meeting!.location.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(Icons.place_outlined,
+                          color: AppColors.primary, size: 12),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          meeting!.location,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
@@ -561,28 +592,51 @@ class _MapSection extends StatelessWidget {
   final String countdown;
   final EmergencyShareMeetingEntity? meeting;
   final EmergencyShareUserEntity? partner;
+  final GpsTracking? currentPosition;
 
   const _MapSection({
     required this.countdown,
     required this.meeting,
     required this.partner,
+    this.currentPosition,
   });
 
   bool get _hasMeetingLocation =>
       meeting?.latitude != null && meeting?.longitude != null;
 
-  // Distance from the *other* participant's last known GPS ping to the
-  // meeting point — a host sees the guest's distance and vice versa, never
-  // the current device's own distance.
+  String _formatMeters(double meters) {
+    if (meters < 1000) {
+      return '${meters.round()} m';
+    }
+    return '${(meters / 1000).toStringAsFixed(1)} km';
+  }
+
   String? get _distanceLabel {
-    if (!_hasMeetingLocation || partner?.hasLocation != true) return null;
-    final meters = Geolocator.distanceBetween(
-      partner!.latitude!,
-      partner!.longitude!,
-      meeting!.latitude!,
-      meeting!.longitude!,
-    );
-    return '${(meters / 1609.344).toStringAsFixed(1)} mi away';
+    if (!_hasMeetingLocation) return null;
+
+    // 1. If partner's live GPS ping is available, show partner's distance to meeting
+    if (partner?.hasLocation == true) {
+      final meters = Geolocator.distanceBetween(
+        partner!.latitude!,
+        partner!.longitude!,
+        meeting!.latitude!,
+        meeting!.longitude!,
+      );
+      return '${partner?.name?.split(' ').first ?? 'Partner'}: ${_formatMeters(meters)} away';
+    }
+
+    // 2. If current user's GPS is available, show your distance to the venue
+    if (currentPosition != null) {
+      final meters = Geolocator.distanceBetween(
+        currentPosition!.lat,
+        currentPosition!.lng,
+        meeting!.latitude!,
+        meeting!.longitude!,
+      );
+      return '${_formatMeters(meters)} to venue';
+    }
+
+    return null;
   }
 
   @override
@@ -608,7 +662,7 @@ class _MapSection extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.access_time, color: Colors.white, size: 14),
+                  const Icon(Icons.access_time, color: Colors.white, size: 14),
                   const SizedBox(width: 6),
                   Text(
                     countdown,
@@ -624,29 +678,35 @@ class _MapSection extends StatelessWidget {
             ),
           ),
 
-          // Live distance-to-meeting badge (bottom-right) — hidden until a
-          // real distance is available; not required to show a "Locating…"
-          // placeholder state right now.
+          // Live distance-to-meeting badge (bottom-right)
           if (_distanceLabel != null)
             Positioned(
-              bottom: 14,
-              right: 16,
+              bottom: 12,
+              right: 14,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: AppColors.darkBg,
                   borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.navigation, color: AppColors.success, size: 16),
+                    const Icon(Icons.navigation_rounded,
+                        color: AppColors.success, size: 16),
                     const SizedBox(width: 6),
                     Text(
                       _distanceLabel!,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -677,7 +737,10 @@ class _LiveMap extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPartnerLocation = partner != null && partner!.hasLocation;
     return CustomPaint(
-      painter: _LiveMapPainter(hasPartnerLocation: hasPartnerLocation),
+      painter: _LiveMapPainter(
+        hasPartnerLocation: hasPartnerLocation,
+        partnerName: partner?.name,
+      ),
       child: const SizedBox.expand(),
     );
   }
@@ -685,7 +748,8 @@ class _LiveMap extends StatelessWidget {
 
 class _LiveMapPainter extends CustomPainter {
   final bool hasPartnerLocation;
-  const _LiveMapPainter({required this.hasPartnerLocation});
+  final String? partnerName;
+  const _LiveMapPainter({required this.hasPartnerLocation, this.partnerName});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -739,6 +803,9 @@ class _LiveMapPainter extends CustomPainter {
       canvas.drawCircle(Offset(startX, midY), 10, Paint()..color = Colors.white);
       canvas.drawCircle(
           Offset(startX, midY), 7, Paint()..color = const Color(0xFF3B82F6));
+      _drawBadge(canvas, Offset(startX, midY + 22),
+          partnerName?.split(' ').first ?? 'Partner',
+          const Color(0xFF1E293B), Colors.white.withOpacity(0.95));
     } else {
       // Still waiting for the partner's first GPS ping — a hollow ring
       // instead of a solid dot, and no route line to a position we don't
@@ -751,6 +818,8 @@ class _LiveMapPainter extends CustomPainter {
           ..strokeWidth = 2
           ..style = PaintingStyle.stroke,
       );
+      _drawBadge(canvas, Offset(startX, midY + 22), 'You',
+          const Color(0xFF1E293B), Colors.white.withOpacity(0.95));
     }
 
     // Meeting point pin (red) — always known, this is fixed at booking time.
@@ -768,11 +837,47 @@ class _LiveMapPainter extends CustomPainter {
     pinPath.close();
     canvas.drawPath(pinPath, pinPaint);
     canvas.drawCircle(Offset(px, py - 6), 4, Paint()..color = Colors.white);
+
+    // Label under the meeting location circle
+    _drawBadge(canvas, Offset(px, py + 26), 'Meeting Location',
+        const Color(0xFFDC2626), Colors.white.withOpacity(0.95));
+  }
+
+  void _drawBadge(Canvas canvas, Offset point, String text, Color textColor,
+      Color bgColor) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
+
+    final bgRect = Rect.fromCenter(
+      center: point,
+      width: tp.width + 12,
+      height: tp.height + 6,
+    );
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bgRect, const Radius.circular(6)),
+      Paint()..color = bgColor,
+    );
+    tp.paint(
+      canvas,
+      Offset(point.dx - tp.width / 2, point.dy - tp.height / 2),
+    );
   }
 
   @override
   bool shouldRepaint(covariant _LiveMapPainter oldDelegate) =>
-      oldDelegate.hasPartnerLocation != hasPartnerLocation;
+      oldDelegate.hasPartnerLocation != hasPartnerLocation ||
+      oldDelegate.partnerName != partnerName;
 }
 
 class _MapPlaceholder extends StatelessWidget {
@@ -841,6 +946,33 @@ class _MapPainter extends CustomPainter {
     final innerDotPaint = Paint()..color = const Color(0xFF3B82F6);
     canvas.drawCircle(Offset(startX, midY), 7, innerDotPaint);
 
+    final tpUser = TextPainter(
+      text: const TextSpan(
+        text: 'You',
+        style: TextStyle(
+          color: Color(0xFF1E293B),
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
+
+    final userBgRect = Rect.fromCenter(
+      center: Offset(startX, midY + 22),
+      width: tpUser.width + 12,
+      height: tpUser.height + 6,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(userBgRect, const Radius.circular(6)),
+      Paint()..color = Colors.white.withOpacity(0.95),
+    );
+    tpUser.paint(
+      canvas,
+      Offset(startX - tpUser.width / 2, midY + 22 - tpUser.height / 2),
+    );
+
     // Destination pin (red) — soft halo behind it too
     final px = endX;
     final py = midY;
@@ -856,6 +988,33 @@ class _MapPainter extends CustomPainter {
     pinPath.close();
     canvas.drawPath(pinPath, pinPaint);
     canvas.drawCircle(Offset(px, py - 6), 4, Paint()..color = Colors.white);
+
+    final tpMeeting = TextPainter(
+      text: const TextSpan(
+        text: 'Meeting Location',
+        style: TextStyle(
+          color: Color(0xFFDC2626),
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
+
+    final meetingBgRect = Rect.fromCenter(
+      center: Offset(px, py + 26),
+      width: tpMeeting.width + 12,
+      height: tpMeeting.height + 6,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(meetingBgRect, const Radius.circular(6)),
+      Paint()..color = Colors.white.withOpacity(0.95),
+    );
+    tpMeeting.paint(
+      canvas,
+      Offset(px - tpMeeting.width / 2, py + 26 - tpMeeting.height / 2),
+    );
   }
 
   @override
@@ -996,78 +1155,177 @@ class _ProgressStep extends StatelessWidget {
 
 // ── Trusted Contacts ────────────────────────────────────────────────────────
 
-class _TrustedContactsCard extends StatelessWidget {
+class _TrustedContactsCard extends StatefulWidget {
   /// null = no meeting context (static/generic screen without a meetingId).
   final List<EmergencyShareContactEntity>? contacts;
 
   const _TrustedContactsCard({this.contacts});
 
   @override
+  State<_TrustedContactsCard> createState() => _TrustedContactsCardState();
+}
+
+class _TrustedContactsCardState extends State<_TrustedContactsCard> {
+  Future<void> _navigateAndRefresh() async {
+    await context.push(AppRoutes.emergencyContacts);
+    // Auto-refresh emergency share data when returning from contacts page
+    if (!mounted) return;
+    final meetingId = context
+        .findAncestorStateOfType<_LiveLocationPageState>()
+        ?._meetingId;
+    if (meetingId != null) {
+      context.read<EmergencyShareBloc>().add(EmergencyShareRequested(meetingId));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final contacts = widget.contacts;
+    final hasContacts = contacts != null && contacts.isNotEmpty;
+
     return Container(
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
+        color: hasContacts ? const Color(0xFFF0FDF4) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.people_outline, color: AppColors.success, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Trusted Contacts Notified',
-                style: TextStyle(
-                  color: AppColors.success,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+        border: Border.all(
+          color: hasContacts ? const Color(0xFFBBF7D0) : AppColors.border,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          const SizedBox(height: 14),
-          if (contacts != null && contacts!.isEmpty)
-            Text(
-              'No trusted contacts added yet.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            )
-          else
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: (contacts ?? const [
-                EmergencyShareContactEntity(id: '1', fullName: 'Mom'),
-                EmergencyShareContactEntity(id: '2', fullName: 'Jake'),
-              ])
-                  .map((c) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCFCE7),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.person, color: AppColors.success, size: 14),
-                            const SizedBox(width: 5),
-                            Text(
-                              c.fullName,
-                              style: TextStyle(
-                                color: AppColors.success,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ))
-                  .toList(),
-            ),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _navigateAndRefresh,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: hasContacts
+                            ? AppColors.success.withOpacity(0.12)
+                            : AppColors.primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.people_rounded,
+                        color: hasContacts ? AppColors.success : AppColors.primary,
+                        size: 15,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        hasContacts
+                            ? 'Trusted Contacts Notified'
+                            : 'Add Trusted Contacts',
+                        style: TextStyle(
+                          color: hasContacts
+                              ? AppColors.success
+                              : AppColors.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: hasContacts
+                            ? AppColors.success.withOpacity(0.12)
+                            : AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            hasContacts ? Icons.edit_outlined : Icons.add,
+                            size: 12,
+                            color: hasContacts
+                                ? AppColors.success
+                                : AppColors.primary,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            hasContacts ? 'Manage' : 'Add',
+                            style: TextStyle(
+                              color: hasContacts
+                                  ? AppColors.success
+                                  : AppColors.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (hasContacts) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: contacts
+                        .map(
+                          (c) => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDCFCE7),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.person,
+                                    color: AppColors.success, size: 12),
+                                const SizedBox(width: 3),
+                                Text(
+                                  c.fullName,
+                                  style: const TextStyle(
+                                    color: AppColors.success,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Auto-alert contacts during emergency',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1077,7 +1335,8 @@ class _TrustedContactsCard extends StatelessWidget {
 
 class _LiveLocationCard extends StatefulWidget {
   final GpsTracking? position;
-  const _LiveLocationCard({this.position});
+  final String? meetingLocation;
+  const _LiveLocationCard({this.position, this.meetingLocation});
 
   @override
   State<_LiveLocationCard> createState() => _LiveLocationCardState();
@@ -1150,58 +1409,69 @@ class _LiveLocationCardState extends State<_LiveLocationCard> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFBFDBFE)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.location_on, color: AppColors.blue, size: 22),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(Icons.location_on, color: AppColors.blue, size: 22),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Live Location Active',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Live Location Active',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Sharing',
+                          style: TextStyle(
+                            color: AppColors.success,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: AppColors.success,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   _locationLabel,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 13),
                 ),
               ],
             ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Sharing',
-                style: TextStyle(
-                  color: AppColors.success,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
           ),
         ],
       ),

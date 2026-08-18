@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/shared/utils/feature_gate.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../bloc/sos_bloc.dart';
 import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
@@ -114,9 +115,23 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
                     progress: state is SosHolding ? state.progress : 0.0,
                     contactCount: _contactCount,
                     pulseAnim: _pulseAnim,
-                    onHoldStart: () => context
-                        .read<SosBloc>()
-                        .add(SosHoldStarted(meetingId: widget.meetingId)),
+                    // Gated here, at the actual trigger, rather than at the
+                    // entry points that push this page (shell SOS button,
+                    // Home's Emergency SOS tile) — the page itself always
+                    // opens, but holding the button to really activate SOS
+                    // requires Trusted Contact Alerts on the current plan.
+                    onHoldStart: () {
+                      if (!requireFeature(
+                        context,
+                        PlanFeature.trustedContactAlerts,
+                        'Trusted Contact Alerts',
+                      )) {
+                        return;
+                      }
+                      context
+                          .read<SosBloc>()
+                          .add(SosHoldStarted(meetingId: widget.meetingId));
+                    },
                     onHoldEnd: () =>
                         context.read<SosBloc>().add(const SosHoldReleased()),
                   ),
