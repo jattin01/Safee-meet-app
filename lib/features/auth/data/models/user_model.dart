@@ -13,6 +13,7 @@ class UserModel {
   final bool isChatEnabled;
   final bool isMeetingEnabled;
   final bool isSosEnabled;
+  final int meetingCount;
   final String? emailVerifiedAt;
   final String? phoneVerifiedAt;
   final String? lastLoginAt;
@@ -31,6 +32,7 @@ class UserModel {
     required this.isChatEnabled,
     required this.isMeetingEnabled,
     required this.isSosEnabled,
+    this.meetingCount = 0,
     this.emailVerifiedAt,
     this.phoneVerifiedAt,
     this.lastLoginAt,
@@ -61,6 +63,8 @@ class UserModel {
             true) as bool,
         isSosEnabled:
             (json['isSosEnabled'] ?? json['is_sos_enabled'] ?? true) as bool,
+        meetingCount:
+            ((json['meetingCount'] ?? json['meeting_count']) as num?)?.toInt() ?? 0,
         emailVerifiedAt:
             (json['emailVerifiedAt'] ?? json['email_verified_at']) as String?,
         phoneVerifiedAt:
@@ -82,6 +86,7 @@ class UserModel {
         'isChatEnabled': isChatEnabled,
         'isMeetingEnabled': isMeetingEnabled,
         'isSosEnabled': isSosEnabled,
+        'meetingCount': meetingCount,
         'emailVerifiedAt': emailVerifiedAt,
         'phoneVerifiedAt': phoneVerifiedAt,
         'lastLoginAt': lastLoginAt,
@@ -101,6 +106,7 @@ class UserModel {
         isChatEnabled: isChatEnabled,
         isMeetingEnabled: isMeetingEnabled,
         isSosEnabled: isSosEnabled,
+        meetingCount: meetingCount,
         emailVerifiedAt: emailVerifiedAt,
         phoneVerifiedAt: phoneVerifiedAt,
         lastLoginAt: lastLoginAt,
@@ -120,6 +126,7 @@ class UserModel {
         isChatEnabled: entity.isChatEnabled,
         isMeetingEnabled: entity.isMeetingEnabled,
         isSosEnabled: entity.isSosEnabled,
+        meetingCount: entity.meetingCount,
         emailVerifiedAt: entity.emailVerifiedAt,
         phoneVerifiedAt: entity.phoneVerifiedAt,
         lastLoginAt: entity.lastLoginAt,

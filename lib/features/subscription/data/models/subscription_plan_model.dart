@@ -10,6 +10,7 @@ class SubscriptionPlanModel {
   final int? pinSearchLimit;
   final List<String> features;
   final Set<String> featureSlugs;
+  final Map<String, int> featureLimits;
   final String icon;
   final String color;
   final int sortOrder;
@@ -25,6 +26,7 @@ class SubscriptionPlanModel {
     this.pinSearchLimit,
     required this.features,
     this.featureSlugs = const {},
+    this.featureLimits = const {},
     required this.icon,
     required this.color,
     required this.sortOrder,
@@ -49,6 +51,9 @@ class SubscriptionPlanModel {
         featureSlugs: json['feature_slugs'] is List
             ? Set<String>.from(json['feature_slugs'] as List)
             : _parseFeatureSlugs(json['features']),
+        featureLimits: json['feature_limits'] is Map
+            ? Map<String, int>.from(json['feature_limits'] as Map)
+            : _parseFeatureLimits(json['features']),
         icon: json['icon'] as String? ?? 'fa-shield-halved',
         color: json['color'] as String? ?? '#6b7280',
         sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
@@ -77,19 +82,56 @@ class SubscriptionPlanModel {
         .toList();
   }
 
-  /// Pulls the `slug` out of every feature entry that has one (opaque
-  /// objects, `{id, slug, name}`) — the machine-checkable subset of
-  /// [_parseFeatures]'s display strings. Older/plain-string entries and
-  /// entries with a null slug (free-text perks) are silently skipped since
-  /// there's nothing to gate against.
   static Set<String> _parseFeatureSlugs(dynamic raw) {
     final list = raw as List<dynamic>? ?? [];
-    return list
+    final slugsFromMaps = list
         .whereType<Map>()
         .map((e) => e['slug'] as String?)
-        .whereType<String>()
+        .whereType<String>();
+
+    final slugsFromStrings = list.where((e) => e is String).map((e) {
+      final s = (e as String).trim().toLowerCase();
+      if (s.contains('verified badge')) return 'verified_badge';
+      if (s.contains('premium badge')) return 'premium_badge';
+      if (s.contains('qr code')) return 'qr_code';
+      if (s.contains('trust score')) return 'trust_score';
+      if (s.contains('level 1')) return 'level1_verification';
+      if (s.contains('level 2')) return 'level2_clearance';
+      if (s.contains('background verification')) return 'background_verification';
+      if (s.contains('professional verification')) return 'professional_verification';
+      if (s.contains('basic safety')) return 'basic_safety_tips';
+      if (s.contains('community guidelines')) return 'community_guidelines';
+      if (s.contains('safety score')) return 'safety_score_analytics';
+      if (s.contains('priority visibility')) return 'priority_visibility';
+      if (s.contains('trusted contact')) return 'trusted_contact_alerts';
+      return s.replaceAll(' ', '_');
+    });
+
+    return [...slugsFromMaps, ...slugsFromStrings]
         .where((slug) => slug.isNotEmpty)
         .toSet();
+  }
+
+  /// Parses features that have `type: "limit"` into a map of slug to limit value.
+  static Map<String, int> _parseFeatureLimits(dynamic raw) {
+    final list = raw as List<dynamic>? ?? [];
+    final limits = <String, int>{};
+    for (final e in list.whereType<Map>()) {
+      final slug = e['slug'] as String?;
+      final type = e['type'] as String?;
+      final valueStr = e['value']?.toString();
+      if (slug != null && slug.isNotEmpty && type == 'limit' && valueStr != null) {
+        final val = int.tryParse(valueStr);
+        if (val != null) limits[slug] = val;
+      } else {
+        // Fallback for plans (like Free Trial) that send a text-only feature without a slug/type.
+        final name = (e['name'] as String?)?.toLowerCase() ?? '';
+        if (name.contains('limited meeting history') && !limits.containsKey('meeting_history')) {
+          limits['meeting_history'] = 3;
+        }
+      }
+    }
+    return limits;
   }
 
   Map<String, dynamic> toJson() => {
@@ -102,6 +144,7 @@ class SubscriptionPlanModel {
         'pin_search_limit': pinSearchLimit,
         'features': features,
         'feature_slugs': featureSlugs.toList(),
+        'feature_limits': featureLimits,
         'icon': icon,
         'color': color,
         'sort_order': sortOrder,
@@ -118,6 +161,7 @@ class SubscriptionPlanModel {
         pinSearchLimit: pinSearchLimit,
         features: features,
         featureSlugs: featureSlugs,
+        featureLimits: featureLimits,
         icon: icon,
         color: color,
         sortOrder: sortOrder,

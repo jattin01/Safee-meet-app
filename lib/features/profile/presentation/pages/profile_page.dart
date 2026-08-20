@@ -361,22 +361,7 @@ class _ProfileAvatarSection extends StatelessWidget {
                       )
                     : const Icon(Icons.person, color: Colors.white70, size: 44),
               ),
-              if (showVerifiedBadge)
-                Positioned(
-                  right: -4,
-                  bottom: -4,
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      color: AppColors.success,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.darkBg, width: 2),
-                    ),
-                    child:
-                        const Icon(Icons.check, color: Colors.white, size: 14),
-                  ),
-                ),
+
               if (showPremiumBadge)
                 Positioned(
                   left: -4,
@@ -385,7 +370,7 @@ class _ProfileAvatarSection extends StatelessWidget {
                     width: 26,
                     height: 26,
                     decoration: BoxDecoration(
-                      color: AppColors.warning,
+                      color: AppColors.purple,
                       shape: BoxShape.circle,
                       border: Border.all(color: AppColors.darkBg, width: 2),
                     ),
@@ -413,7 +398,7 @@ class _ProfileAvatarSection extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (isVerifiedLevel) ...[
+              if (showVerifiedBadge) ...[
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () => _showLevelBadge(

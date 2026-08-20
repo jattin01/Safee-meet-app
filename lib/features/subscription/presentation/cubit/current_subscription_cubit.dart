@@ -60,28 +60,50 @@ class CurrentSubscriptionCubit extends Cubit<CurrentSubscriptionState> {
   Future<void> load({bool forceRefresh = false}) async {
     if (state.status == CurrentSubscriptionStatus.loading) return;
 
-    // Only emit a blocking 'loading' status if we don't already have data.
-    // If we already have data, we just fetch silently in the background
-    // (Stale-While-Revalidate / Cache-First UX).
-    if (state.status != CurrentSubscriptionStatus.loaded) {
+    final hasExistingData = state.status == CurrentSubscriptionStatus.loaded;
+
+    if (!hasExistingData) {
       emit(state.copyWith(
         status: CurrentSubscriptionStatus.loading,
         clearError: true,
       ));
+
+      // 1. Stale-While-Revalidate: Try to load from local cache instantly
+      if (!forceRefresh) {
+        final cacheResult = await _getCurrentSubscription(forceRefresh: false);
+        cacheResult.fold(
+          (_) {}, // Ignore cache errors
+          (subscription) {
+            // Emit the cached subscription to unblock the UI instantly.
+            // We'll update it properly with isOnHighestPlan in step 2.
+            emit(CurrentSubscriptionState(
+              status: CurrentSubscriptionStatus.loaded,
+              subscription: subscription,
+              isOnHighestPlan: state.isOnHighestPlan,
+            ));
+          },
+        );
+      }
     }
 
-    // Started together (Dart futures run eagerly) and awaited separately,
-    // since the two calls return differently-typed Eithers.
-    final subscriptionFuture = _getCurrentSubscription(forceRefresh: forceRefresh);
+    // 2. Always fetch fresh data from network in the background.
+    // We pass forceRefresh: true to bypass the cache in the repository.
+    final subscriptionFuture = _getCurrentSubscription(forceRefresh: true);
     final plansFuture = _getPlans();
+    
     final subscriptionResult = await subscriptionFuture;
     final plansResult = await plansFuture;
 
     subscriptionResult.fold(
-      (failure) => emit(state.copyWith(
-        status: CurrentSubscriptionStatus.error,
-        errorMessage: failure.message,
-      )),
+      (failure) {
+        // Only surface the error if we don't already have perfectly good cached data
+        if (state.status != CurrentSubscriptionStatus.loaded) {
+          emit(state.copyWith(
+            status: CurrentSubscriptionStatus.error,
+            errorMessage: failure.message,
+          ));
+        }
+      },
       (subscription) {
         // The plan catalog is only used to decide whether an "Upgrade" CTA
         // still makes sense; if that lookup fails we default to false

@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="refresh" content="0;url='http://168.144.112.102:8080/login'" />
+
+        <title>Redirecting to http://168.144.112.102:8080/login</title>
+    </head>
+    <body>
+        Redirecting to <a href="http://168.144.112.102:8080/login">http://168.144.112.102:8080/login</a>.
+    </body>
+</html>

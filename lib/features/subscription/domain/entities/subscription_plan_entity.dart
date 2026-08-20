@@ -18,6 +18,10 @@ class SubscriptionPlanEntity extends Equatable {
   /// against [features] display text.
   final Set<String> featureSlugs;
 
+  /// Map of feature slug to its dynamic limit value (e.g. `meeting_history` -> 8).
+  /// Only contains features where API returned `type: "limit"` and a numeric `value`.
+  final Map<String, int> featureLimits;
+
   final String icon;
   final String color;
   final int sortOrder;
@@ -32,12 +36,15 @@ class SubscriptionPlanEntity extends Equatable {
     this.pinSearchLimit,
     required this.features,
     this.featureSlugs = const {},
+    this.featureLimits = const {},
     required this.icon,
     required this.color,
     required this.sortOrder,
   });
 
   bool hasFeature(String featureSlug) => featureSlugs.contains(featureSlug);
+
+  int? getFeatureLimit(String featureSlug) => featureLimits[featureSlug];
 
   double price(bool yearly) => yearly ? yearlyPrice / 12 : monthlyPrice;
 
@@ -64,6 +71,7 @@ class SubscriptionPlanEntity extends Equatable {
         pinSearchLimit,
         features,
         featureSlugs,
+        featureLimits,
         icon,
         color,
         sortOrder,

@@ -13,6 +13,7 @@ class UserEntity extends Equatable {
   final bool    isChatEnabled;
   final bool    isMeetingEnabled;
   final bool    isSosEnabled;
+  final int     meetingCount;
   final String? emailVerifiedAt;
   final String? phoneVerifiedAt;
   final String? lastLoginAt;
@@ -31,6 +32,7 @@ class UserEntity extends Equatable {
     required this.isChatEnabled,
     required this.isMeetingEnabled,
     required this.isSosEnabled,
+    this.meetingCount = 0,
     this.emailVerifiedAt,
     this.phoneVerifiedAt,
     this.lastLoginAt,
@@ -51,7 +53,10 @@ class UserEntity extends Equatable {
         id, safeeId, displayName, avatarUrl,
         accountType, authProvider, status,
         trustScore, trustTier,
-        isChatEnabled, isMeetingEnabled, isSosEnabled,
+        isChatEnabled,
+        isMeetingEnabled,
+        isSosEnabled,
+        meetingCount,
         emailVerifiedAt, phoneVerifiedAt, lastLoginAt, createdAt,
       ];
 }

@@ -3,6 +3,16 @@ import '../../domain/entities/user_entity.dart';
 
 abstract class AuthState extends Equatable {
   const AuthState();
+  
+  UserEntity? get user {
+    final s = this;
+    if (s is Authenticated) return s.user;
+    if (s is RegistrationSuccess) return s.user;
+    if (s is LoginSuccess) return s.user;
+    if (s is AuthAuthenticated) return s.user;
+    return null;
+  }
+
   @override
   List<Object?> get props => [];
 }

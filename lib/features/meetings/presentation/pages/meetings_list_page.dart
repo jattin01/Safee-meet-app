@@ -10,6 +10,7 @@ import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../../domain/entities/meeting_entity.dart';
+import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../bloc/meetings_bloc.dart';
 
 class MeetingsListPage extends StatelessWidget {
@@ -18,8 +19,11 @@ class MeetingsListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: sl<MeetingsBloc>(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: sl<MeetingsBloc>()),
+        BlocProvider.value(value: sl<CurrentSubscriptionCubit>()),
+      ],
       child: _MeetingsListView(initialTab: initialTab),
     );
   }
@@ -100,14 +104,14 @@ class _MeetingsListViewState extends State<_MeetingsListView>
           }
         },
         builder: (context, state) {
-          final upcoming = _meetings
+          var upcoming = _meetings
               .where((m) =>
                   m.status == MeetingStatus.scheduled ||
                   m.status == MeetingStatus.enRoute ||
                   m.status == MeetingStatus.arrived ||
                   (m.status == MeetingStatus.pendingApproval && m.isHost))
               .toList();
-          final requests = _meetings
+          var requests = _meetings
               .where(
                   (m) => m.status == MeetingStatus.pendingApproval && !m.isHost)
               .toList();
@@ -118,6 +122,22 @@ class _MeetingsListViewState extends State<_MeetingsListView>
                   m.status == MeetingStatus.declined ||
                   m.status == MeetingStatus.incidentReported)
               .toList();
+
+          final historyLimit = context
+              .watch<CurrentSubscriptionCubit>()
+              .state
+              .subscription
+              ?.plan
+              .getFeatureLimit('meeting_history');
+
+          if (historyLimit != null) {
+            if (upcoming.length > historyLimit) {
+              upcoming = upcoming.take(historyLimit).toList();
+            }
+            if (requests.length > historyLimit) {
+              requests = requests.take(historyLimit).toList();
+            }
+          }
 
           return Scaffold(
             backgroundColor: AppColors.lightBg,

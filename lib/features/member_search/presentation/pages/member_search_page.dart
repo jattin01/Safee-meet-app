@@ -11,8 +11,10 @@ import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../messaging/domain/entities/message_entity.dart';
 import '../../domain/entities/member_entity.dart';
+import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../bloc/member_search_bloc.dart';
 import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
@@ -173,6 +175,31 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
       Navigator.of(ctx).pop(member);
       return;
     }
+
+    final user = ctx.read<AuthBloc>().state.user;
+    final plan = ctx.read<CurrentSubscriptionCubit>().state.subscription?.plan;
+    
+    if (user != null && plan != null) {
+      final historyLimit = plan.getFeatureLimit('meeting_history');
+      if (historyLimit != null && user.meetingCount >= historyLimit) {
+        showDialog(
+          context: ctx,
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _UpgradeLimitCard(
+              message: 'You have reached your limit of $historyLimit meetings for this plan.',
+              onTap: () {
+                Navigator.pop(context);
+                context.push(AppRoutes.subscription, extra: 'basic_unlimited');
+              },
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
     ctx.push('${AppRoutes.meetingSetup}?memberId=${member.id}', extra: member);
   }
 
