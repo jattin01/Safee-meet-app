@@ -14,6 +14,9 @@ dependencies:
   flutter_bloc: ^8.1.6
   equatable: ^2.0.5
 
+  # App Update
+  upgrader: ^10.3.0
+
   # Dependency Injection
   get_it: ^8.0.2
   injectable: ^2.4.4

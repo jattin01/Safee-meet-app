@@ -67,12 +67,14 @@ class AuthRepositoryImpl implements AuthRepository {
         refreshToken: entity.refreshToken,
         userId:       entity.user.id,
       );
-      await _local.cacheUser(model.user);
-      if (entity.user.displayName != null) {
-        await _secureStorage.saveUserName(entity.user.displayName!);
-      }
       final firebasePhone = _firebaseAuth.currentUser?.phoneNumber;
-      if (firebasePhone != null) await _secureStorage.saveUserPhone(firebasePhone);
+      await Future.wait([
+        _local.cacheUser(model.user),
+        if (entity.user.displayName != null)
+          _secureStorage.saveUserName(entity.user.displayName!),
+        if (firebasePhone != null)
+          _secureStorage.saveUserPhone(firebasePhone),
+      ]);
       return Right(entity);
     } on DioException catch (e) {
       return Left(_mapDioError(e));
@@ -98,12 +100,14 @@ class AuthRepositoryImpl implements AuthRepository {
         userId:       entity.user.id,
       );
       try {
-        await _local.cacheUser(model.user);
-        if (entity.user.displayName != null) {
-          await _secureStorage.saveUserName(entity.user.displayName!);
-        }
         final firebasePhone = _firebaseAuth.currentUser?.phoneNumber;
-        if (firebasePhone != null) await _secureStorage.saveUserPhone(firebasePhone);
+        await Future.wait([
+          _local.cacheUser(model.user),
+          if (entity.user.displayName != null)
+            _secureStorage.saveUserName(entity.user.displayName!),
+          if (firebasePhone != null)
+            _secureStorage.saveUserPhone(firebasePhone),
+        ]);
       } catch (_) {}
       return Right(entity);
     } on DioException catch (e) {

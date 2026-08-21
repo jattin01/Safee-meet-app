@@ -89,6 +89,15 @@ class CurrentUserCubit extends Cubit<CurrentUserState> {
     _scheduleNextPollIfNeeded();
   }
 
+  void setProfile(ProfileEntity profile) {
+    emit(state.copyWith(
+      status: CurrentUserStatus.loaded,
+      profile: profile,
+      clearError: true,
+    ));
+    _scheduleNextPollIfNeeded();
+  }
+
   void _scheduleNextPollIfNeeded() {
     _pollTimer?.cancel();
     _pollTimer = null;

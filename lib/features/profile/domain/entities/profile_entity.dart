@@ -5,6 +5,7 @@ class ProfileEntity extends Equatable {
   final String name;
   final String safeePIN;
   final String? avatarUrl;
+  final String? badgeIconUrl;
   final String? coverUrl;
   final String? phone;
   final String? email;
@@ -30,6 +31,7 @@ class ProfileEntity extends Equatable {
     required this.name,
     required this.safeePIN,
     this.avatarUrl,
+    this.badgeIconUrl,
     this.coverUrl,
     this.phone,
     this.email,
@@ -59,6 +61,9 @@ class ProfileEntity extends Equatable {
         id,
         name,
         safeePIN,
+        avatarUrl,
+        badgeIconUrl,
+        coverUrl,
         phone,
         email,
         trustScore,

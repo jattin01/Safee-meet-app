@@ -147,12 +147,19 @@ class ProfileRepositoryImpl implements ProfileRepository {
     }
   }
 
+  static String? _parseBadgeIconUrl(dynamic url) {
+    if (url == null || url is! String || url.isEmpty) return null;
+    if (url.startsWith('http')) return url;
+    return 'http://168.144.112.102:8080$url';
+  }
+
   ProfileEntity _parseProfile(Map<String, dynamic> d, {String? phone}) =>
       ProfileEntity(
         id: d['id'] as String? ?? '',
         name: d['displayName'] as String? ?? 'SAFEE User',
         safeePIN: d['safeeId'] as String? ?? '',
         avatarUrl: d['avatarUrl'] as String?,
+        badgeIconUrl: _parseBadgeIconUrl(d['badgeIcon'] ?? d['badge_icon']),
         phone: d['phone'] as String? ?? phone,
         email: d['email'] as String?,
         trustScore: (d['trustScore'] as num?)?.toInt() ?? 0,

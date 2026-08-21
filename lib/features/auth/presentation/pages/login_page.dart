@@ -20,6 +20,8 @@ import '../../../../core/shared/widgets/primary_button.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
+import '../../../profile/domain/entities/profile_entity.dart';
+import '../../../profile/presentation/cubit/current_user_cubit.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
@@ -177,6 +179,35 @@ class _LoginViewState extends State<_LoginView> {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is LoginSuccess) {
+          final levelStr = state.user.verificationStatus != 'approved'
+              ? 'none'
+              : switch (state.user.verificationLevel) {
+                  1 => 'level1',
+                  2 => 'level2',
+                  3 => 'level3',
+                  _ => 'none',
+                };
+
+          final profile = ProfileEntity(
+            id: state.user.id,
+            name: state.user.displayName,
+            safeePIN: state.user.safeeId,
+            avatarUrl: state.user.avatarUrl,
+            badgeIconUrl: state.user.badgeIconUrl,
+            phone: _toE164(_phoneCtrl.text.trim()),
+            trustScore: state.user.trustScore,
+            verificationLevel: levelStr,
+            verificationStatus: state.user.verificationStatus ?? 'not_submitted',
+            subscriptionPlan: 'free',
+            safetyScore: 0,
+            totalMeetings: state.user.meetingCount,
+            totalReviews: 0,
+            badges: const [],
+            status: state.user.status,
+            pinSearchCount: 0,
+          );
+          
+          context.read<CurrentUserCubit>().setProfile(profile);
           context.go(AppRoutes.dashboardHome);
         }
         if (state is PhoneRegistrationVerified) {
@@ -204,7 +235,6 @@ class _LoginViewState extends State<_LoginView> {
           final socialProvider = _pendingSocialProvider;
           final socialToken    = _pendingSocialToken;
           setState(() {
-            _verifyingOtp           = false;
             _otpAlreadyVerified     = true;
             _pendingSocialProvider  = null;
             _pendingSocialToken     = null;
@@ -218,6 +248,7 @@ class _LoginViewState extends State<_LoginView> {
           );
         }
         if (state is UserNotRegistered) {
+          setState(() => _verifyingOtp = false);
           _showNotRegisteredSheet(context, state.message);
         }
         if (state is AuthFailureState) {
@@ -443,6 +474,7 @@ class _LoginViewState extends State<_LoginView> {
             _isOtpStep         = false;
             _enteredOtp        = null;
             _otpError          = null;
+            _verifyingOtp      = false;
             // Keep the pending Google/Apple token so a signed-in social
             // session doesn't need to be redone — just re-enter the phone.
             _isSocialPhoneStep = _pendingSocialProvider != null;

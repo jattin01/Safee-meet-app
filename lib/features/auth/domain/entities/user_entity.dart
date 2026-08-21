@@ -5,6 +5,7 @@ class UserEntity extends Equatable {
   final String  safeeId;
   final String  displayName;
   final String? avatarUrl;
+  final String? badgeIconUrl;
   final String  accountType;
   final String  authProvider;
   final String  status;
@@ -18,12 +19,15 @@ class UserEntity extends Equatable {
   final String? phoneVerifiedAt;
   final String? lastLoginAt;
   final String? createdAt;
+  final int?    verificationLevel;
+  final String? verificationStatus;
 
   const UserEntity({
     required this.id,
     required this.safeeId,
     required this.displayName,
     this.avatarUrl,
+    this.badgeIconUrl,
     required this.accountType,
     required this.authProvider,
     required this.status,
@@ -37,6 +41,8 @@ class UserEntity extends Equatable {
     this.phoneVerifiedAt,
     this.lastLoginAt,
     this.createdAt,
+    this.verificationLevel,
+    this.verificationStatus,
   });
 
   String get initials {
@@ -50,7 +56,7 @@ class UserEntity extends Equatable {
 
   @override
   List<Object?> get props => [
-        id, safeeId, displayName, avatarUrl,
+        id, safeeId, displayName, avatarUrl, badgeIconUrl,
         accountType, authProvider, status,
         trustScore, trustTier,
         isChatEnabled,
@@ -58,5 +64,6 @@ class UserEntity extends Equatable {
         isSosEnabled,
         meetingCount,
         emailVerifiedAt, phoneVerifiedAt, lastLoginAt, createdAt,
+        verificationLevel, verificationStatus,
       ];
 }

@@ -16,10 +16,12 @@ class AuthSessionManager {
     String? refreshToken,
     required String userId,
   }) async {
-    await _tokenStorage.saveAccessToken(accessToken);
-    await _tokenStorage.saveUserId(userId);
-    if (refreshToken != null) await _tokenStorage.saveRefreshToken(refreshToken);
-    await _tokenStorage.setAuthenticated();
+    await Future.wait([
+      _tokenStorage.saveAccessToken(accessToken),
+      _tokenStorage.saveUserId(userId),
+      if (refreshToken != null) _tokenStorage.saveRefreshToken(refreshToken),
+      _tokenStorage.setAuthenticated(),
+    ]);
   }
 
   Future<void> clearSession() => _tokenStorage.clearAll();

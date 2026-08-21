@@ -135,6 +135,7 @@ class SafeeMeetApp extends StatelessWidget {
             ),
             child: child!,
           );
+          
           return DevicePreview.appBuilder(context, clampedChild);
         },
       ),

@@ -22,7 +22,9 @@ import '../../../subscription/presentation/cubit/current_subscription_cubit.dart
 import '../../domain/entities/profile_entity.dart';
 import '../bloc/profile_bloc.dart';
 import '../cubit/reviews_cubit.dart';
+import '../cubit/current_user_cubit.dart';
 import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/shared/widgets/skeleton_item.dart';
 
 /// Renders the Safee PIN as a QR PNG and shares it together with the PIN
@@ -588,7 +590,20 @@ class _ProfileAvatarSection extends StatelessWidget {
                   constraints: const BoxConstraints(maxHeight: 380),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(asset, fit: BoxFit.contain),
+                    child: profile?.badgeIconUrl != null
+                        ? CachedNetworkImage(
+                            imageUrl: profile!.badgeIconUrl!,
+                            fadeInDuration: Duration.zero,
+                            fadeOutDuration: Duration.zero,
+                            fit: BoxFit.contain,
+                            placeholder: (context, url) => const SkeletonItem(
+                              width: double.infinity,
+                              height: 380,
+                              borderRadius: 16,
+                            ),
+                            errorWidget: (context, url, error) => Image.asset(asset, fit: BoxFit.contain),
+                          )
+                        : Image.asset(asset, fit: BoxFit.contain),
                   ),
                 ),
               ),

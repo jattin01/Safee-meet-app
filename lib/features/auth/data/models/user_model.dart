@@ -5,6 +5,7 @@ class UserModel {
   final String safeeId;
   final String displayName;
   final String? avatarUrl;
+  final String? badgeIconUrl;
   final String accountType;
   final String authProvider;
   final String status;
@@ -18,12 +19,15 @@ class UserModel {
   final String? phoneVerifiedAt;
   final String? lastLoginAt;
   final String? createdAt;
+  final int? verificationLevel;
+  final String? verificationStatus;
 
   const UserModel({
     required this.id,
     required this.safeeId,
     required this.displayName,
     this.avatarUrl,
+    this.badgeIconUrl,
     required this.accountType,
     required this.authProvider,
     required this.status,
@@ -37,6 +41,8 @@ class UserModel {
     this.phoneVerifiedAt,
     this.lastLoginAt,
     this.createdAt,
+    this.verificationLevel,
+    this.verificationStatus,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -47,6 +53,7 @@ class UserModel {
             json['name'] ??
             'SAFEE User') as String,
         avatarUrl: (json['avatarUrl'] ?? json['avatar_url']) as String?,
+        badgeIconUrl: _parseBadgeIconUrl(json['badgeIcon'] ?? json['badge_icon']),
         accountType:
             (json['accountType'] ?? json['account_type'] ?? 'normal') as String,
         authProvider: (json['authProvider'] ?? json['auth_provider'] ?? 'phone')
@@ -71,6 +78,8 @@ class UserModel {
             (json['phoneVerifiedAt'] ?? json['phone_verified_at']) as String?,
         lastLoginAt: (json['lastLoginAt'] ?? json['last_login_at']) as String?,
         createdAt: (json['createdAt'] ?? json['created_at']) as String?,
+        verificationLevel: (json['verificationLevel'] ?? json['verification_level'] as num?)?.toInt(),
+        verificationStatus: (json['verificationStatus'] ?? json['verification_status']) as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -91,13 +100,23 @@ class UserModel {
         'phoneVerifiedAt': phoneVerifiedAt,
         'lastLoginAt': lastLoginAt,
         'createdAt': createdAt,
+        'verificationLevel': verificationLevel,
+        'verificationStatus': verificationStatus,
       };
+
+  static String? _parseBadgeIconUrl(dynamic url) {
+    if (url == null || url is! String || url.isEmpty) return null;
+    if (url.startsWith('http')) return url;
+    // The user requested to append this specific IP
+    return 'http://168.144.112.102:8080$url';
+  }
 
   UserEntity toEntity() => UserEntity(
         id: id,
         safeeId: safeeId,
         displayName: displayName,
         avatarUrl: avatarUrl,
+        badgeIconUrl: badgeIconUrl,
         accountType: accountType,
         authProvider: authProvider,
         status: status,
@@ -111,6 +130,8 @@ class UserModel {
         phoneVerifiedAt: phoneVerifiedAt,
         lastLoginAt: lastLoginAt,
         createdAt: createdAt,
+        verificationLevel: verificationLevel,
+        verificationStatus: verificationStatus,
       );
 
   static UserModel fromEntity(UserEntity entity) => UserModel(
@@ -131,5 +152,7 @@ class UserModel {
         phoneVerifiedAt: entity.phoneVerifiedAt,
         lastLoginAt: entity.lastLoginAt,
         createdAt: entity.createdAt,
+        verificationLevel: entity.verificationLevel,
+        verificationStatus: entity.verificationStatus,
       );
 }

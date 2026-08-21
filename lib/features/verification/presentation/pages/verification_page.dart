@@ -195,7 +195,7 @@ class _RequirementRow extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
                 color: AppColors.cardBg, shape: BoxShape.circle),
             child: Icon(icon, color: AppColors.textSecondary, size: 20),
           ),

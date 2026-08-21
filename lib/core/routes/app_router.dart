@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:upgrader/upgrader.dart';
 
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -43,9 +45,16 @@ import '../../features/verification/presentation/pages/verification_status_page.
 import '../dependency_injection/injection_container.dart';
 import '../services/fcm_service.dart';
 import '../services/secure_storage_service.dart';
+import '../shared/widgets/custom_upgrade_alert.dart';
 import 'app_routes.dart';
 import 'route_observer.dart';
 import '../../features/verification/presentation/bloc/verification_bloc.dart';
+
+final _upgrader = Upgrader(
+  debugLogging: false,
+  debugDisplayAlways: false,
+  
+);
 
 class AppRouter {
   final SecureStorageService _storage;
@@ -90,7 +99,12 @@ class AppRouter {
             BlocProvider.value(value: sl<CurrentUserCubit>()..load()),
             BlocProvider.value(value: sl<CurrentSubscriptionCubit>()..load()),
           ],
-          child: AppShellPage(navigationShell: shell),
+          child: CustomUpgradeAlert(
+            upgrader: _upgrader,
+            showIgnore: false,
+            showLater: false,
+            child: AppShellPage(navigationShell: shell),
+          ),
         ),
         branches: [
           StatefulShellBranch(
