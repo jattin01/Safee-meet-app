@@ -48,12 +48,14 @@ class ProfileLoaded extends ProfileState {
   final List<ReviewEntity> reviews;
   final bool reviewsLoading;
   final String? reviewFilter;
+  final int timestamp;
 
   const ProfileLoaded({
     required this.profile,
     this.reviews = const [],
     this.reviewsLoading = false,
     this.reviewFilter,
+    this.timestamp = 0,
   });
 
   ProfileLoaded copyWith({
@@ -61,16 +63,19 @@ class ProfileLoaded extends ProfileState {
     List<ReviewEntity>? reviews,
     bool? reviewsLoading,
     String? reviewFilter,
-  }) =>
-      ProfileLoaded(
-        profile: profile ?? this.profile,
-        reviews: reviews ?? this.reviews,
-        reviewsLoading: reviewsLoading ?? this.reviewsLoading,
-        reviewFilter: reviewFilter ?? this.reviewFilter,
-      );
+    int? timestamp,
+  }) {
+    return ProfileLoaded(
+      profile: profile ?? this.profile,
+      reviews: reviews ?? this.reviews,
+      reviewsLoading: reviewsLoading ?? this.reviewsLoading,
+      reviewFilter: reviewFilter ?? this.reviewFilter,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
 
   @override
-  List<Object?> get props => [profile, reviews, reviewsLoading, reviewFilter];
+  List<Object?> get props => [profile, reviews, reviewsLoading, reviewFilter, timestamp];
 }
 
 class ProfileError extends ProfileState {
@@ -100,10 +105,11 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     result.fold(
       (f) => emit(ProfileError(f.message)),
       (p) {
+        final ts = DateTime.now().millisecondsSinceEpoch;
         if (currentState is ProfileLoaded) {
-          emit(currentState.copyWith(profile: p));
+          emit(currentState.copyWith(profile: p, timestamp: ts));
         } else {
-          emit(ProfileLoaded(profile: p));
+          emit(ProfileLoaded(profile: p, timestamp: ts));
         }
       },
     );
