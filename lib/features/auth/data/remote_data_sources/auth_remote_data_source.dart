@@ -24,6 +24,8 @@ abstract class AuthRemoteDataSource {
 
   Future<void> logout();
 
+  Future<void> deleteAccount();
+
   Future<bool> checkUserExists({
     String? email,
     String? phone,
@@ -104,6 +106,11 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<void> logout() async {
     await _dio.post('/v1/auth/logout');
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    await _dio.delete('/v1/auth/phone/delete-account');
   }
 
   @override

@@ -21,6 +21,9 @@ import '../../../subscription/domain/entities/current_subscription_entity.dart';
 import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../../domain/entities/profile_entity.dart';
 import '../bloc/profile_bloc.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_event.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 import '../cubit/reviews_cubit.dart';
 import '../cubit/current_user_cubit.dart';
 import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
@@ -170,16 +173,71 @@ class _ProfileView extends StatelessWidget {
     }
   }
 
+  void _confirmDeleteAccount(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkBg,
+        title: Text(
+          'Delete Account',
+          style: GoogleFonts.inter(
+              color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete your account? This action cannot be undone and all your data will be lost.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textPrimary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.read<AuthBloc>().add(const DeleteAccountRequested());
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ProfileBloc, ProfileState>(
-      builder: (context, state) {
-        final profile = state is ProfileLoaded ? state.profile : null;
-        return BlocBuilder<ReviewsCubit, ReviewsState>(
-          builder: (context, reviewsState) => _buildScaffold(
-              context, profile, state is ProfileLoading, reviewsState),
-        );
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthLoading) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          );
+        } else if (state is LogoutSuccess) {
+          Navigator.of(context, rootNavigator: true).pop();
+          context.go(AppRoutes.login);
+        } else if (state is AuthFailureState) {
+          Navigator.of(context, rootNavigator: true).pop();
+          AppSnackbar.error(context, state.message);
+        }
       },
+      child: BlocBuilder<ProfileBloc, ProfileState>(
+        builder: (context, state) {
+          final profile = state is ProfileLoaded ? state.profile : null;
+          return BlocBuilder<ReviewsCubit, ReviewsState>(
+            builder: (context, reviewsState) => _buildScaffold(
+                context, profile, state is ProfileLoading, reviewsState),
+          );
+        },
+      ),
     );
   }
 
@@ -284,6 +342,17 @@ class _ProfileView extends StatelessWidget {
                           subtitle: _membershipSubtitle(subState),
                           onTap: () => context.push(AppRoutes.subscription),
                         ),
+                      ),
+                    ]),
+                    const SizedBox(height: 16),
+                    AppListCard(children: [
+                      _NavTile(
+                        icon: Icons.delete_forever,
+                        iconColor: AppColors.error,
+                        label: 'Delete Account',
+                        subtitle: 'Permanently remove your account and data',
+                        textColor: AppColors.error,
+                        onTap: () => _confirmDeleteAccount(context),
                       ),
                     ]),
                   ],
@@ -1186,6 +1255,7 @@ class _NavTile extends StatelessWidget {
   final Color iconColor;
   final String label;
   final String? subtitle;
+  final Color? textColor;
   final VoidCallback onTap;
 
   const _NavTile({
@@ -1193,6 +1263,7 @@ class _NavTile extends StatelessWidget {
     required this.iconColor,
     required this.label,
     this.subtitle,
+    this.textColor,
     required this.onTap,
   });
 
@@ -1218,7 +1289,7 @@ class _NavTile extends StatelessWidget {
                 children: [
                   Text(label,
                       style: GoogleFonts.inter(
-                          color: AppColors.textPrimary,
+                          color: textColor ?? AppColors.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w700)),
                   if (subtitle != null) ...[

@@ -1,7 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:country_code_picker/country_code_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -208,6 +208,10 @@ class _LoginViewState extends State<_LoginView> {
           );
           
           context.read<CurrentUserCubit>().setProfile(profile);
+          if (kDebugMode) {
+            // ignore: avoid_print
+            print('[TIMING] LoginSuccess -> navigating to Home now');
+          }
           context.go(AppRoutes.dashboardHome);
         }
         if (state is PhoneRegistrationVerified) {

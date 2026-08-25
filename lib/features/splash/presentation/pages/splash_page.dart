@@ -8,6 +8,8 @@ import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/services/hive_service.dart';
 import '../../../../core/storage/auth_session_manager.dart';
+import '../../../notifications/presentation/cubit/notifications_cubit.dart';
+import '../../../profile/presentation/cubit/current_user_cubit.dart';
 import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 
 class SplashPage extends StatefulWidget {
@@ -76,11 +78,15 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     final authed    = await session.isAuthenticated();
 
     if (authed) {
-      // Warm the current-plan cache as early as possible so it's already
-      // loaded (or loading) by the time the dashboard/shell mounts —
-      // fire-and-forget, cache-aware (15-min TTL) and safe to call again
-      // from the router guard/shell without duplicating work.
+      // Warm these app-root singletons as early as possible so they're
+      // already loaded (or loading) by the time the dashboard/shell
+      // mounts. All three are fire-and-forget and each has its own
+      // in-flight de-dupe, so calling them again from the router
+      // guard/shell (which still do, for the subscription/user cubits)
+      // just reuses this same request instead of firing a second one.
+      unawaited(sl<CurrentUserCubit>().load());
       unawaited(sl<CurrentSubscriptionCubit>().load());
+      unawaited(sl<NotificationsCubit>().load());
     }
 
     if (!mounted) return;

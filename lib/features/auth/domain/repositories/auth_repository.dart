@@ -36,6 +36,9 @@ abstract class AuthRepository {
   /// Logout — invalidates server token + clears local session.
   Future<Either<Failure, void>> logout();
 
+  /// Delete Account — calls the backend deletion endpoint and clears local session.
+  Future<Either<Failure, void>> deleteAccount();
+
   /// Pre-flight check — does this identity exist on the backend?
   Future<Either<Failure, bool>> checkUserExists({
     String? email,

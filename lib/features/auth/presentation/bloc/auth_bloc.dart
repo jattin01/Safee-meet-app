@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -20,6 +21,7 @@ import '../../domain/use_cases/resend_otp_use_case.dart';
 import '../../domain/use_cases/send_otp_use_case.dart';
 import '../../domain/use_cases/send_register_otp_use_case.dart';
 import '../../domain/use_cases/verify_otp_use_case.dart';
+import '../../domain/use_cases/delete_account_use_case.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -38,6 +40,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final ResendOtpUseCase       resendOtp;
   final SendRegisterOtpUseCase sendRegisterOtp;
   final VerifyOtpUseCase       verifyOtp;
+  final DeleteAccountUseCase   deleteAccountUseCase;
 
   // Firebase is only here to get the ID token — not for business logic.
   // Optional: injected for testability; lazily defaults to the singletons.
@@ -60,6 +63,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.resendOtp,
     required this.sendRegisterOtp,
     required this.verifyOtp,
+    required this.deleteAccountUseCase,
     GoogleSignIn? googleSignIn,
     FirebaseAuth? firebaseAuth,
   })  : _googleSignInOverride = googleSignIn,
@@ -72,6 +76,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<GoogleLoginRequested>(_onGoogleLogin);
     on<AppleLoginRequested>(_onAppleLogin);
     on<LogoutRequested>(_onLogout);
+    on<DeleteAccountRequested>(_onDeleteAccount);
     // Legacy handlers
     on<SendOtpRequested>(_onSendOtp);
     on<ResendOtpRequested>(_onResendOtp);
@@ -233,6 +238,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(const LogoutSuccess());
   }
 
+  // ── Delete Account ────────────────────────────────────────────────────────────
+
+  Future<void> _onDeleteAccount(
+    DeleteAccountRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthLoading());
+    final result = await deleteAccountUseCase();
+    result.fold(
+      (failure) => emit(_mapFailureToState(failure)),
+      (_) => emit(const LogoutSuccess()),
+    );
+  }
+
   // ── Google token helper ───────────────────────────────────────────────────────
 
   Future<String?> _getGoogleFirebaseToken() async {
@@ -329,19 +348,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onVerifyOtp(OtpVerificationRequested event, Emitter<AuthState> emit) async {
+    // Debug-only timing instrumentation — verify-otp itself is fast; the
+    // real cost here tends to be the two Firebase network round trips
+    // (signInWithCustomToken, then getIdToken) that happen between our
+    // backend confirming the OTP and PhoneOtpVerified reaching the UI.
+    // Safe to remove once confirmed.
+    final sw = kDebugMode ? (Stopwatch()..start()) : null;
+    void mark(String label) {
+      if (sw != null) {
+        // ignore: avoid_print
+        print('[TIMING] $label: ${sw.elapsedMilliseconds}ms');
+      }
+    }
+
     emit(const AuthLoading());
     final result = await verifyOtp(phone: event.phone, otp: event.otp);
+    mark('POST /auth/verify-otp responded');
     await result.fold(
       (failure) async => emit(_mapFailureToState(failure)),
       (customToken) async {
         try {
           final cred = await _firebaseAuth.signInWithCustomToken(customToken);
+          mark('Firebase signInWithCustomToken done');
           final idToken = await cred.user?.getIdToken();
+          mark('Firebase getIdToken done');
           if (idToken == null) {
             emit(const AuthFailureState('Could not verify OTP. Please try again.'));
             return;
           }
           emit(PhoneOtpVerified(idToken));
+          mark('PhoneOtpVerified emitted');
         } on FirebaseAuthException catch (e) {
           emit(AuthFailureState(e.message ?? 'Could not verify OTP. Please try again.'));
         }

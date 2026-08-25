@@ -137,7 +137,10 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.profile,
-                builder: (_, __) => const ProfilePage(),
+                builder: (_, __) => BlocProvider(
+                  create: (_) => sl<AuthBloc>(),
+                  child: const ProfilePage(),
+                ),
               ),
             ],
           ),

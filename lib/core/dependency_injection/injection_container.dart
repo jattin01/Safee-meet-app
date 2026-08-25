@@ -33,6 +33,7 @@ import '../../features/auth/domain/use_cases/resend_otp_use_case.dart';
 import '../../features/auth/domain/use_cases/send_otp_use_case.dart';
 import '../../features/auth/domain/use_cases/send_register_otp_use_case.dart';
 import '../../features/auth/domain/use_cases/verify_otp_use_case.dart';
+import '../../features/auth/domain/use_cases/delete_account_use_case.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
 // Dashboard
@@ -187,6 +188,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton(() => ResendOtpUseCase(sl()));
   sl.registerLazySingleton(() => SendRegisterOtpUseCase(sl()));
   sl.registerLazySingleton(() => VerifyOtpUseCase(sl()));
+  sl.registerLazySingleton(() => DeleteAccountUseCase(sl()));
   sl.registerFactory(
     () => AuthBloc(
       checkAuthStatus: sl(),
@@ -201,6 +203,7 @@ Future<void> configureDependencies() async {
       resendOtp: sl(),
       sendRegisterOtp: sl(),
       verifyOtp: sl(),
+      deleteAccountUseCase: sl(),
     ),
   );
 

@@ -79,6 +79,11 @@ class LogoutRequested extends AuthEvent {
   const LogoutRequested();
 }
 
+/// Delete Account
+class DeleteAccountRequested extends AuthEvent {
+  const DeleteAccountRequested();
+}
+
 // ── Legacy events (kept for existing UI compat) ───────────────────────────────
 
 class SendOtpRequested extends AuthEvent {

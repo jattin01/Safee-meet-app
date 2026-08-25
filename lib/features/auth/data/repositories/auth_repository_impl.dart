@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../../core/services/secure_storage_service.dart';
@@ -67,14 +70,23 @@ class AuthRepositoryImpl implements AuthRepository {
         refreshToken: entity.refreshToken,
         userId:       entity.user.id,
       );
+      // Supplementary caching only (local Hive cache + display name/phone
+      // for later, non-auth-critical reads) — every secure-storage write
+      // here is a real native platform-channel round trip (Android
+      // Keystore / iOS Keychain), and awaiting a batch of them was adding
+      // real, serialized-feeling delay between the login response landing
+      // and LoginSuccess reaching the UI. None of this is needed for the
+      // caller to proceed or for the next authenticated API call to work
+      // (that only needs the access token _session.saveSession already
+      // persisted above), so let it finish in the background instead.
       final firebasePhone = _firebaseAuth.currentUser?.phoneNumber;
-      await Future.wait([
+      unawaited(Future.wait([
         _local.cacheUser(model.user),
         if (entity.user.displayName != null)
           _secureStorage.saveUserName(entity.user.displayName!),
         if (firebasePhone != null)
           _secureStorage.saveUserPhone(firebasePhone),
-      ]);
+      ]).catchError((_) => const <void>[]));
       return Right(entity);
     } on DioException catch (e) {
       return Left(_mapDioError(e));
@@ -91,24 +103,39 @@ class AuthRepositoryImpl implements AuthRepository {
     required String providerToken,
     String? phone,
   }) async {
+    // Debug-only timing instrumentation to verify where time actually goes
+    // in the login->Home transition. Safe to remove once confirmed.
+    final sw = kDebugMode ? (Stopwatch()..start()) : null;
+    void mark(String label) {
+      if (sw != null) {
+        // ignore: avoid_print
+        print('[TIMING] $label: ${sw.elapsedMilliseconds}ms');
+      }
+    }
+
     try {
       final model  = await _remote.login(provider: provider, providerToken: providerToken, phone: phone);
+      mark('POST /auth/login responded');
       final entity = model.toEntity();
       await _session.saveSession(
         accessToken:  entity.accessToken,
         refreshToken: entity.refreshToken,
         userId:       entity.user.id,
       );
-      try {
-        final firebasePhone = _firebaseAuth.currentUser?.phoneNumber;
-        await Future.wait([
-          _local.cacheUser(model.user),
-          if (entity.user.displayName != null)
-            _secureStorage.saveUserName(entity.user.displayName!),
-          if (firebasePhone != null)
-            _secureStorage.saveUserPhone(firebasePhone),
-        ]);
-      } catch (_) {}
+      mark('saveSession (accessToken+userId+authStatus) done');
+      // Same reasoning as register() above: none of this is auth-critical,
+      // so don't make the caller (and the login->Home transition) wait on
+      // a batch of extra secure-storage/native platform-channel writes on
+      // top of the one saveSession() already had to do.
+      final firebasePhone = _firebaseAuth.currentUser?.phoneNumber;
+      unawaited(Future.wait([
+        _local.cacheUser(model.user),
+        if (entity.user.displayName != null)
+          _secureStorage.saveUserName(entity.user.displayName!),
+        if (firebasePhone != null)
+          _secureStorage.saveUserPhone(firebasePhone),
+      ]).catchError((_) => const <void>[]));
+      mark('login() returning (background caching still in flight)');
       return Right(entity);
     } on DioException catch (e) {
       return Left(_mapDioError(e));
@@ -147,6 +174,24 @@ class AuthRepositoryImpl implements AuthRepository {
       await _remote.logout();
     } on DioException {
       // Proceed even if server call fails
+    }
+    try {
+      await _firebaseAuth.signOut();
+      await _googleSignIn.signOut();
+    } catch (_) {}
+    await _session.clearSession();
+    await _local.clearAll();
+    return const Right(null);
+  }
+
+  @override
+  Future<Either<Failure, void>> deleteAccount() async {
+    try {
+      await _remote.deleteAccount();
+    } on DioException catch (e) {
+      return Left(_mapDioError(e));
+    } catch (_) {
+      return const Left(UnknownFailure());
     }
     try {
       await _firebaseAuth.signOut();

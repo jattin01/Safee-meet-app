@@ -57,9 +57,25 @@ class CurrentSubscriptionCubit extends Cubit<CurrentSubscriptionState> {
   CurrentSubscriptionCubit(this._getCurrentSubscription, this._getPlans)
       : super(const CurrentSubscriptionState());
 
-  Future<void> load({bool forceRefresh = false}) async {
-    if (state.status == CurrentSubscriptionStatus.loading) return;
+  // Coalesces concurrent load() calls into a single in-flight round trip.
+  // The old guard (`if (state.status == loading) return`) wasn't enough:
+  // the cache-first step below flips status to `loaded` *before* the
+  // network fetch finishes, so a second caller landing in that window
+  // (e.g. the router guard's load() racing the shell route's own
+  // ..load()) saw `loaded`/not-`loading` and fired a second, fully
+  // redundant GET /v1/subscriptions/current + /plans — this is why those
+  // showed up twice in a row during the post-login warm-up burst.
+  Future<void>? _inFlight;
 
+  Future<void> load({bool forceRefresh = false}) {
+    final inFlight = _inFlight;
+    if (inFlight != null) return inFlight;
+    final future = _load(forceRefresh: forceRefresh);
+    _inFlight = future;
+    return future.whenComplete(() => _inFlight = null);
+  }
+
+  Future<void> _load({bool forceRefresh = false}) async {
     final hasExistingData = state.status == CurrentSubscriptionStatus.loaded;
 
     if (!hasExistingData) {

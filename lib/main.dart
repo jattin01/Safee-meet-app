@@ -114,8 +114,15 @@ class SafeeMeetApp extends StatelessWidget {
     // signed-in user's verification status all read this same instance.
     return MultiBlocProvider(
       providers: [
-        BlocProvider.value(value: sl<CurrentUserCubit>()..load()),
-        BlocProvider.value(value: sl<NotificationsCubit>()..load()),
+        // Not eagerly ..load()ed here: this widget builds before we know
+        // whether there's a signed-in session at all, so an unconditional
+        // load() fired a doomed GET /v1/auth/me (and /v1/notifications) on
+        // every unauthenticated cold start — that in-flight 401 could then
+        // land right in the middle of the post-login warm-up burst,
+        // competing for the connection when it mattered most. SplashPage
+        // now loads both once it's confirmed the user is authenticated.
+        BlocProvider.value(value: sl<CurrentUserCubit>()),
+        BlocProvider.value(value: sl<NotificationsCubit>()),
       ],
       child: MaterialApp.router(
         title: AppConstants.appName,

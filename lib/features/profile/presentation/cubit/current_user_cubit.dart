@@ -51,13 +51,22 @@ class CurrentUserCubit extends Cubit<CurrentUserState> {
   bool get isVerified =>
       state.profile != null && state.profile!.verificationLevel != 'none';
 
-  Future<void> load({bool forceRefresh = false}) async {
-    if (!forceRefresh &&
-        (state.status == CurrentUserStatus.loading ||
-            state.status == CurrentUserStatus.refreshing)) {
-      return;
-    }
+  // Coalesces concurrent load() calls into a single in-flight GET
+  // /v1/auth/me — main.dart's app-root load(), the router guard's
+  // verification check, and the shell route's own ..load() can all land
+  // around the same login→home transition; without this they'd each fire
+  // an independent request instead of sharing one.
+  Future<void>? _inFlight;
 
+  Future<void> load({bool forceRefresh = false}) {
+    final inFlight = _inFlight;
+    if (inFlight != null) return inFlight;
+    final future = _load(forceRefresh: forceRefresh);
+    _inFlight = future;
+    return future.whenComplete(() => _inFlight = null);
+  }
+
+  Future<void> _load({bool forceRefresh = false}) async {
     emit(
       state.hasProfile
           ? state.copyWith(
