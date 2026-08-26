@@ -313,7 +313,7 @@ class _DarkHeader extends StatelessWidget {
       _greeting = 'Good afternoon';
     }
 
-    final _verificationLabel = 'Level 1 Verified';
+
 
     return Container(
       decoration: const BoxDecoration(

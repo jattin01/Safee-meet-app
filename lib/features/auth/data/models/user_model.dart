@@ -78,7 +78,9 @@ class UserModel {
             (json['phoneVerifiedAt'] ?? json['phone_verified_at']) as String?,
         lastLoginAt: (json['lastLoginAt'] ?? json['last_login_at']) as String?,
         createdAt: (json['createdAt'] ?? json['created_at']) as String?,
-        verificationLevel: (json['verificationLevel'] ?? json['verification_level'] as num?)?.toInt(),
+        verificationLevel: ((json['verificationLevelId'] ??
+                json['verification_level_id']) as num?)
+            ?.toInt(),
         verificationStatus: (json['verificationStatus'] ?? json['verification_status']) as String?,
       );
 

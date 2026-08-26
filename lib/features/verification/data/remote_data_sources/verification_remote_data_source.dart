@@ -8,6 +8,9 @@ abstract class VerificationRemoteDataSource {
   /// neither of which ever reach the client) and returns the short-lived
   /// session token the SDK needs to launch its capture UI.
   Future<Map<String, dynamic>> createDiditSession();
+
+  /// Records the user's consent to a criminal background check.
+  Future<Map<String, dynamic>> submitBackgroundConsent();
 }
 
 class VerificationRemoteDataSourceImpl implements VerificationRemoteDataSource {
@@ -26,5 +29,14 @@ class VerificationRemoteDataSourceImpl implements VerificationRemoteDataSource {
     final res = await _api.dio.post('/v1/verification/didit/start');
     final body = res.data as Map<String, dynamic>;
     return body['data'] as Map<String, dynamic>? ?? body;
+  }
+
+  @override
+  Future<Map<String, dynamic>> submitBackgroundConsent() async {
+    final res = await _api.dio.post(
+      '/v1/verification/background-consent',
+      data: {'accepted': true},
+    );
+    return res.data as Map<String, dynamic>;
   }
 }

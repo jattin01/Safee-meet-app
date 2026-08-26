@@ -13,6 +13,7 @@ class MockVerificationRepository extends Mock
 
 final _status = VerificationStatusEntity(
   trustScore: 72,
+  safetyScore: 80,
   verificationLevel: 'low',
   level1Complete: true,
   level2Complete: false,

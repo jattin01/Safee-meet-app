@@ -224,7 +224,7 @@ Future<void> configureDependencies() async {
     () => VerificationRemoteDataSourceImpl(sl()),
   );
   sl.registerLazySingleton<VerificationRepository>(
-    () => VerificationRepositoryImpl(sl()),
+    () => VerificationRepositoryImpl(sl(), sl()),
   );
   sl.registerLazySingleton(() => VerificationBloc(sl()));
 

@@ -29,6 +29,11 @@ class VerificationDiditSessionRequested extends VerificationEvent {
   const VerificationDiditSessionRequested();
 }
 
+/// Submits the user's consent to the criminal background check.
+class BackgroundConsentSubmitted extends VerificationEvent {
+  const BackgroundConsentSubmitted();
+}
+
 // ── States ────────────────────────────────────────────────────────────────────
 abstract class VerificationState extends Equatable {
   const VerificationState();
@@ -67,6 +72,25 @@ class VerificationError extends VerificationState {
   List<Object?> get props => [message];
 }
 
+/// Consent API call is in progress — used to show a loading indicator in the
+/// popup's Agree button without blanking the whole screen.
+class BackgroundConsentLoading extends VerificationState {
+  const BackgroundConsentLoading();
+}
+
+/// Consent was successfully recorded by the backend and saved locally.
+class BackgroundConsentSuccess extends VerificationState {
+  const BackgroundConsentSuccess();
+}
+
+/// Consent API call failed.
+class BackgroundConsentError extends VerificationState {
+  final String message;
+  const BackgroundConsentError(this.message);
+  @override
+  List<Object?> get props => [message];
+}
+
 // ── BLoC ─────────────────────────────────────────────────────────────────────
 class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
   final VerificationRepository _repository;
@@ -74,6 +98,7 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
   VerificationBloc(this._repository) : super(const VerificationInitial()) {
     on<VerificationStatusRequested>(_onStatusRequested);
     on<VerificationDiditSessionRequested>(_onDiditSessionRequested);
+    on<BackgroundConsentSubmitted>(_onBackgroundConsentSubmitted);
   }
 
   Future<void> _onStatusRequested(
@@ -103,6 +128,25 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
     result.fold(
       (f) => emit(VerificationError(f.message)),
       (session) => emit(VerificationDiditSessionReady(session)),
+    );
+  }
+
+  Future<void> _onBackgroundConsentSubmitted(
+    BackgroundConsentSubmitted _,
+    Emitter<VerificationState> emit,
+  ) async {
+    // Capture the current loaded state so we can restore it after the consent
+    // call — we don't want to blank the whole verification screen.
+    final previous = state;
+    emit(const BackgroundConsentLoading());
+    final result = await _repository.submitBackgroundConsent();
+    result.fold(
+      (f) => emit(BackgroundConsentError(f.message)),
+      (_) {
+        emit(const BackgroundConsentSuccess());
+        // Restore the previous loaded state so the page remains fully visible.
+        if (previous is VerificationStatusLoaded) emit(previous);
+      },
     );
   }
 }

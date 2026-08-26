@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/app_colors.dart';
@@ -13,6 +14,7 @@ import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../domain/entities/verification_entity.dart';
+import '../../domain/repositories/verification_repository.dart';
 import '../bloc/verification_bloc.dart';
 
 class VerificationStatusPage extends StatefulWidget {
@@ -41,7 +43,50 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<VerificationBloc, VerificationState>(
+    return BlocListener<VerificationBloc, VerificationState>(
+      listener: (context, state) {
+        if (state is BackgroundConsentSuccess) {
+          // Popup is already dismissed by the sheet itself; show confirmation.
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Consent recorded — thank you!',
+                    style: GoogleFonts.inter(
+                        color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else if (state is BackgroundConsentError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message,
+                  style: GoogleFonts.inter(
+                      color: Colors.white, fontWeight: FontWeight.w600)),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          );
+        }
+      },
+      child: BlocBuilder<VerificationBloc, VerificationState>(
       builder: (context, state) {
         if (state is VerificationLoading || state is VerificationInitial) {
           return const Scaffold(
@@ -137,14 +182,44 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _LockedLevelCard(
-                          title: 'Level 2 Verification',
-                          subtitle:
-                              'Criminal background and enhanced checks can be added later',
-                          onTap: () {
-                            context.push(AppRoutes.subscription, extra: 'premium');
-                          },
-                        ),
+                        if (status.level2Complete)
+                          const _LevelCard(
+                            icon: Icons.shield,
+                            color: AppColors.success,
+                            title: 'Level 2 Verification',
+                            statusText: 'Verified',
+                            badgeLabel: 'Verified',
+                            badgeColor: AppColors.success,
+                            items: [
+                              _CheckItem('Criminal Background Verification Successfully Completed and Verified', done: true),
+                            ],
+                          )
+                        else
+                          _LockedLevelCard(
+                            title: 'Level 2 Verification',
+                            subtitle:
+                                'Criminal background and enhanced checks can be added later',
+                            onTap: () async {
+                              final repo = GetIt.I<VerificationRepository>();
+                              final alreadyConsented =
+                                  await repo.hasBackgroundConsent();
+                              if (!context.mounted) return;
+                              if (alreadyConsented) {
+                                context.push(AppRoutes.subscription,
+                                    extra: 'premium');
+                              } else {
+                                await showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (_) => BlocProvider.value(
+                                    value: context.read<VerificationBloc>(),
+                                    child: const _BackgroundConsentSheet(),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
                         const SizedBox(height: 16),
                         _LockedLevelCard(
                           title: 'Professional Verification',
@@ -167,6 +242,7 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
           ),
         );
       },
+      ),
     );
   }
 
@@ -721,11 +797,11 @@ class _SafetyScoreBreakdown extends StatelessWidget {
               value: status.safetyMetricMeetings,
               color: AppColors.blue),
           const SizedBox(height: 16),
-          _ScoreBar(
-              label: 'Response Rate',
-              value: status.safetyMetricResponsiveness,
-              color: AppColors.primary),
-          const SizedBox(height: 16),
+          // _ScoreBar(
+          //     label: 'Response Rate',
+          //     value: status.safetyMetricResponsiveness,
+          //     color: AppColors.primary),
+          // const SizedBox(height: 16),
           _ScoreBar(
               label: 'Trust Score',
               value: (status.trustScore / 100).clamp(0.0, 1.0),
@@ -913,5 +989,120 @@ class _GradientCircularProgressPainter extends CustomPainter {
         oldDelegate.trackColor != trackColor ||
         oldDelegate.gradientColors != gradientColors ||
         oldDelegate.strokeWidth != strokeWidth;
+  }
+}
+
+class _BackgroundConsentSheet extends StatelessWidget {
+  const _BackgroundConsentSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.lightBg,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(24, 12, 24, context.bottomSafePadding(24)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Icon
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.shield_outlined,
+              color: AppColors.warning,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Consent Required',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'To proceed with Level 2 Verification, we need your consent to conduct a criminal background check.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 32),
+          BlocConsumer<VerificationBloc, VerificationState>(
+            listener: (context, state) {
+              if (state is BackgroundConsentSuccess) {
+                Navigator.of(context).pop();
+                // Wait for the popup close animation to complete
+                Future.delayed(const Duration(milliseconds: 150), () {
+                  if (context.mounted) {
+                    context.push(AppRoutes.subscription, extra: 'premium');
+                  }
+                });
+              }
+            },
+            builder: (context, state) {
+              final isLoading = state is BackgroundConsentLoading;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PrimaryButton(
+                    label: 'I Agree',
+                    isLoading: isLoading,
+                    onPressed: () {
+                      context
+                          .read<VerificationBloc>()
+                          .add(const BackgroundConsentSubmitted());
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed:
+                        isLoading ? null : () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      foregroundColor: AppColors.textSecondary,
+                      textStyle: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 }

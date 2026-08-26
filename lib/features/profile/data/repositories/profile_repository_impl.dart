@@ -183,12 +183,26 @@ class ProfileRepositoryImpl implements ProfileRepository {
   // `verificationLevel` reflect the live UserVerification row instead.
   String _resolveVerificationLevel(Map<String, dynamic> d) {
     if (d['verificationStatus'] != 'approved') return 'none';
-    return switch ((d['verificationLevel'] as num?)?.toInt()) {
+    return switch (_parseLevelId(d)) {
       1 => 'level1',
       2 => 'level2',
       3 => 'level3',
       _ => 'none',
     };
+  }
+
+  // Backend sends both a numeric `verificationLevelId` and a string
+  // `verificationLevel` (e.g. 'level2'). Prefer the numeric id; fall back to
+  // extracting the digit from the string form for older/other payloads.
+  int? _parseLevelId(Map<String, dynamic> d) {
+    final id = d['verificationLevelId'] ?? d['verification_level_id'];
+    if (id is num) return id.toInt();
+    final level = d['verificationLevel'] ?? d['verification_level'];
+    if (level is num) return level.toInt();
+    if (level is String) {
+      return int.tryParse(RegExp(r'\d+').stringMatch(level) ?? '');
+    }
+    return null;
   }
 
   ReviewEntity _parseReview(Map<String, dynamic> d) => ReviewEntity(

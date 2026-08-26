@@ -83,4 +83,16 @@ class SecureStorageService {
     await _storage.delete(key: 'sm_user_name');
     await _storage.delete(key: _kAuthStatus);
   }
+
+  // ── Background Check Consent ──────────────────────────────────────────────
+
+  static const _kBgConsentAccepted = 'sm_bg_consent_accepted';
+
+  Future<void> saveBgConsentAccepted() =>
+      _storage.write(key: _kBgConsentAccepted, value: 'true');
+
+  Future<bool> getBgConsentAccepted() async {
+    final val = await _storage.read(key: _kBgConsentAccepted);
+    return val == 'true';
+  }
 }

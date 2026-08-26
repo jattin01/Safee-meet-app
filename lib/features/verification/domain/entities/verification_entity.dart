@@ -4,6 +4,7 @@ enum VerificationStep { uploadId, selfie, processing, complete }
 
 class VerificationStatusEntity extends Equatable {
   final int trustScore;
+  final int safetyScore;
   final String verificationLevel;
   final bool level1Complete;
   final bool level2Complete;
@@ -18,6 +19,7 @@ class VerificationStatusEntity extends Equatable {
 
   const VerificationStatusEntity({
     required this.trustScore,
+    required this.safetyScore,
     required this.verificationLevel,
     required this.level1Complete,
     required this.level2Complete,
@@ -34,6 +36,7 @@ class VerificationStatusEntity extends Equatable {
   @override
   List<Object?> get props => [
         trustScore,
+        safetyScore,
         verificationLevel,
         level1Complete,
         level2Complete,
@@ -80,4 +83,19 @@ class ReviewSummaryEntity extends Equatable {
 
   @override
   List<Object?> get props => [authorName, rating, text, createdAt];
+}
+
+class BackgroundConsentEntity extends Equatable {
+  final bool accepted;
+  final String version;
+  final String acceptedAt;
+
+  const BackgroundConsentEntity({
+    required this.accepted,
+    required this.version,
+    required this.acceptedAt,
+  });
+
+  @override
+  List<Object?> get props => [accepted, version, acceptedAt];
 }
