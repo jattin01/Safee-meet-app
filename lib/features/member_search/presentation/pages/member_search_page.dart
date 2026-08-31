@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -627,7 +628,9 @@ class _UpgradeLimitCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Upgrade your plan to unlock more SAFEE PIN searches.',
+            (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
+                ? 'Upgrade your plan to unlock more SAFEE PIN searches.'
+                : 'You have reached your daily search limit. Please try again tomorrow.',
             style: GoogleFonts.inter(
               fontSize: 13,
               color: AppColors.textTertiary,
@@ -636,9 +639,10 @@ class _UpgradeLimitCard extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 18),
-          GestureDetector(
-            onTap: onTap,
-            child: Container(
+          if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
+            GestureDetector(
+              onTap: onTap,
+              child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
               decoration: BoxDecoration(
                 gradient: LinearGradient(

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -50,6 +51,12 @@ bool requireFeature(
   String featureSlug,
   String featureName,
 ) {
+  final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  if (isIOS) {
+    return true; // Bypass all client-side feature gates on iOS
+  }
+
   final subscription =
       context.read<CurrentSubscriptionCubit>().state.subscription;
   if (subscription != null && subscription.plan.hasFeature(featureSlug)) {
@@ -59,22 +66,25 @@ bool requireFeature(
   showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Upgrade Required'),
+      title: Text(isIOS ? 'Feature Locked' : 'Upgrade Required'),
       content: Text(
-        '$featureName isn\'t included in your current plan. Upgrade to unlock it.',
+        isIOS
+            ? '$featureName isn\'t included in your current plan.'
+            : '$featureName isn\'t included in your current plan. Upgrade to unlock it.',
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Not Now'),
+          child: Text(isIOS ? 'OK' : 'Not Now'),
         ),
-        FilledButton(
-          onPressed: () {
-            Navigator.of(dialogContext).pop();
-            context.push(AppRoutes.subscription);
-          },
-          child: const Text('Upgrade'),
-        ),
+        if (!isIOS)
+          FilledButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              context.push(AppRoutes.subscription);
+            },
+            child: const Text('Upgrade'),
+          ),
       ],
     ),
   );

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -1179,7 +1180,7 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
                 // No plan above the user's current one — there's nothing left to
                 // upgrade to, so the Upgrade/Manage CTA is hidden entirely and
                 // only the plan itself (already rendered above) is shown.
-                if (!widget.state.isOnHighestPlan)
+                if (!widget.state.isOnHighestPlan && (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS))
                   GestureDetector(
                     onTap: () => context.push(
                       AppRoutes.subscription,

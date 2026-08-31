@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -78,11 +79,12 @@ class HomePage extends StatelessWidget {
                         ),
                         _MeetingSyncCard(profile: profile),
                         const SizedBox(height: 24),
-                        BlocBuilder<CurrentSubscriptionCubit,
-                            CurrentSubscriptionState>(
-                          builder: (context, subState) =>
-                              _UpgradeCard(state: subState),
-                        ),
+                        if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
+                          BlocBuilder<CurrentSubscriptionCubit,
+                              CurrentSubscriptionState>(
+                            builder: (context, subState) =>
+                                _UpgradeCard(state: subState),
+                          ),
                         const SizedBox(height: 140),
                       ],
                     ),

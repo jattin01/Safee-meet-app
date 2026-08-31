@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -207,7 +208,15 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
             }
 
             final loaded = state as SubscriptionLoaded;
-            final plans = loaded.plans;
+            var plans = loaded.plans;
+            
+            // Hide paid plans on iOS to comply with Apple Guideline 3.1.1
+            // (In-App Purchase). Until native IAP is implemented, iOS users
+            // can only select the free tier.
+            if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+              plans = plans.where((p) => p.monthlyPrice == 0).toList();
+            }
+
             _ensureSelection(plans, subState);
             final selectedPlan = plans.firstWhere(
               (p) => p.id == _selectedId,
@@ -228,10 +237,12 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
                       title: 'Choose Your Plan',
                       titleFontSize: 21,
                       childGap: 20,
-                      child: _PlanToggle(
-                        yearly: _yearly,
-                        onChanged: (v) => setState(() => _yearly = v),
-                      ),
+                      child: plans.any((p) => p.monthlyPrice > 0)
+                          ? _PlanToggle(
+                              yearly: _yearly,
+                              onChanged: (v) => setState(() => _yearly = v),
+                            )
+                          : const SizedBox.shrink(),
                     ),
                     Padding(
                       padding: EdgeInsets.fromLTRB(
