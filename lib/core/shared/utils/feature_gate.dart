@@ -51,6 +51,8 @@ bool requireFeature(
   String featureSlug,
   String featureName,
 ) {
+
+
   final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   if (isIOS) {
@@ -70,7 +72,7 @@ bool requireFeature(
       content: Text(
         isIOS
             ? '$featureName isn\'t included in your current plan.'
-            : '$featureName isn\'t included in your current plan. Upgrade to unlock it.',
+            : 'Upgrade your subscription plan to unlock $featureName.',
       ),
       actions: [
         TextButton(

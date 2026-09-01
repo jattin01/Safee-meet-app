@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
@@ -194,7 +195,7 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
                               _CheckItem('Criminal Background Verification Successfully Completed and Verified', done: true),
                             ],
                           )
-                        else
+                        else if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) ...[
                           _LockedLevelCard(
                             title: 'Level 2 Verification',
                             subtitle:
@@ -220,15 +221,16 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
                               }
                             },
                           ),
-                        const SizedBox(height: 16),
-                        _LockedLevelCard(
-                          title: 'Professional Verification',
-                          subtitle:
-                              'Business and credentials review is not enabled yet',
-                          onTap: () {
-                            context.push(AppRoutes.subscription, extra: 'professional');
-                          },
-                        ),
+                          const SizedBox(height: 16),
+                          _LockedLevelCard(
+                            title: 'Professional Verification',
+                            subtitle:
+                                'Business and credentials review is not enabled yet',
+                            onTap: () {
+                              context.push(AppRoutes.subscription, extra: 'professional');
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 20),
                         _SafetyScoreBreakdown(status: status),
                         const SizedBox(height: 24),

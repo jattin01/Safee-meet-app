@@ -177,10 +177,11 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
       return;
     }
 
-    final user = ctx.read<AuthBloc>().state.user;
+    final user = sl<AuthBloc>().state.user;
     final plan = ctx.read<CurrentSubscriptionCubit>().state.subscription?.plan;
+    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     
-    if (user != null && plan != null) {
+    if (!isIOS && user != null && plan != null) {
       final historyLimit = plan.getFeatureLimit('meeting_history');
       if (historyLimit != null && user.meetingCount >= historyLimit) {
         showDialog(

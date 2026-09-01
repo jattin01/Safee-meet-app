@@ -288,11 +288,12 @@ class _ProfileView extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    BlocBuilder<CurrentSubscriptionCubit,
-                        CurrentSubscriptionState>(
-                      builder: (context, subState) =>
-                          _CurrentPlanCard(state: subState),
-                    ),
+                    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
+                      BlocBuilder<CurrentSubscriptionCubit,
+                          CurrentSubscriptionState>(
+                        builder: (context, subState) =>
+                            _CurrentPlanCard(state: subState),
+                      ),
                     const SizedBox(height: 16),
                     AppListCard(children: [
                       _NavTile(
@@ -334,16 +335,17 @@ class _ProfileView extends StatelessWidget {
                           context.push(AppRoutes.reviews);
                         },
                       ),
-                      BlocBuilder<CurrentSubscriptionCubit,
-                          CurrentSubscriptionState>(
-                        builder: (context, subState) => _NavTile(
-                          icon: Icons.workspace_premium,
-                          iconColor: AppColors.purple,
-                          label: 'Membership & Billing',
-                          subtitle: _membershipSubtitle(subState),
-                          onTap: () => context.push(AppRoutes.subscription),
+                      if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
+                        BlocBuilder<CurrentSubscriptionCubit,
+                            CurrentSubscriptionState>(
+                          builder: (context, subState) => _NavTile(
+                            icon: Icons.workspace_premium,
+                            iconColor: AppColors.purple,
+                            label: 'Membership & Billing',
+                            subtitle: _membershipSubtitle(subState),
+                            onTap: () => context.push(AppRoutes.subscription),
+                          ),
                         ),
-                      ),
                     ]),
                     const SizedBox(height: 16),
                     AppListCard(children: [

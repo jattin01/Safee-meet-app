@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_colors.dart';
@@ -241,16 +242,17 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                             onTap: () =>
                                 context.push(AppRoutes.emergencyContacts),
                           ),
-                          BlocBuilder<CurrentSubscriptionCubit,
-                              CurrentSubscriptionState>(
-                            builder: (context, subState) => _NavTile(
-                              icon: Icons.credit_card,
-                              iconColor: AppColors.warning,
-                              label: 'Subscription & Billing',
-                              subtitle: _subscriptionSubtitle(subState),
-                              onTap: () => context.push(AppRoutes.subscription),
+                          if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
+                            BlocBuilder<CurrentSubscriptionCubit,
+                                CurrentSubscriptionState>(
+                              builder: (context, subState) => _NavTile(
+                                icon: Icons.credit_card,
+                                iconColor: AppColors.warning,
+                                label: 'Subscription & Billing',
+                                subtitle: _subscriptionSubtitle(subState),
+                                onTap: () => context.push(AppRoutes.subscription),
+                              ),
                             ),
-                          ),
                         ]),
                         const SizedBox(height: 24),
                         const _Label('PRIVACY & SECURITY'),
