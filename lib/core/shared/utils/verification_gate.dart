@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../routes/app_routes.dart';
 import '../../../features/profile/presentation/cubit/current_user_cubit.dart';
+import 'package:flutter/foundation.dart';
 import '../widgets/app_snackbar.dart';
 
 /// Call at the top of a tap handler for any verification-gated feature

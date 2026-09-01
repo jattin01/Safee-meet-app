@@ -101,40 +101,48 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
           _contactCount = state.contacts.length;
         }
         final activated = state is SosActivatedState;
-        return Scaffold(
-          backgroundColor:
-              activated ? const Color(0xFF1A0508) : AppColors.darkBg,
-          body: SafeArea(
-            child: activated
-                ? _ActivatedView(
-                    state: state,
-                    onCancel: () =>
-                        context.read<SosBloc>().add(const SosCancelled()),
-                  )
-                : _IdleView(
-                    progress: state is SosHolding ? state.progress : 0.0,
-                    contactCount: _contactCount,
-                    pulseAnim: _pulseAnim,
-                    // Gated here, at the actual trigger, rather than at the
-                    // entry points that push this page (shell SOS button,
-                    // Home's Emergency SOS tile) — the page itself always
-                    // opens, but holding the button to really activate SOS
-                    // requires Trusted Contact Alerts on the current plan.
-                    onHoldStart: () {
-                      if (!requireFeature(
-                        context,
-                        PlanFeature.trustedContactAlerts,
-                        'Trusted Contact Alerts',
-                      )) {
-                        return;
-                      }
-                      context
-                          .read<SosBloc>()
-                          .add(SosHoldStarted(meetingId: widget.meetingId));
-                    },
-                    onHoldEnd: () =>
-                        context.read<SosBloc>().add(const SosHoldReleased()),
-                  ),
+        return PopScope(
+          canPop: !activated,
+          onPopInvoked: (didPop) {
+            if (!didPop && activated) {
+              context.go(AppRoutes.home);
+            }
+          },
+          child: Scaffold(
+            backgroundColor:
+                activated ? const Color(0xFF1A0508) : AppColors.darkBg,
+            body: SafeArea(
+              child: activated
+                  ? _ActivatedView(
+                      state: state,
+                      onCancel: () =>
+                          context.read<SosBloc>().add(const SosCancelled()),
+                    )
+                  : _IdleView(
+                      progress: state is SosHolding ? state.progress : 0.0,
+                      contactCount: _contactCount,
+                      pulseAnim: _pulseAnim,
+                      // Gated here, at the actual trigger, rather than at the
+                      // entry points that push this page (shell SOS button,
+                      // Home's Emergency SOS tile) — the page itself always
+                      // opens, but holding the button to really activate SOS
+                      // requires Trusted Contact Alerts on the current plan.
+                      onHoldStart: () {
+                        if (!requireFeature(
+                          context,
+                          PlanFeature.trustedContactAlerts,
+                          'Trusted Contact Alerts',
+                        )) {
+                          return;
+                        }
+                        context
+                            .read<SosBloc>()
+                            .add(SosHoldStarted(meetingId: widget.meetingId));
+                      },
+                      onHoldEnd: () =>
+                          context.read<SosBloc>().add(const SosHoldReleased()),
+                    ),
+            ),
           ),
         );
       },

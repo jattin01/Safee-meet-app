@@ -233,7 +233,9 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
             _isMeetingUnavailable(state.message) &&
             !_statusHandled) {
           _statusHandled = true;
-          _leaveWithMessage('This meeting is over and is no longer available.');
+          if (ModalRoute.of(context)?.isCurrent == true) {
+            _leaveWithMessage('This meeting is over and is no longer available.');
+          }
         }
       },
       builder: (context, state) {

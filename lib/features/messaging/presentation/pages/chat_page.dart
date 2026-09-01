@@ -351,11 +351,11 @@ class _MessageList extends StatelessWidget {
     for (final msg in messages.reversed) {
       final date =
           DateTime(msg.createdAt.year, msg.createdAt.month, msg.createdAt.day);
-      items.add(_MessageItem(msg));
 
       if (lastDate != null && date != lastDate) {
         items.add(_DateItem(lastDate));
       }
+      items.add(_MessageItem(msg));
       lastDate = date;
     }
     if (lastDate != null) {
@@ -406,6 +406,7 @@ class _MessageList extends StatelessWidget {
           isMine: isMine,
           isLastInGroup: isLastInGroup,
           partnerInitial: partnerInitial,
+          partnerName: partnerName,
           uploadProgress: uploadProgressMap[msg.id],
           onRetry: () => onRetry(msg),
         );
@@ -800,6 +801,7 @@ class _MessageBubble extends StatelessWidget {
   final bool isMine;
   final bool isLastInGroup;
   final String partnerInitial;
+  final String partnerName;
   final double? uploadProgress;
   final VoidCallback onRetry;
 
@@ -808,6 +810,7 @@ class _MessageBubble extends StatelessWidget {
     required this.isMine,
     required this.isLastInGroup,
     required this.partnerInitial,
+    required this.partnerName,
     this.uploadProgress,
     required this.onRetry,
   });
@@ -861,6 +864,7 @@ class _MessageBubble extends StatelessWidget {
           message: message,
           isMine: isMine,
           isLastInGroup: isLastInGroup,
+          partnerName: partnerName,
           uploadProgress: uploadProgress,
           onRetry: onRetry,
         );
@@ -869,6 +873,7 @@ class _MessageBubble extends StatelessWidget {
           message: message,
           isMine: isMine,
           isLastInGroup: isLastInGroup,
+          partnerName: partnerName,
           uploadProgress: uploadProgress,
           onRetry: onRetry,
         );
@@ -877,6 +882,7 @@ class _MessageBubble extends StatelessWidget {
           message: message,
           isMine: isMine,
           isLastInGroup: isLastInGroup,
+          partnerName: partnerName,
         );
     }
   }
@@ -888,11 +894,13 @@ class _TextBubble extends StatelessWidget {
   final MessageEntity message;
   final bool isMine;
   final bool isLastInGroup;
+  final String partnerName;
 
   const _TextBubble({
     required this.message,
     required this.isMine,
     required this.isLastInGroup,
+    required this.partnerName,
   });
 
   @override
@@ -931,6 +939,15 @@ class _TextBubble extends StatelessWidget {
             isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Text(
+            isMine ? 'You' : partnerName,
+            style: TextStyle(
+              color: isMine ? Colors.white70 : AppColors.textTertiary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
             message.content,
             style: TextStyle(
               color: isMine ? Colors.white : AppColors.textPrimary,
@@ -952,6 +969,7 @@ class _ImageBubble extends StatelessWidget {
   final MessageEntity message;
   final bool isMine;
   final bool isLastInGroup;
+  final String partnerName;
   final double? uploadProgress;
   final VoidCallback onRetry;
 
@@ -959,6 +977,7 @@ class _ImageBubble extends StatelessWidget {
     required this.message,
     required this.isMine,
     required this.isLastInGroup,
+    required this.partnerName,
     this.uploadProgress,
     required this.onRetry,
   });
@@ -996,7 +1015,22 @@ class _ImageBubble extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(
+      child: Column(
+        crossAxisAlignment:
+            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Text(
+              isMine ? 'You' : partnerName,
+              style: TextStyle(
+                color: isMine ? Colors.white70 : AppColors.textTertiary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ClipRRect(
         borderRadius: BorderRadius.only(
           topLeft: const Radius.circular(18),
           topRight: const Radius.circular(18),
@@ -1039,6 +1073,8 @@ class _ImageBubble extends StatelessWidget {
             ),
           ],
         ),
+      ),
+        ],
       ),
     );
   }
@@ -1266,6 +1302,7 @@ class _DocumentBubble extends StatelessWidget {
   final MessageEntity message;
   final bool isMine;
   final bool isLastInGroup;
+  final String partnerName;
   final double? uploadProgress;
   final VoidCallback onRetry;
 
@@ -1273,6 +1310,7 @@ class _DocumentBubble extends StatelessWidget {
     required this.message,
     required this.isMine,
     required this.isLastInGroup,
+    required this.partnerName,
     this.uploadProgress,
     required this.onRetry,
   });
@@ -1319,6 +1357,17 @@ class _DocumentBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              isMine ? 'You' : partnerName,
+              style: TextStyle(
+                color: isMine ? Colors.white70 : AppColors.textTertiary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           GestureDetector(
             onTap: canOpen ? () => _openDoc(context, att!.url) : null,
             child: Row(

@@ -37,10 +37,7 @@ const _activeMeetingRecheckInterval = Duration(seconds: 30);
 /// Increment offered by the time-slot picker below.
 const _slotMinutes = 15;
 
-/// Rounds [dt] up to the next `_slotMinutes` boundary (e.g. 14:07 → 14:15),
-/// rolling into the next day if needed — so an auto-adjusted default always
-/// lands on a real, selectable slot instead of an arbitrary in-between
-/// minute the grid can't represent.
+/// No longer used to force a 15-minute gap, but kept for UI snapping if needed.
 DateTime _snapUpToSlot(DateTime dt) {
   final truncated = DateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute);
   final remainder = truncated.minute % _slotMinutes;
@@ -100,37 +97,14 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
   bool _checkingActiveMeeting = true;
   Timer? _activeMeetingRecheckTimer;
 
-  // The specific meeting (if any) whose window [scheduledAt, scheduledAt +
-  // 15min) contains [date]+[time].
+  // Meetings can now overlap, so this just returns null.
   MeetingEntity? _blockingMeetingFor(DateTime date, TimeOfDay time) {
-    final combined =
-        DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    for (final m in _activeMeetings) {
-      final start = m.scheduledAt;
-      final end = start.add(const Duration(minutes: 15));
-      if (!combined.isBefore(start) && combined.isBefore(end)) return m;
-    }
     return null;
   }
 
-  // The earliest real, selectable slot (snapped to `_slotMinutes`) at or
-  // after [from] that isn't inside any active meeting's window — chains
-  // forward through back-to-back/overlapping meetings (e.g. meetings at
-  // 4:30 and 4:45 push a 4:20 pick to 5:00, not just to 4:45) instead of
-  // only clearing a single one, and re-snaps after each hop since a
-  // meeting's own start time may not itself land on a slot boundary.
+  // Meetings can now overlap, so this just returns the snapped current time.
   DateTime _nextAvailableSlot(DateTime from) {
-    var candidate = _snapUpToSlot(from);
-    // Bounded by one hop per active meeting — enough to clear any chain of
-    // back-to-back windows without risking an infinite loop.
-    for (var i = 0; i <= _activeMeetings.length; i++) {
-      final date = DateTime(candidate.year, candidate.month, candidate.day);
-      final time = TimeOfDay(hour: candidate.hour, minute: candidate.minute);
-      final blocker = _blockingMeetingFor(date, time);
-      if (blocker == null) return candidate;
-      candidate = _snapUpToSlot(blocker.scheduledAt.add(const Duration(minutes: 15)));
-    }
-    return candidate;
+    return _snapUpToSlot(from);
   }
 
   static const _purposes = [
@@ -157,35 +131,12 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
   }
 
   void _processMeetings(List<MeetingEntity> meetings) {
-    final now = DateTime.now();
-    final active = meetings
-        .where((m) =>
-            _activeStatuses.contains(m.status) &&
-            now.isBefore(m.scheduledAt.add(const Duration(minutes: 15))))
-        .toList()
-      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
-    
     if (mounted) {
       setState(() {
         _checkingActiveMeeting = false;
-        _activeMeetings = active;
-        final combined = DateTime(_selectedDate.year, _selectedDate.month,
-            _selectedDate.day, _selectedTime.hour, _selectedTime.minute);
-        final allowed = _nextAvailableSlot(combined);
-        if (allowed.isAfter(combined)) {
-          _selectedDate = DateTime(allowed.year, allowed.month, allowed.day);
-          _selectedTime = TimeOfDay(hour: allowed.hour, minute: allowed.minute);
-        }
+        // Meetings can overlap now, so no active meeting restrictions.
+        _activeMeetings = [];
       });
-      
-      if (active.isEmpty) return;
-      // Each window's end is a hard deadline that lapses while this page
-      // might just be sitting open — poll for that instead of only ever
-      // re-deriving it from a fresh API response.
-      _activeMeetingRecheckTimer ??= Timer.periodic(
-        _activeMeetingRecheckInterval,
-        (_) => _pruneLapsedActiveMeetings(),
-      );
     }
   }
 
@@ -260,7 +211,10 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
   bool _isPastDateTime(DateTime date, TimeOfDay time) {
     final combined =
         DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    return combined.isBefore(DateTime.now());
+    // Allow the current minute by subtracting a small buffer from now,
+    // otherwise selecting the current time (e.g. 14:30) at 14:30:30 will 
+    // be incorrectly blocked as "in the past".
+    return combined.isBefore(DateTime.now().subtract(const Duration(minutes: 1)));
   }
 
   // True while [date]+[time] falls inside ANY active meeting's own window
@@ -368,16 +322,9 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
       _selectedTime.minute,
     );
 
-    // Belt-and-suspenders re-check: the pickers already keep the selection
-    // clear of past times and the active meeting's block window, but
-    // re-validate here too in case that state changed after the fields
-    // were populated (e.g. this page was pre-filled via a deep link) or
-    // the history check is still in flight.
+    // Only check if it's in the past.
     if (_isDisabledDateTime(_selectedDate, _selectedTime)) {
-      final message = _isWithinActiveMeetingBlock(_selectedDate, _selectedTime)
-          ? _activeMeetingMessage
-          : 'Please choose a current or future time.';
-      AppSnackbar.info(context, message);
+      AppSnackbar.info(context, 'Please choose a current or future time.');
       return;
     }
 
@@ -647,7 +594,7 @@ class _PartnerCard extends StatelessWidget {
   // and every other verification-level display in the app (settings,
   // profile, home) already switches on — just abbreviated to fit this
   // compact inline badge.
-  static const _levelLabels = {'level1': 'L1', 'level2': 'L2', 'level3': 'L3'};
+  static const _levelLabels = {'low': 'L1', 'medium': 'L2', 'high': 'L3'};
 
   @override
   Widget build(BuildContext context) {
@@ -687,6 +634,14 @@ class _PartnerCard extends StatelessWidget {
                   ),
                   if (hasPartner) ...[
                     const SizedBox(height: 2),
+                    Text(
+                      'SAFEE PIN: ${partner!.safeePIN}',
+                      style: const TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Icon(

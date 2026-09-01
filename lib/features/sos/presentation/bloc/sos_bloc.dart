@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/services/api_client.dart';
 import '../../../../core/services/secure_storage_service.dart';
 
@@ -273,6 +275,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     // Send SOS to server — reporter comes from the auth token, not a
     // client-supplied id. meetingId (when triggered from an active meeting)
     // ties the incident to that meeting on the backend.
+    bool backendSuccess = false;
     try {
       final res = await _api.dio.post('/v1/sos/trigger', data: {
         'latitude': position.latitude,
@@ -280,7 +283,42 @@ class SosBloc extends Bloc<SosEvent, SosState> {
         if (event.meetingId != null) 'meeting_id': event.meetingId,
       });
       _activeIncidentId = res.data['incident']?['id']?.toString();
+      backendSuccess = true;
     } catch (_) {
+      // We will proceed to local SMS fallback even if backend fails
+    }
+
+    // Forcefully end the meeting since SOS was activated
+    if (event.meetingId != null) {
+      try {
+        await _api.dio.post('/v1/meetings/${event.meetingId}/end');
+      } catch (_) {}
+    }
+
+    bool smsLaunched = false;
+    // Fallback/Main: Send SMS to emergency contacts via url_launcher
+    if (_contacts.isNotEmpty) {
+      try {
+        final phones = _contacts.map((c) => c.phone).join(',');
+        final msg = Uri.encodeComponent('Emergency! I need help. My current location: https://maps.google.com/?q=${position.latitude},${position.longitude}');
+        final separator = Platform.isIOS ? '&' : '?';
+        final uri = Uri.parse('sms:$phones${separator}body=$msg');
+        
+        // Some devices/simulators return false for canLaunchUrl even if they can launch.
+        // Try launching it anyway if canLaunchUrl fails.
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+          smsLaunched = true;
+        } else {
+          try {
+            await launchUrl(uri);
+            smsLaunched = true;
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    if (!backendSuccess && !smsLaunched) {
       emit(SosError(
         message: 'Failed to send SOS alert. Please try again.',
         contacts: _contacts,

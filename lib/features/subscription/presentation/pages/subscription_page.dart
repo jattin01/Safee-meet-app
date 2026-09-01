@@ -246,6 +246,7 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
                                 plan: p,
                                 yearly: _yearly,
                                 selected: _selectedId == p.id,
+                                isCurrentPlan: subState.subscription?.plan.slug == p.slug,
                                 onSelect: () => setState(() {
                                   _selectedId = p.id;
                                   _userSelectedManually = true;
@@ -255,16 +256,21 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
                           const SizedBox(height: 8),
                           const FeatureComparisonSection(),
                           const SizedBox(height: 24),
-                          PrimaryButton(
-                            label: selectedPlan.monthlyPrice == 0
-                                ? 'Continue with Free'
-                                : 'Get ${selectedPlan.name} — \$${selectedPlan.price(_yearly).toStringAsFixed(2)}/mo'
-                                    '${_yearly ? ' (billed yearly)' : ''}',
-                            isLoading: isProcessing,
-                            onPressed: isProcessing
-                                ? null
-                                : () => _handleSubscribe(context, selectedPlan),
-                          ),
+                          Builder(builder: (context) {
+                            final isSelectedCurrent = subState.subscription?.plan.slug == selectedPlan.slug;
+                            return PrimaryButton(
+                              label: isSelectedCurrent 
+                                  ? 'Active Plan'
+                                  : selectedPlan.monthlyPrice == 0
+                                  ? 'Continue with Free'
+                                  : 'Get ${selectedPlan.name} — \$${selectedPlan.price(_yearly).toStringAsFixed(2)}/mo'
+                                      '${_yearly ? ' (billed yearly)' : ''}',
+                              isLoading: isProcessing,
+                              onPressed: isProcessing || isSelectedCurrent
+                                  ? null
+                                  : () => _handleSubscribe(context, selectedPlan),
+                            );
+                          }),
                           const SizedBox(height: 14),
                           Center(
                             child: Text(
@@ -392,6 +398,7 @@ class _PlanCard extends StatelessWidget {
   final SubscriptionPlanEntity plan;
   final bool yearly;
   final bool selected;
+  final bool isCurrentPlan;
   final VoidCallback onSelect;
 
   const _PlanCard({
@@ -399,6 +406,7 @@ class _PlanCard extends StatelessWidget {
     required this.plan,
     required this.yearly,
     required this.selected,
+    required this.isCurrentPlan,
     required this.onSelect,
   });
 
@@ -491,11 +499,35 @@ class _PlanCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(plan.name,
-                            style: GoogleFonts.inter(
-                                color: AppColors.textPrimary,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800)),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(plan.name,
+                                  style: GoogleFonts.inter(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800)),
+                            ),
+                            if (isCurrentPlan) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Active',
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,

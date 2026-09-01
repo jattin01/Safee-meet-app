@@ -5,6 +5,7 @@ import '../../../../core/shared/failures/failures.dart';
 import '../../domain/entities/member_entity.dart';
 import '../../domain/repositories/member_search_repository.dart';
 import '../remote_data_sources/member_search_remote_data_source.dart';
+import 'package:flutter/foundation.dart';
 
 class MemberSearchRepositoryImpl implements MemberSearchRepository {
   final MemberSearchRemoteDataSource _remote;
@@ -54,6 +55,7 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
     final isSubscriptionLimit =
         data['subscription_required'] == true ||
         data['required_feature'] != null;
+
     return ServerFailure(
       message,
       code: isSubscriptionLimit ? 'SUBSCRIPTION_REQUIRED' : null,

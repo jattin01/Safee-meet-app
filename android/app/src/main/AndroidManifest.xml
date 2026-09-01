@@ -59,6 +59,7 @@
          succeed on Android. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <!-- firebase_analytics pulls this in transitively; the app doesn't serve
          ads or use the Advertising ID, so it's stripped from the merged
          manifest to match the Play Console "No" Advertising ID declaration. -->

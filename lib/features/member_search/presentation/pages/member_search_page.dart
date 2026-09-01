@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,6 +13,7 @@ import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../profile/presentation/cubit/current_user_cubit.dart';
 import '../../../messaging/domain/entities/message_entity.dart';
 import '../../domain/entities/member_entity.dart';
 import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
@@ -176,12 +178,12 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
       return;
     }
 
-    final user = ctx.read<AuthBloc>().state.user;
+    final user = ctx.read<CurrentUserCubit>().state.profile;
     final plan = ctx.read<CurrentSubscriptionCubit>().state.subscription?.plan;
     
     if (user != null && plan != null) {
       final historyLimit = plan.getFeatureLimit('meeting_history');
-      if (historyLimit != null && user.meetingCount >= historyLimit) {
+      if (historyLimit != null && user.totalMeetings >= historyLimit) {
         showDialog(
           context: ctx,
           builder: (context) => Dialog(
@@ -216,7 +218,26 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
           }
         },
         builder: (context, state) {
-          return SingleChildScrollView(
+          return RefreshIndicator(
+            color: AppColors.primary,
+            onRefresh: () async {
+              final bloc = context.read<MemberSearchBloc>();
+              
+              // We want to wait for whichever loading state is applicable to finish
+              final future = bloc.stream.firstWhere(
+                (s) => !s.isLoadingRecentSearches && s is! MemberSearchLoading,
+              );
+              
+              if (state is MemberSearchFound) {
+                bloc.add(PINSearchRequested(state.member.safeePIN));
+              } else {
+                bloc.add(const RecentSearchesRequested());
+              }
+              
+              await future;
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -280,10 +301,10 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                             ),
                           ] else if (state is MemberSearchError) ...[
                             const SizedBox(height: 24),
-                            state.upgradeRequired ||
+                            (state.upgradeRequired ||
                                     state.message.toLowerCase().contains('limit') ||
                                     state.message.toLowerCase().contains('upgrade') ||
-                                    state.message.toLowerCase().contains('subscription')
+                                    state.message.toLowerCase().contains('subscription'))
                                 ? _UpgradeLimitCard(
                                     message: state.message,
                                     onTap: () =>
@@ -369,7 +390,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                 ),
               ],
             ),
-          );
+          ));
         },
       ),
     );
@@ -405,7 +426,6 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                     color: AppColors.textPrimary, fontSize: 15),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
-                  LengthLimitingTextInputFormatter(10),
                 ],
                 decoration: InputDecoration(
                   hintText: 'Enter SAFEE PIN (e.g. SMHIPZTWPS)',
@@ -424,7 +444,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
           valueListenable: _pinCtrl,
           builder: (context, value, child) {
             final pin = value.text.trim().toUpperCase();
-            final isValid = pin.length == 10 && pin.startsWith('SM');
+            final isValid = pin.isNotEmpty;
             return _SearchButton(
               label: state is MemberSearchLoading ? 'Searching...' : 'Search Member',
               onTap: (!isValid || state is MemberSearchLoading) ? null : _search,

@@ -11,6 +11,7 @@ import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../domain/entities/message_entity.dart';
 import '../bloc/messaging_bloc.dart';
+import '../../../profile/presentation/cubit/current_user_cubit.dart';
 
 class ConversationsPage extends StatelessWidget {
   const ConversationsPage({super.key});
@@ -118,8 +119,12 @@ class _ConversationsViewState extends State<_ConversationsView> {
         builder: (context, state) {
           return RefreshIndicator(
             color: AppColors.primary,
-            onRefresh: () async =>
-                context.read<MessagingBloc>().add(const FetchConversations()),
+            onRefresh: () {
+              final bloc = context.read<MessagingBloc>();
+              final done = bloc.stream.firstWhere((s) => s is ConversationsState || s is MessagingError);
+              bloc.add(const FetchConversations());
+              return done;
+            },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
@@ -362,7 +367,11 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasUnread = conversation.unreadCount > 0;
     final lastMsg = conversation.lastMessage;
+    final currentUserId = context.read<CurrentUserCubit>().state.profile?.id;
+    final isMine = lastMsg?.senderId == currentUserId;
     final timeLabel = lastMsg != null ? _formatTime(lastMsg.createdAt) : '';
+    final lastMsgText = lastMsg?.content ?? 'No messages yet';
+    final displayText = isMine ? 'You: $lastMsgText' : lastMsgText;
 
     return GestureDetector(
       onTap: () => context.push(
@@ -444,7 +453,7 @@ class _ConversationTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    lastMsg?.content ?? 'No messages yet',
+                    displayText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

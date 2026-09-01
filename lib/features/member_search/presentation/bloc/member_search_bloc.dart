@@ -191,7 +191,7 @@ class MemberSearchBloc extends Bloc<MemberSearchEvent, MemberSearchState> {
   }
 
   Future<void> _onPIN(PINSearchRequested event, Emitter<MemberSearchState> emit) async {
-    if (event.pin.length < 6) return;
+    if (event.pin.isEmpty) return;
     emit(MemberSearchLoading(
       recentSearches: _recent,
       isLoadingRecentSearches: _recentsLoading,

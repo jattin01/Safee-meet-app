@@ -18,8 +18,10 @@ class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   Future<void> _refresh(BuildContext context) async {
-    context.read<CurrentUserCubit>().load(forceRefresh: true);
-    context.read<NotificationsCubit>().load(forceRefresh: true);
+    await Future.wait([
+      context.read<CurrentUserCubit>().load(forceRefresh: true),
+      context.read<NotificationsCubit>().load(forceRefresh: true),
+    ]);
   }
 
   @override
@@ -313,7 +315,8 @@ class _DarkHeader extends StatelessWidget {
       _greeting = 'Good afternoon';
     }
 
-
+    final subState = context.watch<CurrentSubscriptionCubit>().state;
+    final isPremium = subState.subscription != null && subState.subscription!.hasActiveAccess;
 
     return Container(
       decoration: const BoxDecoration(
@@ -482,10 +485,21 @@ class _DarkHeader extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 6),
-                          _HeaderBadge(
-                            label: _verificationLabel,
-                            color: AppColors.blue,
-                            textColor: AppColors.blueLight,
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              _HeaderBadge(
+                                label: _verificationLabel,
+                                color: AppColors.blue,
+                                textColor: AppColors.blueLight,
+                              ),
+                              _HeaderBadge(
+                                label: isPremium ? 'Premium Active' : 'Free Plan',
+                                color: isPremium ? AppColors.purple : AppColors.textTertiary,
+                                textColor: Colors.white,
+                              ),
+                            ],
                           ),
                         ],
                       ),

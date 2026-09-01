@@ -169,7 +169,7 @@ class _ProfileView extends StatelessWidget {
         return 'View billing details';
       case CurrentSubscriptionStatus.loaded:
         final sub = state.subscription;
-        return sub == null ? 'Free plan' : '${sub.planLabel} plan';
+        return sub == null ? 'Free plan' : '${sub.planLabel} plan (Active)';
     }
   }
 

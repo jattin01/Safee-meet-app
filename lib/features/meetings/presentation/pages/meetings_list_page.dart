@@ -79,7 +79,10 @@ class _MeetingsListViewState extends State<_MeetingsListView>
   }
 
   Future<void> _refresh() async {
-    context.read<MeetingsBloc>().add(const MeetingsLoadRequested());
+    final bloc = context.read<MeetingsBloc>();
+    final future = bloc.stream.firstWhere((s) => s is MeetingsListLoaded || s is MeetingsError);
+    bloc.add(const MeetingsLoadRequested());
+    await future;
   }
 
   @override

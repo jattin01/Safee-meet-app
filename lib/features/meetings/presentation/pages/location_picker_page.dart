@@ -102,6 +102,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             onMapCreated: (c) => _controller = c,
             onCameraMove: (position) => _center = position.target,
             onCameraIdle: () => _resolveAddress(_center),
+            myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
           ),
