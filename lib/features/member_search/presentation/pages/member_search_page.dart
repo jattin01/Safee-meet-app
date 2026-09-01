@@ -157,8 +157,13 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     });
   }
 
-  void _openChat(BuildContext ctx, MemberEntity member) {
-    ctx.push(
+  // Returns the push's Future (resolves once the pushed screen is popped)
+  // rather than firing-and-forgetting it, so _MemberResultCard can keep its
+  // Message/Meet buttons disabled for exactly as long as that navigation is
+  // "in flight" — the push itself still starts immediately/synchronously,
+  // this only changes when the caller finds out it's done.
+  Future<void> _openChat(BuildContext ctx, MemberEntity member) async {
+    await ctx.push(
       '${AppRoutes.chat}/new_${member.id}',
       extra: ConversationEntity(
         id: 'new_${member.id}',
@@ -172,7 +177,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     );
   }
 
-  void _openMeeting(BuildContext ctx, MemberEntity member) {
+  Future<void> _openMeeting(BuildContext ctx, MemberEntity member) async {
     if (widget.pickerMode) {
       Navigator.of(ctx).pop(member);
       return;
@@ -180,11 +185,11 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
 
     final user = ctx.read<CurrentUserCubit>().state.profile;
     final plan = ctx.read<CurrentSubscriptionCubit>().state.subscription?.plan;
-    
+
     if (user != null && plan != null) {
       final historyLimit = plan.getFeatureLimit('meeting_history');
       if (historyLimit != null && user.totalMeetings >= historyLimit) {
-        showDialog(
+        await showDialog(
           context: ctx,
           builder: (context) => Dialog(
             backgroundColor: Colors.transparent,
@@ -202,7 +207,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
       }
     }
 
-    ctx.push('${AppRoutes.meetingSetup}?memberId=${member.id}', extra: member);
+    await ctx.push('${AppRoutes.meetingSetup}?memberId=${member.id}', extra: member);
   }
 
   @override
@@ -1049,10 +1054,10 @@ class _TabPill extends StatelessWidget {
       );
 }
 
-class _MemberResultCard extends StatelessWidget {
+class _MemberResultCard extends StatefulWidget {
   final MemberEntity member;
-  final VoidCallback onChat;
-  final VoidCallback onMeet;
+  final Future<void> Function() onChat;
+  final Future<void> Function() onMeet;
 
   const _MemberResultCard({
     required this.member,
@@ -1061,7 +1066,47 @@ class _MemberResultCard extends StatelessWidget {
   });
 
   @override
+  State<_MemberResultCard> createState() => _MemberResultCardState();
+}
+
+class _MemberResultCardState extends State<_MemberResultCard> {
+  // Independent per-button in-flight flags — tapping one only disables that
+  // button and swaps in its own spinner; the other stays fully interactive
+  // the whole time, per design. Each resets automatically once its own
+  // pushed screen is popped (or, for the picker/limit-dialog branches inside
+  // onMeet, once that resolves).
+  bool _chatPending = false;
+  bool _meetPending = false;
+
+  Future<void> _handleChatTap() async {
+    if (_chatPending) return;
+    setState(() => _chatPending = true);
+    try {
+      await widget.onChat();
+    } finally {
+      if (mounted) setState(() => _chatPending = false);
+    }
+  }
+
+  Future<void> _handleMeetTap() async {
+    if (_meetPending) return;
+    setState(() => _meetPending = true);
+    try {
+      await widget.onMeet();
+    } finally {
+      if (mounted) setState(() => _meetPending = false);
+    }
+  }
+
+  Widget _spinner(Color color) => SizedBox(
+        height: 16,
+        width: 16,
+        child: CircularProgressIndicator(strokeWidth: 2, color: color),
+      );
+
+  @override
   Widget build(BuildContext context) {
+    final member = widget.member;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1190,7 +1235,7 @@ class _MemberResultCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: onChat,
+                            onPressed: _chatPending ? null : _handleChatTap,
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               foregroundColor: AppColors.textPrimary,
@@ -1198,22 +1243,24 @@ class _MemberResultCard extends StatelessWidget {
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14)),
                             ),
-                            child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.chat_bubble_outline, size: 16),
-                                  const SizedBox(width: 6),
-                                  Text('Message',
-                                      style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13)),
-                                ]),
+                            child: _chatPending
+                                ? _spinner(AppColors.textPrimary)
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.chat_bubble_outline, size: 16),
+                                      const SizedBox(width: 6),
+                                      Text('Message',
+                                          style: GoogleFonts.inter(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13)),
+                                    ]),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: onMeet,
+                            onPressed: _meetPending ? null : _handleMeetTap,
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               backgroundColor: AppColors.primary,
@@ -1222,18 +1269,37 @@ class _MemberResultCard extends StatelessWidget {
                               shadowColor: AppColors.primary.withOpacity(0.3),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14)),
+                              // Without these, Material 3's default disabled
+                              // style kicks in the instant onPressed becomes
+                              // null — washed-out grey background and
+                              // dimmed icon. That reads as the button
+                              // vanishing rather than a clean "disabled,
+                              // loading" state, so pin it to look identical
+                              // to the enabled style while the spinner shows.
+                              disabledBackgroundColor: AppColors.primary,
+                              disabledForegroundColor: Colors.white,
+                              disabledIconColor: Colors.white,
+                            ).copyWith(
+                              // styleFrom's `elevation` param hardcodes the
+                              // disabled state's elevation to 0 (dropping the
+                              // shadow) with no styleFrom param to override
+                              // it — this copyWith forces it back to the
+                              // same elevation in every state instead.
+                              elevation: const WidgetStatePropertyAll(2),
                             ),
-                            child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.calendar_today_outlined,
-                                      size: 16),
-                                  const SizedBox(width: 6),
-                                  Text('Meet',
-                                      style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13)),
-                                ]),
+                            child: _meetPending
+                                ? _spinner(Colors.white)
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.calendar_today_outlined,
+                                          size: 16),
+                                      const SizedBox(width: 6),
+                                      Text('Meet',
+                                          style: GoogleFonts.inter(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13)),
+                                    ]),
                           ),
                         ),
                       ],

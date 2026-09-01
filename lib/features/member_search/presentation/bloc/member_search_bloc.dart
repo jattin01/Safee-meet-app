@@ -37,8 +37,11 @@ class RecentSearchesRequested extends MemberSearchEvent {
   const RecentSearchesRequested();
 }
 
-/// User tapped a member in the "recently searched" list — shows that
-/// member's result immediately, without re-hitting the search API.
+/// User tapped a member in the "recently searched" list. [member] only
+/// identifies *who* was tapped (it's a snapshot from the last
+/// GET /v1/members/recent-searches fetch and may be stale) — the handler
+/// re-fetches by PIN via the live search endpoint so the displayed result
+/// always reflects the member's current data.
 class RecentMemberSelected extends MemberSearchEvent {
   final MemberEntity member;
   const RecentMemberSelected(this.member);
@@ -130,14 +133,7 @@ class MemberSearchBloc extends Bloc<MemberSearchEvent, MemberSearchState> {
           isLoadingRecentSearches: _recentsLoading,
         )));
     on<RecentSearchesRequested>(_onLoadRecents);
-    on<RecentMemberSelected>((event, emit) {
-      emit(MemberSearchFound(
-        event.member,
-        recentSearches: _recent,
-        isLoadingRecentSearches: _recentsLoading,
-      ));
-      _addMatchToChatList(event.member);
-    });
+    on<RecentMemberSelected>(_onRecentSelected);
   }
 
   // Ensures a chat room already exists for (current user, matched member)
@@ -188,6 +184,21 @@ class MemberSearchBloc extends Bloc<MemberSearchEvent, MemberSearchState> {
         isLoadingRecentSearches: false,
       ));
     }
+  }
+
+  // Re-fetches by PIN instead of trusting the tapped recent-search entity
+  // directly — that entity is a snapshot from whenever recent-searches was
+  // last loaded and can be stale (trust/safety score, badges, avatar, etc.
+  // may have changed since), so this always goes through the same live
+  // lookup + refresh path as a fresh PIN search.
+  Future<void> _onRecentSelected(
+      RecentMemberSelected event, Emitter<MemberSearchState> emit) async {
+    emit(MemberSearchLoading(
+      recentSearches: _recent,
+      isLoadingRecentSearches: _recentsLoading,
+    ));
+    final result = await _repository.searchByPIN(event.member.safeePIN);
+    await _emitResult(result, emit);
   }
 
   Future<void> _onPIN(PINSearchRequested event, Emitter<MemberSearchState> emit) async {

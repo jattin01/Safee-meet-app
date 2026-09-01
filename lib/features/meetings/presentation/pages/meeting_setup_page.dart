@@ -75,7 +75,9 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
   final _floorFlatCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  TimeOfDay _selectedTime = const TimeOfDay(hour: 14, minute: 0);
+  // Placeholder — always overwritten in initState() with the next available
+  // 15-minute slot from "now", so no fixed hour is hardcoded here.
+  TimeOfDay _selectedTime = TimeOfDay.now();
   MeetingPurpose _selectedPurpose = MeetingPurpose.coffee;
   late MemberEntity? _selectedPartner = widget.partner;
   double? _pickedLatitude;
@@ -119,14 +121,13 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
   @override
   void initState() {
     super.initState();
-    // Default time (2 PM today) may already be in the past — bump it
-    // forward the same way _pickDate does, so the initial selection is
-    // always valid without requiring the user to open a picker.
-    if (_isPastDateTime(_selectedDate, _selectedTime)) {
-      final adjusted = _snapUpToSlot(DateTime.now());
-      _selectedDate = DateTime(adjusted.year, adjusted.month, adjusted.day);
-      _selectedTime = TimeOfDay(hour: adjusted.hour, minute: adjusted.minute);
-    }
+    // Default date/time is always the next available 15-minute slot from
+    // right now (same logic _pickDate falls back to) — no fixed hour is
+    // hardcoded, so the initial selection is always valid without requiring
+    // the user to open a picker.
+    final adjusted = _nextAvailableSlot(DateTime.now());
+    _selectedDate = DateTime(adjusted.year, adjusted.month, adjusted.day);
+    _selectedTime = TimeOfDay(hour: adjusted.hour, minute: adjusted.minute);
     _loadActiveMeetings();
   }
 

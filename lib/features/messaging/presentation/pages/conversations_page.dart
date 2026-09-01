@@ -192,9 +192,15 @@ class _ConversationsViewState extends State<_ConversationsView> {
   }
 
   Widget _buildBody(BuildContext context, MessagingState state) {
+    // The shell's bottom nav bar floats over this page (Scaffold uses
+    // extendBody: true) and is 65px tall plus the device's own bottom
+    // safe-area inset — clear that plus a bit of breathing room so the
+    // last chat tile never sits flush against/behind the nav bar.
+    final navClearance = 65 + MediaQuery.of(context).padding.bottom + 24;
+
     if (state is MessagingInitial || state is MessagingLoading) {
       return Padding(
-        padding: const EdgeInsets.only(top: 8),
+        padding: EdgeInsets.only(top: 8, bottom: navClearance),
         child: Column(
           children: List.generate(
             5,
@@ -286,7 +292,7 @@ class _ConversationsViewState extends State<_ConversationsView> {
       }
 
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, navClearance),
         child: Column(
           children: filtered
               .map((c) => _ConversationTile(
