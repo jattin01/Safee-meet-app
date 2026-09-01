@@ -81,11 +81,12 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
     // this repeated fetch just updates the existing data in place. The same
     // tick also re-checks the real meeting status (see _fetchMeetingStatus)
     // so a cancellation by either Host or Guest surfaces here automatically.
+    final emergencyShareBloc = context.read<EmergencyShareBloc>();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _tick++);
       if (meetingId != null && _tick % _locationPollEvery == 0) {
-        context.read<EmergencyShareBloc>().add(EmergencyShareRequested(meetingId));
+        emergencyShareBloc.add(EmergencyShareRequested(meetingId));
         _fetchMeetingStatus(meetingId);
       }
     });

@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/services/api_client.dart';
 import '../../../../core/services/secure_storage_service.dart';
 
@@ -295,30 +293,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
       } catch (_) {}
     }
 
-    bool smsLaunched = false;
-    // Fallback/Main: Send SMS to emergency contacts via url_launcher
-    if (_contacts.isNotEmpty) {
-      try {
-        final phones = _contacts.map((c) => c.phone).join(',');
-        final msg = Uri.encodeComponent('Emergency! I need help. My current location: https://maps.google.com/?q=${position.latitude},${position.longitude}');
-        final separator = Platform.isIOS ? '&' : '?';
-        final uri = Uri.parse('sms:$phones${separator}body=$msg');
-        
-        // Some devices/simulators return false for canLaunchUrl even if they can launch.
-        // Try launching it anyway if canLaunchUrl fails.
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri);
-          smsLaunched = true;
-        } else {
-          try {
-            await launchUrl(uri);
-            smsLaunched = true;
-          } catch (_) {}
-        }
-      } catch (_) {}
-    }
-
-    if (!backendSuccess && !smsLaunched) {
+    if (!backendSuccess) {
       emit(SosError(
         message: 'Failed to send SOS alert. Please try again.',
         contacts: _contacts,

@@ -160,7 +160,7 @@ class _ProfileView extends StatelessWidget {
         _ => 'Not verified yet',
       };
 
-  String _membershipSubtitle(CurrentSubscriptionState state) {
+  String _membershipSubtitle(CurrentSubscriptionState state, ProfileEntity? profile) {
     switch (state.status) {
       case CurrentSubscriptionStatus.initial:
       case CurrentSubscriptionStatus.loading:
@@ -169,7 +169,8 @@ class _ProfileView extends StatelessWidget {
         return 'View billing details';
       case CurrentSubscriptionStatus.loaded:
         final sub = state.subscription;
-        return sub == null ? 'Free plan' : '${sub.planLabel} plan (Active)';
+        if (state.noActiveSubscription) return 'No active plan — Upgrade now';
+        return sub == null ? 'View plans' : '${sub.planLabel} (Active)';
     }
   }
 
@@ -287,11 +288,9 @@ class _ProfileView extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    BlocBuilder<CurrentSubscriptionCubit,
-                        CurrentSubscriptionState>(
-                      builder: (context, subState) =>
-                          _CurrentPlanCard(state: subState),
-                    ),
+                    BlocBuilder<CurrentSubscriptionCubit, CurrentSubscriptionState>(
+              builder: (context, subState) => _CurrentPlanCard(state: subState, fallbackPlanName: profile?.subscriptionPlan ?? 'free'),
+            ),
                     const SizedBox(height: 16),
                     AppListCard(children: [
                       _NavTile(
@@ -333,13 +332,12 @@ class _ProfileView extends StatelessWidget {
                           context.push(AppRoutes.reviews);
                         },
                       ),
-                      BlocBuilder<CurrentSubscriptionCubit,
-                          CurrentSubscriptionState>(
+                      BlocBuilder<CurrentSubscriptionCubit, CurrentSubscriptionState>(
                         builder: (context, subState) => _NavTile(
                           icon: Icons.workspace_premium,
                           iconColor: AppColors.purple,
                           label: 'Membership & Billing',
-                          subtitle: _membershipSubtitle(subState),
+                          subtitle: _membershipSubtitle(subState, profile),
                           onTap: () => context.push(AppRoutes.subscription),
                         ),
                       ),
@@ -1070,7 +1068,8 @@ class _TrustScoreRow extends StatelessWidget {
 
 class _CurrentPlanCard extends StatefulWidget {
   final CurrentSubscriptionState state;
-  const _CurrentPlanCard({required this.state});
+  final String fallbackPlanName;
+  const _CurrentPlanCard({required this.state, required this.fallbackPlanName});
 
   @override
   State<_CurrentPlanCard> createState() => _CurrentPlanCardState();
@@ -1114,14 +1113,24 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
     final isLoading =
         widget.state.status == CurrentSubscriptionStatus.loading &&
             !widget.state.hasLoadedOnce;
-    final label = isLoading ? '—' : (sub?.planLabel ?? 'Free / Level 1');
+    final noSub = widget.state.noActiveSubscription;
+    // Label: real plan name when active, 'Upgrade Now' when confirmed no plan
+    final label = isLoading
+        ? '—'
+        : (sub?.planLabel ?? (noSub ? 'Upgrade Now' : widget.fallbackPlanName));
     final hasPaidAccess = sub?.hasActiveAccess ?? false;
     final subtitle = isLoading
-        ? 'Loading plan…'
-        : (sub != null ? _subtitleFor(sub) : "You're on the Free plan");
+        ? 'Loading…'
+        : (sub != null
+            ? _subtitleFor(sub)
+            : (noSub
+                ? 'Get a plan to unlock all features'
+                : "You're on the ${widget.fallbackPlanName} tier"));
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
+    return GestureDetector(
+      onTap: sub == null ? () => context.push(AppRoutes.subscription) : null,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
       child: Stack(
         children: [
           Container(
@@ -1177,14 +1186,10 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
                   ),
                 ),
                 // No plan above the user's current one — there's nothing left to
-                // upgrade to, so the Upgrade/Manage CTA is hidden entirely and
-                // only the plan itself (already rendered above) is shown.
-                if (!widget.state.isOnHighestPlan)
+                // upgrade to, so the Upgrade/Manage CTA is hidden entirely.
+                if (!widget.state.isOnHighestPlan && sub != null)
                   GestureDetector(
-                    onTap: () => context.push(
-                      AppRoutes.subscription,
-                      extra: hasPaidAccess ? null : 'premium',
-                    ),
+                    onTap: () => context.push(AppRoutes.subscription),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 18, vertical: 10),
@@ -1195,14 +1200,14 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
                         ]),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(hasPaidAccess ? 'Manage' : 'Upgrade Level 2',
+                      child: Text('Manage',
                           style: GoogleFonts.inter(
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w700)),
                     ),
                   )
-                else
+                else if (sub != null)
                   Container(
                     width: 32,
                     height: 32,
@@ -1213,6 +1218,8 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
                     child: const Icon(Icons.check,
                         color: AppColors.success, size: 18),
                   ),
+                if (sub == null)
+                  const Icon(Icons.chevron_right, color: Colors.white60, size: 22),
               ],
             ),
           ),
@@ -1246,7 +1253,7 @@ class _CurrentPlanCardState extends State<_CurrentPlanCard>
             ),
         ],
       ),
-    );
+    ));
   }
 }
 

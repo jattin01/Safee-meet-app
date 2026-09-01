@@ -316,8 +316,6 @@ class _DarkHeader extends StatelessWidget {
     }
 
     final subState = context.watch<CurrentSubscriptionCubit>().state;
-    final isPremium = subState.subscription != null && subState.subscription!.hasActiveAccess;
-    final planLabel = isPremium ? '${subState.subscription!.planLabel} Plan' : 'Free Plan';
 
     return Container(
       decoration: const BoxDecoration(
@@ -494,11 +492,6 @@ class _DarkHeader extends StatelessWidget {
                                 label: _verificationLabel,
                                 color: AppColors.blue,
                                 textColor: AppColors.blueLight,
-                              ),
-                              _HeaderBadge(
-                                label: planLabel,
-                                color: isPremium ? AppColors.purple : AppColors.textTertiary,
-                                textColor: Colors.white,
                               ),
                             ],
                           ),
@@ -1013,22 +1006,26 @@ class _UpgradeCardState extends State<_UpgradeCard>
   @override
   Widget build(BuildContext context) {
     final sub = widget.state.subscription;
-    final hasPaidAccess = sub?.hasActiveAccess ?? false;
-    final isFree = !hasPaidAccess;
     final isHighestPlan = widget.state.isOnHighestPlan;
-    final planName = sub?.planLabel ?? 'Free';
+    final noSub = widget.state.noActiveSubscription;
 
     final String title;
     final String subtitle;
-    if (isHighestPlan) {
-      title = '$planName Plan';
+
+    if (isHighestPlan && sub != null) {
+      title = sub.planLabel;
       subtitle = "You're on our top plan — all features unlocked";
-    } else if (isFree) {
-      title = 'Free Plan';
-      subtitle = 'Unlock more trust and safety features';
-    } else {
-      title = '$planName Plan';
+    } else if (noSub) {
+      // 404 confirmed — user has no active subscription at all
+      title = 'Upgrade Now';
+      subtitle = 'Get a plan to unlock trust & safety features';
+    } else if (sub != null) {
+      title = sub.planLabel;
       subtitle = 'Review billing and subscription details';
+    } else {
+      // Still loading or unknown — neutral
+      title = 'View Plans';
+      subtitle = 'Unlock more trust and safety features';
     }
 
     return FadeTransition(

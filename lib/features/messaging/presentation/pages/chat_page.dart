@@ -664,8 +664,6 @@ class _ChatHeader extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.more_vert,
-              color: Colors.white.withOpacity(0.8), size: 22),
         ],
       ),
     );

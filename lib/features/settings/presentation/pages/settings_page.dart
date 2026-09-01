@@ -380,7 +380,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
           profile.email ?? profile.phone!
       ].where((value) => value.trim().isNotEmpty).join(' · ');
 
-  String _subscriptionSubtitle(CurrentSubscriptionState state) {
+  String? _subscriptionSubtitle(CurrentSubscriptionState state) {
     switch (state.status) {
       case CurrentSubscriptionStatus.initial:
       case CurrentSubscriptionStatus.loading:
@@ -389,7 +389,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         return 'Manage your subscription';
       case CurrentSubscriptionStatus.loaded:
         final sub = state.subscription;
-        if (sub == null) return 'Current plan: Free';
+        if (state.noActiveSubscription || sub == null) return 'Manage your subscription plan';
         final suffix = sub.isCancelled
             ? ' (Cancelled)'
             : sub.isTrialing

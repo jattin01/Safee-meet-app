@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:device_preview/device_preview.dart';
 
 import 'core/config/app_constants.dart';
 import 'core/config/app_theme.dart';
@@ -95,12 +94,7 @@ void main() async {
   // Register all dependencies
   await configureDependencies();
 
-  runApp(
-    DevicePreview(
-      enabled: false,
-      builder: (context) => const SafeeMeetApp(),
-    ),
-  );
+  runApp(const SafeeMeetApp());
 }
 
 class SafeeMeetApp extends StatelessWidget {
@@ -131,9 +125,8 @@ class SafeeMeetApp extends StatelessWidget {
         themeMode: ThemeMode.dark,
         routerConfig: router,
         debugShowCheckedModeBanner: false,
-        locale: DevicePreview.locale(context),
         builder: (context, child) {
-          final clampedChild = MediaQuery(
+          return MediaQuery(
             data: MediaQuery.of(context).copyWith(
               textScaler: MediaQuery.of(context).textScaler.clamp(
                     minScaleFactor: 0.8,
@@ -142,8 +135,6 @@ class SafeeMeetApp extends StatelessWidget {
             ),
             child: child!,
           );
-          
-          return DevicePreview.appBuilder(context, clampedChild);
         },
       ),
     );

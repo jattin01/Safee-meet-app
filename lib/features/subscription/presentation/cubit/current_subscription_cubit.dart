@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/current_subscription_entity.dart';
+import '../../domain/entities/subscription_plan_entity.dart';
 import '../../domain/use_cases/get_current_subscription_use_case.dart';
 import '../../domain/use_cases/get_subscription_plans_use_case.dart';
 
@@ -17,33 +18,51 @@ class CurrentSubscriptionState extends Equatable {
   // hasn't been cross-checked yet, so upgrade CTAs default to visible.
   final bool isOnHighestPlan;
   final String? errorMessage;
+  // Full plan catalog — populated after /plans is loaded.
+  final List<SubscriptionPlanEntity> availablePlans;
+  // True when the backend confirmed 404 (no active subscription at all).
+  // Used by UI to show an Upgrade CTA instead of a plan name.
+  final bool noActiveSubscription;
 
   const CurrentSubscriptionState({
     this.status = CurrentSubscriptionStatus.initial,
     this.subscription,
     this.isOnHighestPlan = false,
     this.errorMessage,
+    this.availablePlans = const [],
+    this.noActiveSubscription = false,
   });
 
   bool get hasLoadedOnce => status != CurrentSubscriptionStatus.initial;
   bool get hasSubscription => subscription != null;
 
+  // Returns the lowest-sort-order plan name from the catalog.
+  String? get lowestPlanName {
+    if (availablePlans.isEmpty) return null;
+    final sorted = [...availablePlans]..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return sorted.first.name;
+  }
+
   CurrentSubscriptionState copyWith({
     CurrentSubscriptionStatus? status,
     String? errorMessage,
     bool clearError = false,
+    List<SubscriptionPlanEntity>? availablePlans,
+    bool? noActiveSubscription,
   }) {
     return CurrentSubscriptionState(
       status: status ?? this.status,
       subscription: subscription,
       isOnHighestPlan: isOnHighestPlan,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      availablePlans: availablePlans ?? this.availablePlans,
+      noActiveSubscription: noActiveSubscription ?? this.noActiveSubscription,
     );
   }
 
   @override
   List<Object?> get props =>
-      [status, subscription, isOnHighestPlan, errorMessage];
+      [status, subscription, isOnHighestPlan, errorMessage, availablePlans, noActiveSubscription];
 }
 
 /// A single, app-wide instance of this cubit is registered in get_it as a
@@ -134,6 +153,9 @@ class CurrentSubscriptionCubit extends Cubit<CurrentSubscriptionState> {
           status: CurrentSubscriptionStatus.loaded,
           subscription: subscription,
           isOnHighestPlan: isHighest,
+          availablePlans: plans,
+          // noActiveSubscription is true when backend confirmed null (404)
+          noActiveSubscription: subscription == null,
         ));
       },
     );

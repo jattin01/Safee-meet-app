@@ -52,9 +52,17 @@ class _AppShellPageState extends State<AppShellPage> with RouteAware {
 
   @override
   void didPopNext() {
-    context.read<CurrentUserCubit>().load(forceRefresh: true);
-    context.read<CurrentSubscriptionCubit>().load(forceRefresh: true);
-    context.read<MeetingsBloc>().add(const MeetingsLoadRequested());
+    // Delay the state refresh until the pop transition animation has completely
+    // finished (usually ~300ms). Triggering a state rebuild during the 
+    // go_router transition causes GlobalKey duplication bugs in the framework.
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      context.read<CurrentUserCubit>().load(forceRefresh: true);
+      context.read<CurrentSubscriptionCubit>().load(forceRefresh: true);
+      // MeetingsBloc is not in this shell's provider tree — read from service
+      // locator directly to avoid ProviderNotFoundException.
+      sl<MeetingsBloc>().add(const MeetingsLoadRequested());
+    });
   }
 
   @override

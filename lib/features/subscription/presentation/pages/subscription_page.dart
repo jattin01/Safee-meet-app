@@ -186,10 +186,13 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
             if (state is! SubscriptionLoaded) return;
             if (state.checkoutStatus == CheckoutStatus.success) {
               AppSnackbar.success(context, 'Subscription activated successfully.');
-              context.go(AppRoutes.subscription);
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(AppRoutes.home);
+              }
             } else if (state.checkoutErrorMessage != null) {
               AppSnackbar.error(context, state.checkoutErrorMessage!);
-              context.go(AppRoutes.subscription);
             }
           },
           builder: (context, state) {

@@ -52,7 +52,7 @@ class _MemberSearchView extends StatefulWidget {
 class _MemberSearchViewState extends State<_MemberSearchView> {
   late int _activeTab = widget.initialTab == 'qr' ? 1 : 0;
   final _pinCtrl = TextEditingController();
-  final _scannerController = MobileScannerController();
+  final _scannerController = MobileScannerController(autoStart: false);
   final _imagePicker = ImagePicker();
   bool _qrHandled = false;
   bool _resolvingGalleryImage = false;
@@ -63,6 +63,11 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     super.initState();
     // Reset search state on open
     context.read<MemberSearchBloc>().add(const MemberSearchReset());
+
+    // If opened directly on the QR tab, start the scanner
+    if (_activeTab == 1) {
+      _scannerController.start();
+    }
 
     // Clear old result/error when user types a new PIN
     _pinCtrl.addListener(() {
@@ -76,6 +81,11 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
   @override
   void dispose() {
     _pinCtrl.dispose();
+    // Always stop before disposing — MobileScanner's SurfaceView continues
+    // producing frames until stop() is called. Without this, navigating away
+    // from the page leaves the camera producing frames into a detached
+    // SurfaceView, which exhausts Android's BLASTBufferQueue (max 7 frames).
+    _scannerController.stop();
     _scannerController.dispose();
     super.dispose();
   }
@@ -91,11 +101,13 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     final code = capture.barcodes.first.rawValue?.trim();
     if (code == null || code.isEmpty) return;
     _qrHandled = true;
+    _scannerController.stop(); // Stop camera to prevent buffer exhaustion while viewing results
     context.read<MemberSearchBloc>().add(QRSearchRequested(code));
   }
 
   void _rescan() {
     setState(() => _qrHandled = false);
+    _scannerController.start();
     context.read<MemberSearchBloc>().add(const MemberSearchReset());
   }
 
@@ -163,6 +175,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
   // "in flight" — the push itself still starts immediately/synchronously,
   // this only changes when the caller finds out it's done.
   Future<void> _openChat(BuildContext ctx, MemberEntity member) async {
+    _scannerController.stop();
     await ctx.push(
       '${AppRoutes.chat}/new_${member.id}',
       extra: ConversationEntity(
@@ -175,6 +188,9 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
         updatedAt: DateTime.now(),
       ),
     );
+    if (mounted && _activeTab == 1 && !_qrHandled) {
+      _scannerController.start();
+    }
   }
 
   Future<void> _openMeeting(BuildContext ctx, MemberEntity member) async {
@@ -196,9 +212,13 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
             insetPadding: const EdgeInsets.symmetric(horizontal: 20),
             child: _UpgradeLimitCard(
               message: 'You have reached your limit of $historyLimit meetings for this plan.',
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                context.push(AppRoutes.subscription, extra: 'basic_unlimited');
+                _scannerController.stop();
+                await context.push(AppRoutes.subscription, extra: 'basic_unlimited');
+                if (mounted && _activeTab == 1 && !_qrHandled) {
+                  _scannerController.start();
+                }
               },
             ),
           ),
@@ -207,7 +227,11 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
       }
     }
 
+    _scannerController.stop();
     await ctx.push('${AppRoutes.meetingSetup}?memberId=${member.id}', extra: member);
+    if (mounted && _activeTab == 1 && !_qrHandled) {
+      _scannerController.start();
+    }
   }
 
   @override
@@ -256,6 +280,11 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                         activeTab: _activeTab,
                         onTabChanged: (i) {
                           if (_activeTab != i) {
+                            if (i == 1 && !_qrHandled) {
+                              _scannerController.start();
+                            } else {
+                              _scannerController.stop();
+                            }
                             setState(() => _activeTab = i);
                             context.read<MemberSearchBloc>().add(MemberSearchReset());
                             if (i == 1) {
