@@ -317,6 +317,7 @@ class _DarkHeader extends StatelessWidget {
 
     final subState = context.watch<CurrentSubscriptionCubit>().state;
     final isPremium = subState.subscription != null && subState.subscription!.hasActiveAccess;
+    final planLabel = isPremium ? '${subState.subscription!.planLabel} Plan' : 'Free Plan';
 
     return Container(
       decoration: const BoxDecoration(
@@ -495,7 +496,7 @@ class _DarkHeader extends StatelessWidget {
                                 textColor: AppColors.blueLight,
                               ),
                               _HeaderBadge(
-                                label: isPremium ? 'Premium Active' : 'Free Plan',
+                                label: planLabel,
                                 color: isPremium ? AppColors.purple : AppColors.textTertiary,
                                 textColor: Colors.white,
                               ),

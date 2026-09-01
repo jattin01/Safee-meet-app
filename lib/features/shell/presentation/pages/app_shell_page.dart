@@ -9,6 +9,7 @@ import '../../../../core/routes/route_observer.dart';
 import '../../../../core/shared/utils/verification_gate.dart';
 import '../../../meetings/presentation/bloc/meetings_bloc.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
+import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 
 const _tabs = [
   _TabItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
@@ -52,6 +53,8 @@ class _AppShellPageState extends State<AppShellPage> with RouteAware {
   @override
   void didPopNext() {
     context.read<CurrentUserCubit>().load(forceRefresh: true);
+    context.read<CurrentSubscriptionCubit>().load(forceRefresh: true);
+    context.read<MeetingsBloc>().add(const MeetingsLoadRequested());
   }
 
   @override
