@@ -8,7 +8,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../../../../core/dependency_injection/injection_container.dart';
+import '../../../../core/services/socket_service.dart';
 import '../../../../core/shared/failures/failures.dart';
+import '../../../profile/presentation/bloc/profile_bloc.dart';
+import '../../../profile/presentation/cubit/current_user_cubit.dart';
+import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../../domain/use_cases/apple_login_use_case.dart';
 import '../../domain/use_cases/check_auth_status_use_case.dart';
 import '../../domain/use_cases/check_user_exists_use_case.dart';
@@ -235,6 +240,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(const AuthLoading());
     await logout();
+    _resetUserScopedState();
     emit(const LogoutSuccess());
   }
 
@@ -248,8 +254,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await deleteAccountUseCase();
     result.fold(
       (failure) => emit(_mapFailureToState(failure)),
-      (_) => emit(const LogoutSuccess()),
+      (_) {
+        _resetUserScopedState();
+        emit(const LogoutSuccess());
+      },
     );
+  }
+
+  // ── Session-scoped singleton reset ───────────────────────────────────────────
+
+  /// ProfileBloc, CurrentUserCubit and CurrentSubscriptionCubit are all
+  /// app-lifetime DI singletons (see injection_container.dart) that cache
+  /// the signed-in user's data in memory — clearing secure storage on
+  /// logout (done inside `logout()`/`deleteAccountUseCase()` above) does
+  /// not touch them. Without this, a different user logging in later in
+  /// the same app session would briefly see the previous user's cached
+  /// profile/subscription until something else happened to trigger a
+  /// reload. Best-effort: a reset failing here must never block logout
+  /// from completing.
+  void _resetUserScopedState() {
+    try {
+      sl<ProfileBloc>().reset();
+      sl<CurrentUserCubit>().reset();
+      sl<CurrentSubscriptionCubit>().reset();
+      sl<SocketService>().disconnect();
+    } catch (_) {}
   }
 
   // ── Google token helper ───────────────────────────────────────────────────────

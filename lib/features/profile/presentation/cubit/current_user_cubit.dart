@@ -142,6 +142,18 @@ class CurrentUserCubit extends Cubit<CurrentUserState> {
     }
   }
 
+  /// Clears cached user state — call on logout. This cubit is an
+  /// app-lifetime DI singleton (see injection_container.dart), so without
+  /// this a different user logging in later in the same app session would
+  /// briefly see the previous user's cached profile/verification status.
+  /// Does not close the cubit — it's reused across sessions.
+  void reset() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _lastSyncedIdentity = null;
+    emit(const CurrentUserState());
+  }
+
   @override
   Future<void> close() {
     _pollTimer?.cancel();

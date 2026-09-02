@@ -160,4 +160,10 @@ class CurrentSubscriptionCubit extends Cubit<CurrentSubscriptionState> {
       },
     );
   }
+
+  /// Clears cached subscription state — call on logout. This cubit is an
+  /// app-lifetime DI singleton (see injection_container.dart), so without
+  /// this a different user logging in later in the same app session would
+  /// briefly see the previous user's cached plan.
+  void reset() => emit(const CurrentSubscriptionState());
 }

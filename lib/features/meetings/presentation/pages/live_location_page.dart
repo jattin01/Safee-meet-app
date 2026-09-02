@@ -137,9 +137,15 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
     final meetingId = widget.meetingId;
     if (meetingId == null) return;
     final bloc = context.read<EmergencyShareBloc>();
-    final shareDone = bloc.stream.firstWhere(
-      (s) => s is EmergencyShareLoaded || s is EmergencyShareError,
-    );
+    // Safety net: EmergencyShareLoaded now bumps a timestamp on every fetch
+    // specifically so this always sees a distinct stream event (see that
+    // class's doc comment) — but if some other, currently-unforeseen path
+    // ever stalls without emitting Loaded/Error at all, this timeout still
+    // guarantees the RefreshIndicator spinner stops instead of hanging
+    // indefinitely, same as a successful refresh would.
+    final shareDone = bloc.stream
+        .firstWhere((s) => s is EmergencyShareLoaded || s is EmergencyShareError)
+        .timeout(const Duration(seconds: 15), onTimeout: () => bloc.state);
     bloc.add(EmergencyShareRequested(meetingId));
     await Future.wait([shareDone, _fetchMeetingStatus(meetingId)]);
   }
@@ -1248,7 +1254,7 @@ class _TrustedContactsCardState extends State<_TrustedContactsCard> {
                     Expanded(
                       child: Text(
                         hasContacts
-                            ? 'Trusted Contacts Notified'
+                            ? 'Trusted Contacts to be Notified'
                             : 'Add Trusted Contacts',
                         style: TextStyle(
                           color: hasContacts

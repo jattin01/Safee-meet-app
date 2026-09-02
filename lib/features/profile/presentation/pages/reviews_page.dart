@@ -17,7 +17,15 @@ class ReviewsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider.value(
-      value: sl<ReviewsCubit>()..load(),
+      // ReviewsCubit is an app-lifetime DI singleton (see
+      // injection_container.dart) that ProfilePage's review-preview card
+      // also primes via a plain `..load()`. That call is a no-op once the
+      // cubit is already `loaded` (see ReviewsCubit.load's guard), so
+      // without forceRefresh here, navigating into this dedicated Reviews
+      // page would just keep showing whatever the cubit last had —
+      // possibly stale — until the user manually pulled to refresh.
+      // Force a refetch every time this page is (re)pushed instead.
+      value: sl<ReviewsCubit>()..load(forceRefresh: true),
       child: const _ReviewsView(),
     );
   }

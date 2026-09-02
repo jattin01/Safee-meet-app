@@ -34,9 +34,20 @@ class EmergencyShareLoading extends EmergencyShareState {
 
 class EmergencyShareLoaded extends EmergencyShareState {
   final EmergencyShareEntity data;
-  const EmergencyShareLoaded(this.data);
+  // Bumped on every successful (re)fetch, even when the freshly-fetched
+  // `data` is field-for-field identical to what's already loaded (very
+  // common here — LiveLocationPage re-polls this every 10s, so a manual
+  // pull-to-refresh shortly after often fetches nothing new). bloc's
+  // emit() silently drops a state that's Equatable-equal to the current
+  // one, so without this a same-data refresh would never actually reach
+  // `bloc.stream` — and _handleRefresh in live_location_page.dart, which
+  // awaits the next Loaded/Error there to know when to stop the
+  // RefreshIndicator spinner, would then hang forever. Including this in
+  // props guarantees every emit is a distinct value.
+  final int timestamp;
+  const EmergencyShareLoaded(this.data, {this.timestamp = 0});
   @override
-  List<Object?> get props => [data];
+  List<Object?> get props => [data, timestamp];
 }
 
 class EmergencyShareError extends EmergencyShareState {
@@ -79,7 +90,10 @@ class EmergencyShareBloc
       final result = await _repository.getEmergencyShare(event.meetingId);
       result.fold(
         (f) => emit(EmergencyShareError(f.message)),
-        (data) => emit(EmergencyShareLoaded(data)),
+        (data) => emit(EmergencyShareLoaded(
+          data,
+          timestamp: DateTime.now().millisecondsSinceEpoch,
+        )),
       );
     } finally {
       _isFetching = false;

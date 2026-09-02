@@ -10,12 +10,11 @@ import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/utils/verification_gate.dart';
 import '../../../../core/services/hive_service.dart';
-import '../../../../core/services/secure_storage_service.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../../../features/auth/presentation/bloc/auth_event.dart';
-import '../../../../core/services/google_auth_service.dart';
+import '../../../../features/auth/presentation/bloc/auth_state.dart';
 import '../../../../core/shared/widgets/section_header.dart';
 import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
@@ -163,7 +162,25 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<CurrentUserCubit, CurrentUserState>(
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthLoading) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          );
+        } else if (state is LogoutSuccess) {
+          Navigator.of(context, rootNavigator: true).pop();
+          context.go(AppRoutes.login);
+        } else if (state is AuthFailureState) {
+          Navigator.of(context, rootNavigator: true).pop();
+          AppSnackbar.error(context, state.message);
+        }
+      },
+      child: BlocBuilder<CurrentUserCubit, CurrentUserState>(
       builder: (context, state) {
         if (state.status == CurrentUserStatus.loading &&
             state.profile == null) {
@@ -377,6 +394,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
           ),
         );
       },
+      ),
     );
   }
 
@@ -412,16 +430,13 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         _ => 'Unverified',
       };
 
-  Future<void> _logout() async {
-    try {
-      await sl<GoogleAuthService>().signOut();
-    } catch (_) {
-      // Ignore any sign-out failure and continue clearing local state.
-    }
-    await sl<SecureStorageService>().clearSession();
-    if (!mounted) return;
-    context.read<AuthBloc>().add(const AuthResetRequested());
-    context.go(AppRoutes.auth);
+  void _logout() {
+    // Goes through the same LogoutRequested → AuthRepositoryImpl.logout()
+    // path as everywhere else: backend /logout call, Firebase + Google
+    // sign-out, and a full secure-storage clear — see the BlocListener in
+    // build() above for the loading/success/error handling (same pattern
+    // ProfilePage uses).
+    context.read<AuthBloc>().add(const LogoutRequested());
   }
 }
 

@@ -21,6 +21,7 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
+import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
 
 class LoginPage extends StatelessWidget {
@@ -214,6 +215,16 @@ class _LoginViewState extends State<_LoginView> {
           );
           
           context.read<CurrentUserCubit>().setProfile(profile);
+          // ProfileBloc is a separate app-lifetime singleton (see
+          // injection_container.dart) that backs the Profile screen and
+          // only self-loads once, the first time it's ever resolved. If a
+          // different user logs in later in the same app session (e.g.
+          // after a logout), it would otherwise keep showing the previous
+          // user's cached profile until a manual pull-to-refresh. Force a
+          // refetch for the newly-logged-in user here — same event
+          // ProfilePage's pull-to-refresh already dispatches, so this reuses
+          // an existing, tested code path rather than adding a new one.
+          sl<ProfileBloc>().add(const ProfileLoadRequested());
           if (kDebugMode) {
             // ignore: avoid_print
             print('[TIMING] LoginSuccess -> navigating to Home now');

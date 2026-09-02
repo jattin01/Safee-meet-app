@@ -28,6 +28,12 @@ class ReviewMarkedHelpful extends ProfileEvent {
   List<Object?> get props => [reviewId];
 }
 
+/// Dispatched on logout to clear the cached profile/reviews — see
+/// [ProfileBloc.reset].
+class ProfileResetRequested extends ProfileEvent {
+  const ProfileResetRequested();
+}
+
 // ── States ─────────────────────────────────────────────────────────────────
 abstract class ProfileState extends Equatable {
   const ProfileState();
@@ -93,6 +99,7 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     on<ProfileLoadRequested>(_onLoad);
     on<ReviewsLoadRequested>(_onReviews);
     on<ReviewMarkedHelpful>(_onHelpful);
+    on<ProfileResetRequested>(_onReset);
   }
 
   Future<void> _onLoad(ProfileLoadRequested _, Emitter<ProfileState> emit) async {
@@ -153,4 +160,14 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
       add(ReviewsLoadRequested(filter: (state as ProfileLoaded).reviewFilter));
     }
   }
+
+  void _onReset(ProfileResetRequested _, Emitter<ProfileState> emit) =>
+      emit(const ProfileInitial());
+
+  /// Clears the cached profile/reviews — call on logout. This bloc is an
+  /// app-lifetime DI singleton (see injection_container.dart) that
+  /// otherwise keeps whichever user's data it last loaded in memory, so
+  /// without this a different user logging in later in the same app
+  /// session would briefly see the previous user's cached profile.
+  void reset() => add(const ProfileResetRequested());
 }

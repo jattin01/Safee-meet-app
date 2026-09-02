@@ -149,7 +149,6 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: AppRoutes.settings,
-                // Settings still dispatches AuthResetRequested on sign-out.
                 builder: (_, __) => BlocProvider(
                   create: (_) => sl<AuthBloc>(),
                   child: const SettingsPage(),
