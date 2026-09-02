@@ -53,8 +53,10 @@
     <string>SafeeMeet needs photo library access so you can attach identity documents and photos.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>SafeeMeet needs microphone access during identity verification to confirm you're a live person.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>SafeeMeet uses your location to share live location during an active meeting for safety verification.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SafeeMeet uses your location to share live location during an active meeting for safety verification.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SafeeMeet uses your location during an active meeting or SOS alert to share your live location with your selected emergency contacts for your safety.</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>remote-notification</string>
