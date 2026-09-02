@@ -142,11 +142,17 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () {
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx, false);
+            },
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () {
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx, true);
+            },
             child: Text(actionLabel),
           ),
         ],

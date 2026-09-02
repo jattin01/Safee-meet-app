@@ -37,7 +37,7 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "/Users/mac/safee_meet_release.jks")
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "/Users/apple/Downloads/app_release.jks")
             storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "Parklite@123"
             keyAlias = System.getenv("KEY_ALIAS") ?: "safee_meet"
             keyPassword = System.getenv("KEY_PASSWORD") ?: "Parklite@123"

@@ -213,9 +213,16 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
             child: _UpgradeLimitCard(
               message: 'You have reached your limit of $historyLimit meetings for this plan.',
               onTap: () async {
+                // Pop the dialog with its own (builder-scoped) context, but
+                // push the next route with the outer page context (`ctx`),
+                // not this one — `context` here belongs to the dialog that's
+                // being removed, and reusing it for a second navigation
+                // right after popping it risks Flutter's "element is
+                // already inactive" crash. `ctx` stays valid for as long as
+                // this page itself is alive.
                 Navigator.pop(context);
                 _scannerController.stop();
-                await context.push(AppRoutes.subscription, extra: 'basic_unlimited');
+                await ctx.push(AppRoutes.subscription, extra: 'basic_unlimited');
                 if (mounted && _activeTab == 1 && !_qrHandled) {
                   _scannerController.start();
                 }

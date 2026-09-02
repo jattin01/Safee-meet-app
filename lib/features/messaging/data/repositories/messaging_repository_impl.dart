@@ -264,6 +264,25 @@ class MessagingRepositoryImpl implements MessagingRepository {
     return const Right(null);
   }
 
+  @override
+  Future<Either<Failure, void>> syncUserProfile({
+    required String name,
+    String? avatarUrl,
+  }) async {
+    try {
+      final uid = await _session.getUserId();
+      if (uid == null) return const Right(null);
+      await _dataSource.syncUserProfile(
+        uid: uid,
+        name: name,
+        avatarUrl: avatarUrl,
+      );
+      return const Right(null);
+    } catch (e) {
+      return Left(_mapError(e));
+    }
+  }
+
   // This backend talks to Firestore/Storage directly (no Dio/REST here), so
   // failures surface as FirebaseException/SocketException rather than
   // DioException — map the connectivity-flavored codes to NetworkFailure

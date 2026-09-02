@@ -92,6 +92,19 @@ abstract class ChatRemoteDataSource {
     required String uid,
     required String token,
   });
+
+  // Keeps the messaging feature's own `users/{uid}` doc (read by getUsers()
+  // for "start new chat", and copied into a room's participantNames the
+  // first time a chat is opened) in sync with the real, REST-backed
+  // profile — that's the actual source of truth for a user's display name,
+  // and this collection has no other writer for it in the normal
+  // signup/login flow, which is why an un-synced user's name previously
+  // always fell back to the literal "Unknown".
+  Future<void> syncUserProfile({
+    required String uid,
+    required String name,
+    String? avatarUrl,
+  });
 }
 
 class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
@@ -127,6 +140,31 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     if (snap.exists && snap.data() != null) {
       final data = Map<String, dynamic>.from(snap.data()!);
       data['roomId'] = snap.id;
+
+      // Self-heal: refresh OUR OWN name/avatar in this room's
+      // participantNames/participantAvatars every time we open or use it,
+      // not just at room creation. Only the caller's own entry is ever
+      // touched here — never the partner's — because `partnerName`/
+      // `partnerAvatarUrl` are whatever the caller happens to have cached
+      // and could themselves be stale; blindly overwriting the partner's
+      // entry with that could undo a self-heal the partner already did on
+      // their own side the next time they opened this same room.
+      final storedNames = Map<String, dynamic>.from(
+          (data['participantNames'] as Map?) ?? const {});
+      final storedAvatars = Map<String, dynamic>.from(
+          (data['participantAvatars'] as Map?) ?? const {});
+      if (storedNames[currentUserId] != currentUserName ||
+          storedAvatars[currentUserId] != currentUserAvatarUrl) {
+        storedNames[currentUserId] = currentUserName;
+        storedAvatars[currentUserId] = currentUserAvatarUrl;
+        await ref.update({
+          'participantNames': storedNames,
+          'participantAvatars': storedAvatars,
+        });
+        data['participantNames'] = storedNames;
+        data['participantAvatars'] = storedAvatars;
+      }
+
       return ChatRoomModel.fromJson(data);
     }
 
@@ -452,6 +490,22 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   }) async {
     await _firestore.collection('users').doc(uid).set(
       {'fcmToken': token},
+      SetOptions(merge: true),
+    );
+  }
+
+  @override
+  Future<void> syncUserProfile({
+    required String uid,
+    required String name,
+    String? avatarUrl,
+  }) async {
+    await _firestore.collection('users').doc(uid).set(
+      {
+        'uid': uid,
+        'name': name,
+        if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      },
       SetOptions(merge: true),
     );
   }

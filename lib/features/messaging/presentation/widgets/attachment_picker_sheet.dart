@@ -62,7 +62,10 @@ class _AttachmentPickerSheet extends StatelessWidget {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
+                  onTap: () {
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop();
+                  },
                   child: Icon(Icons.close,
                       color: AppColors.textSecondary, size: 22),
                 ),
@@ -108,6 +111,11 @@ class _AttachmentPickerSheet extends StatelessWidget {
         maxWidth: 1920,
         maxHeight: 1920,
       );
+      // The sheet's own route (or the page underneath it) may have been
+      // popped while the OS picker was up — nothing left to pop back into,
+      // and calling navigator.pop on it now risks the element-lifecycle
+      // assertion instead of a harmless no-op.
+      if (!context.mounted) return;
       if (xFile == null) {
         navigator.pop(null);
         return;
@@ -154,6 +162,9 @@ class _AttachmentPickerSheet extends StatelessWidget {
         withData: false,
       );
 
+      // Same reasoning as _pickImage — the route this sheet belongs to may
+      // already be gone by the time the OS file picker returns.
+      if (!context.mounted) return;
       if (result == null || result.files.isEmpty) {
         navigator.pop(null);
         return;

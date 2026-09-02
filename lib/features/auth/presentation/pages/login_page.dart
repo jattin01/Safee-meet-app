@@ -166,8 +166,14 @@ class _LoginViewState extends State<_LoginView> {
       builder: (sheetCtx) => _NotRegisteredSheet(
         message: message,
         onRegister: () {
+          // Pop the sheet with its own (builder-scoped) context, but push
+          // the next route with the outer `ctx` — `sheetCtx` belongs to the
+          // sheet that's being removed, and reusing it for a second
+          // navigation right after popping it risks Flutter's "element is
+          // already inactive" crash.
+          if (!sheetCtx.mounted) return;
           Navigator.pop(sheetCtx);
-          sheetCtx.push(AppRoutes.register);
+          ctx.push(AppRoutes.register);
         },
       ),
     );
@@ -566,7 +572,10 @@ class _NotRegisteredSheet extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                    },
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: AppColors.border),
                       padding: const EdgeInsets.symmetric(vertical: 14),

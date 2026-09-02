@@ -65,11 +65,19 @@ bool requireFeature(
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
+          // Guards against the dialog's barrier having already dismissed it
+          // (e.g. a stray tap outside right as this button is pressed) —
+          // popping an already-inactive route throws Flutter's element-
+          // lifecycle assertion instead of just being a harmless no-op.
+          onPressed: () {
+            if (!dialogContext.mounted) return;
+            Navigator.of(dialogContext).pop();
+          },
           child: const Text('Not Now'),
         ),
         FilledButton(
           onPressed: () {
+            if (!dialogContext.mounted) return;
             Navigator.of(dialogContext).pop();
             context.push(AppRoutes.subscription);
           },

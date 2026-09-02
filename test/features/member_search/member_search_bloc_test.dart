@@ -129,14 +129,21 @@ void main() {
 
   group('RecentMemberSelected', () {
     blocTest<MemberSearchBloc, MemberSearchState>(
-      'emits MemberSearchFound directly, without calling the search API',
+      'emits [Loading, Found] by re-fetching the member by PIN, instead of '
+      'trusting the possibly-stale cached recent-search entity',
       build: _bloc,
+      setUp: () {
+        when(() => repository.searchByPIN(any()))
+            .thenAnswer((_) async => Right(_member));
+      },
       act: (bloc) => bloc.add(RecentMemberSelected(_member)),
       verify: (_) {
-        verifyNever(() => repository.searchByPIN(any()));
-        verifyNever(() => repository.searchByQR(any()));
+        verify(() => repository.searchByPIN(_member.safeePIN)).called(1);
       },
-      expect: () => [MemberSearchFound(_member)],
+      expect: () => [
+        const MemberSearchLoading(),
+        MemberSearchFound(_member),
+      ],
     );
   });
 
@@ -186,6 +193,10 @@ void main() {
     blocTest<MemberSearchBloc, MemberSearchState>(
       'also ensures a chat room exists when selecting a recent search',
       build: _bloc,
+      setUp: () {
+        when(() => repository.searchByPIN(any()))
+            .thenAnswer((_) async => Right(_member));
+      },
       act: (bloc) => bloc.add(RecentMemberSelected(_member)),
       wait: const Duration(milliseconds: 50),
       verify: (_) {
@@ -205,6 +216,8 @@ void main() {
       setUp: () {
         when(() => secureStorage.getUserId())
             .thenAnswer((_) async => _member.id);
+        when(() => repository.searchByPIN(any()))
+            .thenAnswer((_) async => Right(_member));
       },
       act: (bloc) => bloc.add(RecentMemberSelected(_member)),
       wait: const Duration(milliseconds: 50),

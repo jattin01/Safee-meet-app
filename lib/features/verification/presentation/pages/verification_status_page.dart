@@ -212,6 +212,18 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
                                   context: context,
                                   isScrollControlled: true,
                                   backgroundColor: Colors.transparent,
+                                  // Not barrier/drag-dismissible: while a
+                                  // BackgroundConsentSubmitted request is in
+                                  // flight, this sheet's own bloc listener
+                                  // pops it on success — if the barrier were
+                                  // also tappable, a user tapping outside
+                                  // during that wait could dismiss it right
+                                  // as the listener's pop fires, popping an
+                                  // already-inactive route. The sheet's
+                                  // explicit Cancel button is the intended
+                                  // dismiss path (disabled while loading).
+                                  isDismissible: false,
+                                  enableDrag: false,
                                   builder: (_) => BlocProvider.value(
                                     value: context.read<VerificationBloc>(),
                                     child: const _BackgroundConsentSheet(),
@@ -1060,6 +1072,7 @@ class _BackgroundConsentSheet extends StatelessWidget {
           BlocConsumer<VerificationBloc, VerificationState>(
             listener: (context, state) {
               if (state is BackgroundConsentSuccess) {
+                if (!context.mounted) return;
                 Navigator.of(context).pop();
                 // Wait for the popup close animation to complete
                 Future.delayed(const Duration(milliseconds: 150), () {

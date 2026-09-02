@@ -59,6 +59,12 @@ class _SosPageState extends State<SosPage> with TickerProviderStateMixin {
       isScrollControlled: true,
       builder: (_) => _NoEmergencyContactSheet(
         onAddContact: () {
+          // This sheet is also dismissible by barrier tap/drag and by its
+          // own "Remind me later"/close-icon buttons — guard against a
+          // race where one of those has already popped it by the time this
+          // fires, which would otherwise pop whatever's now on top (or
+          // throw the element-lifecycle assertion) instead of a no-op.
+          if (!context.mounted) return;
           Navigator.of(context).pop();
           context.push(AppRoutes.emergencyContacts);
         },
@@ -507,7 +513,10 @@ class _NoEmergencyContactSheet extends StatelessWidget {
                       const SizedBox(height: 16),
                       Center(
                         child: GestureDetector(
-                          onTap: () => Navigator.of(context).pop(),
+                          onTap: () {
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop();
+                          },
                           child: Text(
                             'Remind me later',
                             style: GoogleFonts.inter(
@@ -526,7 +535,10 @@ class _NoEmergencyContactSheet extends StatelessWidget {
                 top: 8,
                 right: 8,
                 child: GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
+                  onTap: () {
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop();
+                  },
                   child: Container(
                     width: 32,
                     height: 32,

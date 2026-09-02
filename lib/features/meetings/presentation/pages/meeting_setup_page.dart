@@ -814,7 +814,12 @@ class _TimeSlotSheet extends StatelessWidget {
                         slot.hour == selectedTime.hour &&
                         slot.minute == selectedTime.minute;
                     return GestureDetector(
-                      onTap: disabled ? null : () => Navigator.of(context).pop(slot),
+                      onTap: disabled
+                          ? null
+                          : () {
+                              if (!context.mounted) return;
+                              Navigator.of(context).pop(slot);
+                            },
                       child: Container(
                         alignment: Alignment.center,
                         decoration: BoxDecoration(

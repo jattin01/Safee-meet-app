@@ -119,8 +119,15 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
 
   void _leaveWithMessage(String message) {
     if (!mounted) return;
-    context.pop();
+    // Show the toast BEFORE popping, not after: AppSnackbar.info walks up
+    // from this context to find the root Overlay, and calling it right
+    // after context.pop() can hit this page's element while it's already
+    // deactivating — a real crash (Flutter's "element._lifecycleState ==
+    // _ElementLifecycle.inactive" assertion), not just theoretical. The
+    // toast lives in the root overlay so it keeps displaying correctly over
+    // whatever screen is visible once the pop completes.
     AppSnackbar.info(context, message);
+    context.pop();
   }
 
   // Pull-to-refresh: re-fetches both the emergency-share data (partner
@@ -163,11 +170,18 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            // Guards against the dialog's barrier having already dismissed
+            // it — popping an already-inactive route throws Flutter's
+            // element-lifecycle assertion instead of being a harmless no-op.
+            onPressed: () {
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+            },
             child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           TextButton(
             onPressed: () {
+              if (!ctx.mounted) return;
               Navigator.pop(ctx);
               _endMeeting();
             },

@@ -103,7 +103,23 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     
     final result = await _repository.getProfile();
     result.fold(
-      (f) => emit(ProfileError(f.message)),
+      (f) {
+        // A transient refresh failure shouldn't wipe out a profile we
+        // already loaded successfully — that would blank the whole screen
+        // (including an already-valid safeePIN/QR code) over a flaky
+        // retry. Only surface ProfileError when there was never a good
+        // profile to fall back on; otherwise keep showing the last-known-
+        // good one. Bump the timestamp so this is still a distinct value
+        // that reaches the stream (pull-to-refresh awaits it for a
+        // terminal state), even though `profile` itself is unchanged.
+        if (currentState is ProfileLoaded) {
+          emit(currentState.copyWith(
+            timestamp: DateTime.now().millisecondsSinceEpoch,
+          ));
+        } else {
+          emit(ProfileError(f.message));
+        }
+      },
       (p) {
         final ts = DateTime.now().millisecondsSinceEpoch;
         if (currentState is ProfileLoaded) {
@@ -121,7 +137,12 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     emit(current.copyWith(reviewsLoading: true, reviewFilter: event.filter));
     final result = await _repository.getReviews(filter: event.filter);
     result.fold(
-      (f) => emit(ProfileError(f.message)),
+      // A reviews-fetch failure is unrelated to the profile itself — just
+      // stop the reviews spinner instead of downgrading to ProfileError,
+      // which would otherwise blank out the whole profile screen (name,
+      // avatar, and the safeePIN/QR code) over what's really just the
+      // reviews list failing to load.
+      (f) => emit(current.copyWith(reviewsLoading: false)),
       (reviews) => emit(current.copyWith(reviews: reviews, reviewsLoading: false)),
     );
   }

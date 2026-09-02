@@ -190,7 +190,13 @@ class _ProfileView extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            // Guards against the dialog's barrier having already dismissed
+            // it — popping an already-inactive route throws Flutter's
+            // element-lifecycle assertion instead of being a harmless no-op.
+            onPressed: () {
+              if (!ctx.mounted) return;
+              Navigator.of(ctx).pop();
+            },
             child: const Text('Cancel',
                 style: TextStyle(color: AppColors.textPrimary)),
           ),
@@ -200,6 +206,7 @@ class _ProfileView extends StatelessWidget {
               foregroundColor: Colors.white,
             ),
             onPressed: () {
+              if (!ctx.mounted) return;
               Navigator.of(ctx).pop();
               context.read<AuthBloc>().add(const DeleteAccountRequested());
             },
@@ -636,7 +643,10 @@ class _ProfileAvatarSection extends StatelessWidget {
                       ),
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.of(dialogContext).pop(),
+                      onTap: () {
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                      },
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
@@ -692,6 +702,7 @@ class _ProfileAvatarSection extends StatelessWidget {
                         ),
                         child: ElevatedButton.icon(
                           onPressed: () {
+                            if (!dialogContext.mounted) return;
                             Navigator.of(dialogContext).pop();
                             openVerificationScreen(context);
                           },
@@ -850,6 +861,17 @@ class _PinCard extends StatelessWidget {
               )) {
                 return;
               }
+              // ProfileBloc's own /v1/auth/me fetch can still be in flight
+              // even when the gates above already pass (they read
+              // CurrentUserCubit, a separately/faster-populated source) —
+              // opening the dialog before `pin` arrives would bake in an
+              // empty string at build time and never update it, since this
+              // dialog isn't wired to the bloc. Bail out instead of
+              // generating a QR code that can't be scanned.
+              if (pin == null || pin!.isEmpty) {
+                AppSnackbar.info(context, 'Your Safee PIN isn\'t ready yet.');
+                return;
+              }
               showDialog(
                 context: context,
                 builder: (_) => Dialog(
@@ -871,7 +893,9 @@ class _PinCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         QrImageView(
-                          data: pin ?? '',
+                          // Guaranteed non-null/non-empty by the guard above
+                          // this showDialog call.
+                          data: pin!,
                           version: QrVersions.auto,
                           size: 220,
                         ),

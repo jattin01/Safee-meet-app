@@ -66,6 +66,7 @@ import '../../features/messaging/data/datasources/chat_remote_datasource.dart';
 import '../../features/messaging/data/repositories/messaging_repository_impl.dart';
 import '../../features/messaging/domain/repositories/messaging_repository.dart';
 import '../../features/messaging/domain/use_cases/create_or_get_room_use_case.dart';
+import '../../features/messaging/domain/use_cases/sync_user_profile_use_case.dart';
 import '../../features/messaging/domain/use_cases/get_conversations_use_case.dart';
 import '../../features/messaging/domain/use_cases/get_users_use_case.dart';
 import '../../features/messaging/domain/use_cases/listen_messages_use_case.dart';
@@ -134,9 +135,15 @@ Future<void> configureDependencies() async {
   );
   sl.registerLazySingleton<HiveService>(() => HiveService());
   sl.registerLazySingleton<ConnectivityService>(() => ConnectivityService());
-  sl.registerLazySingleton<ApiClient>(() => ApiClient(sl()));
-  sl.registerLazySingleton<SocketService>(() => SocketService(sl()));
+  // AppRouter is registered before ApiClient because ApiClient's auth
+  // interceptor needs it (to redirect to Login on session expiry) —
+  // constructing AppRouter here is cheap since its `router` field is late/
+  // lazy (it isn't built until first accessed, well after every dependency
+  // below is registered), so this ordering doesn't risk resolving anything
+  // out of order.
   sl.registerSingleton<AppRouter>(AppRouter(sl()));
+  sl.registerLazySingleton<ApiClient>(() => ApiClient(sl(), sl()));
+  sl.registerLazySingleton<SocketService>(() => SocketService(sl()));
 
   // ── Firebase ──────────────────────────────────────────────────────────────
   sl.registerLazySingleton<FirebaseFirestore>(
@@ -255,6 +262,7 @@ Future<void> configureDependencies() async {
     () => MessagingRepositoryImpl(sl(), sl()),
   );
   sl.registerLazySingleton(() => CreateOrGetRoomUseCase(sl()));
+  sl.registerLazySingleton(() => SyncUserProfileUseCase(sl()));
   sl.registerLazySingleton(() => GetConversationsUseCase(sl()));
   sl.registerLazySingleton(() => GetUsersUseCase(sl()));
   sl.registerLazySingleton(() => SendMessageUseCase(sl()));
@@ -300,7 +308,7 @@ Future<void> configureDependencies() async {
   // screen need to read the *same* instance so verification status stays in
   // sync app-wide — see AppRoutes' restricted-route redirect and
   // CurrentUserCubit.isVerified.
-  sl.registerLazySingleton(() => CurrentUserCubit(sl()));
+  sl.registerLazySingleton(() => CurrentUserCubit(sl(), sl()));
   sl.registerLazySingleton(() => SubmitReviewUseCase(sl()));
   sl.registerFactory(() => SubmitReviewCubit(sl()));
   sl.registerLazySingleton(() => GetReviewsListUseCase(sl()));

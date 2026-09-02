@@ -91,4 +91,13 @@ abstract class MessagingRepository {
     required String meetingId,
     required bool accepted,
   });
+
+  // ── Profile sync ──────────────────────────────────────────────────────────
+  // Keeps this feature's own users/{uid} doc's name/avatar in sync with the
+  // real profile — see ChatRemoteDataSource.syncUserProfile for why this
+  // exists.
+  Future<Either<Failure, void>> syncUserProfile({
+    required String name,
+    String? avatarUrl,
+  });
 }

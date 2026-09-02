@@ -83,6 +83,7 @@ class _ConversationsViewState extends State<_ConversationsView> {
               style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
             onTap: () {
+              if (!context.mounted) return;
               Navigator.pop(context);
               bloc.add(
                   PinConversation(roomId: conv.id, pin: !conv.isPinned));
@@ -100,6 +101,7 @@ class _ConversationsViewState extends State<_ConversationsView> {
               style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
             onTap: () {
+              if (!context.mounted) return;
               Navigator.pop(context);
               bloc.add(
                   MuteConversation(roomId: conv.id, mute: !conv.isMuted));
