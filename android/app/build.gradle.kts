@@ -70,10 +70,6 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    // Required for flutter_stripe: MainActivity's theme must derive from
-    // Theme.MaterialComponents (see styles.xml) or Stripe's Android SDK
-    // fails to initialize.
-    implementation("com.google.android.material:material:1.12.0")
 }
 
 // didit_sdk's native Android SDK pulls in the newer, unified

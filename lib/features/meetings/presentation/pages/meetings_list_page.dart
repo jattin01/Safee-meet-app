@@ -10,7 +10,6 @@ import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../../domain/entities/meeting_entity.dart';
-import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../bloc/meetings_bloc.dart';
 
 class MeetingsListPage extends StatelessWidget {
@@ -22,7 +21,6 @@ class MeetingsListPage extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider.value(value: sl<MeetingsBloc>()),
-        BlocProvider.value(value: sl<CurrentSubscriptionCubit>()),
       ],
       child: _MeetingsListView(initialTab: initialTab),
     );
@@ -122,22 +120,6 @@ class _MeetingsListViewState extends State<_MeetingsListView>
                   m.status == MeetingStatus.declined ||
                   m.status == MeetingStatus.incidentReported)
               .toList();
-
-          final historyLimit = context
-              .watch<CurrentSubscriptionCubit>()
-              .state
-              .subscription
-              ?.plan
-              .getFeatureLimit('meeting_history');
-
-          if (historyLimit != null) {
-            if (upcoming.length > historyLimit) {
-              upcoming = upcoming.take(historyLimit).toList();
-            }
-            if (requests.length > historyLimit) {
-              requests = requests.take(historyLimit).toList();
-            }
-          }
 
           return Scaffold(
             backgroundColor: AppColors.lightBg,

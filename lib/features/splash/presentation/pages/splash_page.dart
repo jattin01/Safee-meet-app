@@ -10,7 +10,6 @@ import '../../../../core/services/hive_service.dart';
 import '../../../../core/storage/auth_session_manager.dart';
 import '../../../notifications/presentation/cubit/notifications_cubit.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
-import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -85,7 +84,6 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
       // guard/shell (which still do, for the subscription/user cubits)
       // just reuses this same request instead of firing a second one.
       unawaited(sl<CurrentUserCubit>().load());
-      unawaited(sl<CurrentSubscriptionCubit>().load());
       unawaited(sl<NotificationsCubit>().load());
     }
 

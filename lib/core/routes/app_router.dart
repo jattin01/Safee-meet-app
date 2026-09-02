@@ -38,8 +38,6 @@ import '../../features/gps_tracking/presentation/bloc/gps_tracking_bloc.dart';
 import '../../features/sos/presentation/bloc/sos_bloc.dart';
 import '../../features/sos/presentation/pages/sos_page.dart';
 import '../../features/splash/presentation/pages/splash_page.dart';
-import '../../features/subscription/presentation/cubit/current_subscription_cubit.dart';
-import '../../features/subscription/presentation/pages/subscription_page.dart';
 import '../../features/verification/presentation/pages/verification_page.dart';
 import '../../features/verification/presentation/pages/verification_status_page.dart';
 import '../dependency_injection/injection_container.dart';
@@ -89,16 +87,8 @@ class AppRouter {
 
       // ── Shell (bottom nav) ────────────────────────────────────────────────
       StatefulShellRoute.indexedStack(
-        builder: (_, __, shell) => MultiBlocProvider(
-          providers: [
-            // Singleton cubits (see injection_container.dart) — already
-            // provided at the app root (main.dart) too; `.value` here just
-            // re-exposes the same instance to this subtree without ever
-            // closing it when the shell rebuilds/disposes. `.load()` is a
-            // cheap no-op re-entrancy guard if it's already loaded/loading.
-            BlocProvider.value(value: sl<CurrentUserCubit>()..load()),
-            BlocProvider.value(value: sl<CurrentSubscriptionCubit>()..load()),
-          ],
+        builder: (_, __, shell) => BlocProvider.value(
+          value: sl<CurrentUserCubit>()..load(),
           child: CustomUpgradeAlert(
             upgrader: _upgrader,
             showIgnore: false,
@@ -227,14 +217,8 @@ class AppRouter {
         path: AppRoutes.sos,
         pageBuilder: (_, state) => CustomTransitionPage(
           key: state.pageKey,
-          // /sos is a top-level route outside the shell's IndexedStack, so
-          // it doesn't inherit the shell's CurrentSubscriptionCubit
-          // provider — SosPage's Trusted Contact Alerts gate needs it too.
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider(create: (_) => sl<SosBloc>()),
-              BlocProvider.value(value: sl<CurrentSubscriptionCubit>()..load()),
-            ],
+          child: BlocProvider(
+            create: (_) => sl<SosBloc>(),
             child: const SosPage(),
           ),
           transitionsBuilder: (_, anim, __, child) =>
@@ -245,24 +229,13 @@ class AppRouter {
         path: '${AppRoutes.sos}/:id',
         pageBuilder: (_, state) => CustomTransitionPage(
           key: state.pageKey,
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider(create: (_) => sl<SosBloc>()),
-              BlocProvider.value(value: sl<CurrentSubscriptionCubit>()..load()),
-            ],
+          child: BlocProvider(
+            create: (_) => sl<SosBloc>(),
             child: SosPage(meetingId: state.pathParameters['id']),
           ),
           transitionsBuilder: (_, anim, __, child) =>
               FadeTransition(opacity: anim, child: child),
         ),
-      ),
-      GoRoute(
-        path: AppRoutes.subscription,
-        builder: (_, state) {
-          final extra = state.extra;
-          final initialPlanSlug = extra is String ? extra : null;
-          return SubscriptionPage(initialPlanSlug: initialPlanSlug);
-        },
       ),
       GoRoute(
         path: AppRoutes.notifications,
@@ -321,10 +294,6 @@ class AppRouter {
     // on every navigation is harmless.
     if (isAuth) {
       unawaited(sl<FcmService>().initialize());
-      // Warms the shared current-subscription cache right after auth is
-      // confirmed. load() is a no-op re-entrancy guard + cache read when
-      // already loaded/fresh, so calling it on every navigation is cheap.
-      unawaited(sl<CurrentSubscriptionCubit>().load());
     }
 
     final preAuthRoutes = {

@@ -6,7 +6,6 @@ import 'package:get_it/get_it.dart';
 import '../routes/app_router.dart';
 import '../services/api_client.dart';
 import '../services/connectivity_service.dart';
-import '../services/stripe_payment_service.dart';
 import '../services/fcm_service.dart';
 import '../services/google_auth_service.dart';
 import '../services/hive_service.dart';
@@ -86,16 +85,6 @@ import '../../features/meetings/domain/repositories/emergency_share_repository.d
 import '../../features/meetings/presentation/bloc/emergency_share_bloc.dart';
 
 // Subscription
-import '../../features/subscription/data/local_data_sources/subscription_local_data_source.dart';
-import '../../features/subscription/data/remote_data_sources/subscription_remote_data_source.dart';
-import '../../features/subscription/data/repositories/subscription_repository_impl.dart';
-import '../../features/subscription/domain/repositories/subscription_repository.dart';
-import '../../features/subscription/domain/use_cases/get_current_subscription_use_case.dart';
-import '../../features/subscription/domain/use_cases/get_subscription_comparison_use_case.dart';
-import '../../features/subscription/domain/use_cases/get_subscription_plans_use_case.dart';
-import '../../features/subscription/presentation/bloc/subscription_bloc.dart';
-import '../../features/subscription/presentation/cubit/current_subscription_cubit.dart';
-import '../../features/subscription/presentation/cubit/subscription_comparison_cubit.dart';
 
 // SOS
 import '../../features/sos/presentation/bloc/sos_bloc.dart';
@@ -308,26 +297,6 @@ Future<void> configureDependencies() async {
 
   // ── GPS Tracking ──────────────────────────────────────────────────────────
   sl.registerFactory(() => GpsTrackingBloc(sl()));
-
-  // ── Subscription ──────────────────────────────────────────────────────────
-  sl.registerLazySingleton<SubscriptionRemoteDataSource>(
-    () => SubscriptionRemoteDataSourceImpl(sl()),
-  );
-  sl.registerLazySingleton<SubscriptionLocalDataSource>(
-    () => SubscriptionLocalDataSourceImpl(sl()),
-  );
-  sl.registerLazySingleton<SubscriptionRepository>(
-    () => SubscriptionRepositoryImpl(sl(), sl()),
-  );
-  sl.registerLazySingleton(() => GetSubscriptionPlansUseCase(sl()));
-  sl.registerLazySingleton(() => GetSubscriptionComparisonUseCase(sl()));
-  sl.registerLazySingleton(() => GetCurrentSubscriptionUseCase(sl()));
-  sl.registerLazySingleton(() => StripePaymentService());
-  // Singleton (not a factory): the whole app must share one cached
-  // current-subscription state instead of each screen fetching its own.
-  sl.registerLazySingleton(() => CurrentSubscriptionCubit(sl(), sl()));
-  sl.registerLazySingleton(() => SubscriptionBloc(sl(), sl(), sl(), sl()));
-  sl.registerLazySingleton(() => SubscriptionComparisonCubit(sl()));
 
   // ── Notifications ─────────────────────────────────────────────────────────
   sl.registerLazySingleton<NotificationsRemoteDataSource>(

@@ -206,8 +206,7 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
                                   await repo.hasBackgroundConsent();
                               if (!context.mounted) return;
                               if (alreadyConsented) {
-                                context.push(AppRoutes.subscription,
-                                    extra: 'premium');
+                                context.push(AppRoutes.verificationStatus);
                               } else {
                                 await showModalBottomSheet<void>(
                                   context: context,
@@ -227,7 +226,7 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
                             subtitle:
                                 'Business and credentials review is not enabled yet',
                             onTap: () {
-                              context.push(AppRoutes.subscription, extra: 'professional');
+                              context.push(AppRoutes.verificationStatus);
                             },
                           ),
                         ],
@@ -1066,7 +1065,7 @@ class _BackgroundConsentSheet extends StatelessWidget {
                 // Wait for the popup close animation to complete
                 Future.delayed(const Duration(milliseconds: 150), () {
                   if (context.mounted) {
-                    context.push(AppRoutes.subscription, extra: 'premium');
+                    context.push(AppRoutes.verificationStatus);
                   }
                 });
               }

@@ -28,7 +28,6 @@ abstract final class AppRoutes {
   static const String liveLocation = '/live-location';
   static const String emergencyShare = '/meetings/emergency-share';
   static const String sos = '/sos';
-  static const String subscription = '/subscription';
   static const String notifications = '/notifications';
   static const String reviews = '/reviews';
   static const String addReview = '/meetings/review';

@@ -30,17 +30,6 @@ abstract final class AppConstants {
   static const String appVersion = '2.4.1';
   static const String tagline = 'Are you verified?';
 
-  // ── Subscription Prices ──────────────────────────────────────────────────
-  static const String freePriceMonthly = '\$0';
-
-  // ── Stripe ───────────────────────────────────────────────────────────────
-  // TEST-MODE publishable key only (pk_test_...). Safe to embed client-side —
-  // it cannot move money or read sensitive data on its own, unlike the
-  // secret key (which lives server-side only, never here). Must be swapped
-  // for the matching pk_live_... key — from the SAME Stripe account as the
-  // backend's live secret key — before this app is used for real charges.
-  static const String stripePublishableKey =
-      'pk_test_51TsnbMBhFiphlmD9lIlrcqzede2CHVzRDhUtCG5akNPQGIRE5Gwavmt4Tk00zD01ef8MBZ9fJNdSDJNiPkWFXWkV00MrCh3c8O';
   // ── Emergency ────────────────────────────────────────────────────────────
   static const int maxEmergencyContacts = 5;
   static const int sosCountdownSeconds = 5;

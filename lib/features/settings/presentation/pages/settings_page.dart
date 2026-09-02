@@ -21,7 +21,6 @@ import '../../../../core/shared/widgets/section_header.dart';
 import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../../profile/domain/entities/profile_entity.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
-import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import 'package:safee_meet/core/shared/widgets/app_snackbar.dart';
 
 Future<void> _openUrl(BuildContext context, String url) async {
@@ -242,17 +241,6 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                             onTap: () =>
                                 context.push(AppRoutes.emergencyContacts),
                           ),
-                          if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
-                            BlocBuilder<CurrentSubscriptionCubit,
-                                CurrentSubscriptionState>(
-                              builder: (context, subState) => _NavTile(
-                                icon: Icons.credit_card,
-                                iconColor: AppColors.warning,
-                                label: 'Subscription & Billing',
-                                subtitle: _subscriptionSubtitle(subState),
-                                onTap: () => context.push(AppRoutes.subscription),
-                              ),
-                            ),
                         ]),
                         const SizedBox(height: 24),
                         const _Label('PRIVACY & SECURITY'),
@@ -381,25 +369,6 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         if ((profile.email ?? profile.phone) != null)
           profile.email ?? profile.phone!
       ].where((value) => value.trim().isNotEmpty).join(' · ');
-
-  String _subscriptionSubtitle(CurrentSubscriptionState state) {
-    switch (state.status) {
-      case CurrentSubscriptionStatus.initial:
-      case CurrentSubscriptionStatus.loading:
-        return 'Loading plan…';
-      case CurrentSubscriptionStatus.error:
-        return 'Manage your subscription';
-      case CurrentSubscriptionStatus.loaded:
-        final sub = state.subscription;
-        if (sub == null) return 'Current plan: Free';
-        final suffix = sub.isCancelled
-            ? ' (Cancelled)'
-            : sub.isTrialing
-                ? ' (Trial)'
-                : '';
-        return 'Current plan: ${sub.planLabel}$suffix';
-    }
-  }
 
   String _verificationLabel(String level) => switch (level) {
         'level3' => 'Level 3 Verified',

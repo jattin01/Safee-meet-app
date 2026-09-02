@@ -4,14 +4,11 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
-import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-// flutter_stripe requires a FlutterFragmentActivity (not FlutterActivity) on
-// Android — it needs the Activity Result API for 3D Secure / browser-based
-// payment authentication flows.
-class MainActivity : FlutterFragmentActivity() {
+class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

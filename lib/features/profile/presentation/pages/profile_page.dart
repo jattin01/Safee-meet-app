@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -14,12 +13,9 @@ import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
-import '../../../../core/shared/utils/feature_gate.dart';
 import '../../../../core/shared/utils/verification_gate.dart';
 import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
-import '../../../subscription/domain/entities/current_subscription_entity.dart';
-import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
 import '../../domain/entities/profile_entity.dart';
 import '../bloc/profile_bloc.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -150,7 +146,6 @@ class _ProfileView extends StatelessWidget {
     return Future.wait([
       profileDone,
       context.read<ReviewsCubit>().load(forceRefresh: true),
-      context.read<CurrentSubscriptionCubit>().load(forceRefresh: true),
     ]);
   }
 
@@ -160,19 +155,6 @@ class _ProfileView extends StatelessWidget {
         'level1' => 'Level 1 Verified',
         _ => 'Not verified yet',
       };
-
-  String _membershipSubtitle(CurrentSubscriptionState state) {
-    switch (state.status) {
-      case CurrentSubscriptionStatus.initial:
-      case CurrentSubscriptionStatus.loading:
-        return 'Loading plan…';
-      case CurrentSubscriptionStatus.error:
-        return 'View billing details';
-      case CurrentSubscriptionStatus.loaded:
-        final sub = state.subscription;
-        return sub == null ? 'Free plan' : '${sub.planLabel} plan';
-    }
-  }
 
   void _confirmDeleteAccount(BuildContext context) {
     showDialog(
@@ -288,13 +270,6 @@ class _ProfileView extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
-                      BlocBuilder<CurrentSubscriptionCubit,
-                          CurrentSubscriptionState>(
-                        builder: (context, subState) =>
-                            _CurrentPlanCard(state: subState),
-                      ),
-                    const SizedBox(height: 16),
                     AppListCard(children: [
                       _NavTile(
                         icon: Icons.ios_share,
@@ -303,13 +278,6 @@ class _ProfileView extends StatelessWidget {
                         subtitle: 'Send your PIN and QR code',
                         onTap: () {
                           if (!requireVerification(context)) return;
-                          if (!requireFeature(
-                            context,
-                            PlanFeature.qrCode,
-                            'QR Code Generation',
-                          )) {
-                            return;
-                          }
                           _shareSafeePinAndScanner(context, profile?.safeePIN);
                         },
                       ),
@@ -335,17 +303,6 @@ class _ProfileView extends StatelessWidget {
                           context.push(AppRoutes.reviews);
                         },
                       ),
-                      if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS)
-                        BlocBuilder<CurrentSubscriptionCubit,
-                            CurrentSubscriptionState>(
-                          builder: (context, subState) => _NavTile(
-                            icon: Icons.workspace_premium,
-                            iconColor: AppColors.purple,
-                            label: 'Membership & Billing',
-                            subtitle: _membershipSubtitle(subState),
-                            onTap: () => context.push(AppRoutes.subscription),
-                          ),
-                        ),
                     ]),
                     const SizedBox(height: 16),
                     AppListCard(children: [
@@ -383,17 +340,8 @@ class _ProfileAvatarSection extends StatelessWidget {
     final isVerifiedLevel =
         level == 'level1' || level == 'level2' || level == 'level3';
 
-    final plan =
-        context.watch<CurrentSubscriptionCubit>().state.subscription?.plan;
-    // The checkmark badge and the Premium badge are both plan perks
-    // ("Verified Badge Display" / "Premium Badge" in a plan's features[]),
-    // not automatic consequences of completing verification or paying —
-    // a verified user on a plan without verified_badge still shouldn't see
-    // the checkmark, same idea as every other requireFeature() gate.
-    final showVerifiedBadge = isVerifiedLevel &&
-        (plan?.hasFeature(PlanFeature.verifiedBadge) ?? false);
-    final showPremiumBadge =
-        plan?.hasFeature(PlanFeature.premiumBadge) ?? false;
+    final showVerifiedBadge = isVerifiedLevel;
+    const showPremiumBadge = false;
 
     // DarkScreenHeader lays out its `child` slot in a start-aligned Column,
     // so without forcing full width here this section just shrink-wraps to
@@ -848,13 +796,6 @@ class _PinCard extends StatelessWidget {
           GestureDetector(
             onTap: () {
               if (!requireVerification(context)) return;
-              if (!requireFeature(
-                context,
-                PlanFeature.qrCode,
-                'QR Code Generation',
-              )) {
-                return;
-              }
               showDialog(
                 context: context,
                 builder: (_) => Dialog(
@@ -1071,188 +1012,6 @@ class _TrustScoreRow extends StatelessWidget {
   }
 }
 
-class _CurrentPlanCard extends StatefulWidget {
-  final CurrentSubscriptionState state;
-  const _CurrentPlanCard({required this.state});
-
-  @override
-  State<_CurrentPlanCard> createState() => _CurrentPlanCardState();
-}
-
-class _CurrentPlanCardState extends State<_CurrentPlanCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _shimmerController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2500),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
-  }
-
-  static String _formatDate(DateTime d) => DateFormat('MMM d, yyyy').format(d);
-
-  String? _subtitleFor(CurrentSubscriptionEntity sub) {
-    if (sub.isCancelled && sub.renewsAt != null) {
-      return 'Access ends ${_formatDate(sub.renewsAt!)}';
-    }
-    if (sub.isTrialing && sub.hasTrial) {
-      return sub.renewsAt != null
-          ? 'Trial · ${sub.trialDays}d · ends ${_formatDate(sub.renewsAt!)}'
-          : 'Trial · ${sub.trialDays} days';
-    }
-    if (sub.hasActiveAccess && sub.renewsAt != null) {
-      final cadence = sub.billingCycle == 'yearly' ? 'yr' : 'mo';
-      return '\$${sub.price.toStringAsFixed(2)}/$cadence · Renews ${_formatDate(sub.renewsAt!)}';
-    }
-    if (!sub.hasActiveAccess) return sub.statusLabel;
-    return null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final sub = widget.state.subscription;
-    final isLoading =
-        widget.state.status == CurrentSubscriptionStatus.loading &&
-            !widget.state.hasLoadedOnce;
-    final label = isLoading ? '—' : (sub?.planLabel ?? 'Free / Level 1');
-    final hasPaidAccess = sub?.hasActiveAccess ?? false;
-    final subtitle = isLoading
-        ? 'Loading plan…'
-        : (sub != null ? _subtitleFor(sub) : "You're on the Free plan");
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: Stack(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.darkBg,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(14)),
-                  child: const Icon(Icons.workspace_premium,
-                      color: Colors.white, size: 24),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'CURRENT PLAN',
-                        style: GoogleFonts.inter(
-                            color: AppColors.textTertiary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.6),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(label,
-                          style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800)),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        Text(subtitle,
-                            style: const TextStyle(
-                                color: AppColors.textTertiary, fontSize: 11)),
-                      ],
-                    ],
-                  ),
-                ),
-                // No plan above the user's current one — there's nothing left to
-                // upgrade to, so the Upgrade/Manage CTA is hidden entirely and
-                // only the plan itself (already rendered above) is shown.
-                if (!widget.state.isOnHighestPlan && (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS))
-                  GestureDetector(
-                    onTap: () => context.push(
-                      AppRoutes.subscription,
-                      extra: hasPaidAccess ? null : 'premium',
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 10),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [
-                          AppColors.primary,
-                          AppColors.primaryLight
-                        ]),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(hasPaidAccess ? 'Manage' : 'Upgrade Level 2',
-                          style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  )
-                else
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.check,
-                        color: AppColors.success, size: 18),
-                  ),
-              ],
-            ),
-          ),
-          // Sweeping light shimmer effect
-          if (!widget.state.isOnHighestPlan)
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _shimmerController,
-                builder: (context, child) {
-                  final slide = (_shimmerController.value * 3) - 1.5;
-                  return FractionalTranslation(
-                    translation: Offset(slide, 0),
-                    child: child,
-                  );
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.white.withOpacity(0.0),
-                        Colors.white.withOpacity(0.12),
-                        Colors.white.withOpacity(0.0),
-                      ],
-                      stops: const [0.2, 0.5, 0.8],
-                      begin: const Alignment(-1.0, -0.3),
-                      end: const Alignment(1.0, 0.3),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _NavTile extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
@@ -1271,18 +1030,18 @@ class _NavTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(children: [
             Container(
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.12), shape: BoxShape.circle),
+                color: iconColor.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
               child: Icon(icon, color: iconColor, size: 19),
             ),
             const SizedBox(width: 14),
@@ -1298,27 +1057,24 @@ class _NavTile extends StatelessWidget {
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(subtitle!,
-                        style: TextStyle(
+                        style: const TextStyle(
                             color: AppColors.textTertiary, fontSize: 12)),
                   ],
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
-          ],
+            const Icon(Icons.chevron_right,
+                color: AppColors.textTertiary, size: 20),
+          ]),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class _ProfileSkeletonState extends StatelessWidget {
   const _ProfileSkeletonState();
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
+  Widget build(BuildContext context) => Column(children: [
         const SkeletonItem(
             width: 88, height: 88, borderRadius: 22, color: Colors.white12),
         const SizedBox(height: 14),
@@ -1327,18 +1083,5 @@ class _ProfileSkeletonState extends StatelessWidget {
         const SizedBox(height: 8),
         const SkeletonItem(
             width: 180, height: 16, borderRadius: 6, color: Colors.white12),
-        const SizedBox(height: 18),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SkeletonItem(
-                width: 80, height: 26, borderRadius: 20, color: Colors.white12),
-            const SizedBox(width: 8),
-            const SkeletonItem(
-                width: 80, height: 26, borderRadius: 20, color: Colors.white12),
-          ],
-        ),
-      ],
-    );
-  }
+      ]);
 }

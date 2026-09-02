@@ -96,9 +96,6 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
-  # Payments (Stripe — subscription checkout, test mode only for now)
-  flutter_stripe: ^11.3.0
-
   # Identity Verification (National ID + facial liveness) — 'core' variant:
   # no NFC passport reading, ID card/passport scan + selfie liveness only.
   didit_sdk: ^4.5.3
