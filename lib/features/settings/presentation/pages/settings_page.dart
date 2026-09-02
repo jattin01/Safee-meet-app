@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -52,6 +54,10 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
     _locationEnabled = hive.isLocationPermGranted;
     _sosAlertsEnabled = hive.isSosAlertsEnabled;
     _syncLocationPermission();
+    // Settings can be opened while the app-wide profile load is still pending
+    // (or immediately after an account switch). Ensure this page requests the
+    // data it renders; concurrent calls are coalesced by CurrentUserCubit.
+    unawaited(sl<CurrentUserCubit>().load());
   }
 
   @override
@@ -182,8 +188,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
       },
       child: BlocBuilder<CurrentUserCubit, CurrentUserState>(
       builder: (context, state) {
-        if (state.status == CurrentUserStatus.loading &&
-            state.profile == null) {
+        if (state.profile == null &&
+            state.status != CurrentUserStatus.error) {
           return const Scaffold(
             backgroundColor: AppColors.lightBg,
             body: _SettingsSkeletonState(),

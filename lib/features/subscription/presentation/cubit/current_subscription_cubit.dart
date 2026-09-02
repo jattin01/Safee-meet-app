@@ -89,6 +89,14 @@ class CurrentSubscriptionCubit extends Cubit<CurrentSubscriptionState> {
   Future<void> load({bool forceRefresh = false}) {
     final inFlight = _inFlight;
     if (inFlight != null) return inFlight;
+
+    // The router guard and shell can both call load() on every navigation.
+    // Once this app-wide cubit has data, those normal calls must use it;
+    // only an explicit refresh is allowed to make another network round trip.
+    if (!forceRefresh && state.status == CurrentSubscriptionStatus.loaded) {
+      return Future.value();
+    }
+
     final future = _load(forceRefresh: forceRefresh);
     _inFlight = future;
     return future.whenComplete(() => _inFlight = null);

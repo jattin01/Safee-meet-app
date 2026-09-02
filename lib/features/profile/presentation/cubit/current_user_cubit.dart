@@ -70,6 +70,14 @@ class CurrentUserCubit extends Cubit<CurrentUserState> {
   Future<void> load({bool forceRefresh = false}) {
     final inFlight = _inFlight;
     if (inFlight != null) return inFlight;
+
+    // The router/shell re-expose this singleton during navigation. Keep the
+    // already loaded profile instead of making GET /auth/me on every tap.
+    // Callers that genuinely need current data use forceRefresh: true.
+    if (!forceRefresh && state.status == CurrentUserStatus.loaded) {
+      return Future.value();
+    }
+
     final future = _load(forceRefresh: forceRefresh);
     _inFlight = future;
     return future.whenComplete(() => _inFlight = null);

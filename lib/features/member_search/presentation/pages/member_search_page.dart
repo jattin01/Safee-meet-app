@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -56,6 +58,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
   final _imagePicker = ImagePicker();
   bool _qrHandled = false;
   bool _resolvingGalleryImage = false;
+  bool _isBranchVisible = true;
   final _resultSectionKey = GlobalKey();
 
   @override
@@ -66,7 +69,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
 
     // If opened directly on the QR tab, start the scanner
     if (_activeTab == 1) {
-      _scannerController.start();
+      _startScannerIfVisible();
     }
 
     // Clear old result/error when user types a new PIN
@@ -90,6 +93,39 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // StatefulShellRoute.indexedStack keeps inactive branches alive in an
+    // Offstage/TickerMode(false) subtree. A camera preview must be stopped
+    // there: otherwise CameraX keeps filling a detached SurfaceView's buffer
+    // queue, which causes the white preview seen after switching tabs.
+    final isVisible = TickerMode.of(context);
+    if (_isBranchVisible == isVisible) return;
+    _isBranchVisible = isVisible;
+
+    if (!isVisible) {
+      unawaited(_scannerController.stop());
+    } else {
+      _startScannerIfVisible();
+    }
+  }
+
+  void _startScannerIfVisible() {
+    if (!_isBranchVisible || _activeTab != 1 || _qrHandled) return;
+
+    // MobileScanner needs its preview SurfaceView attached and laid out before
+    // CameraX opens the camera. This is especially important after an Offstage
+    // tab becomes visible again.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isBranchVisible || _activeTab != 1 || _qrHandled) {
+        return;
+      }
+      unawaited(_scannerController.start());
+    });
+  }
+
   void _search() {
     final pin = _pinCtrl.text.trim().toUpperCase();
     if (pin.length != 10 || !pin.startsWith('SM')) return;
@@ -107,7 +143,7 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
 
   void _rescan() {
     setState(() => _qrHandled = false);
-    _scannerController.start();
+    _startScannerIfVisible();
     context.read<MemberSearchBloc>().add(const MemberSearchReset());
   }
 
@@ -188,8 +224,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
         updatedAt: DateTime.now(),
       ),
     );
-    if (mounted && _activeTab == 1 && !_qrHandled) {
-      _scannerController.start();
+    if (mounted) {
+      _startScannerIfVisible();
     }
   }
 
@@ -223,8 +259,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                 Navigator.pop(context);
                 _scannerController.stop();
                 await ctx.push(AppRoutes.subscription, extra: 'basic_unlimited');
-                if (mounted && _activeTab == 1 && !_qrHandled) {
-                  _scannerController.start();
+                if (mounted) {
+                  _startScannerIfVisible();
                 }
               },
             ),
@@ -236,8 +272,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
 
     _scannerController.stop();
     await ctx.push('${AppRoutes.meetingSetup}?memberId=${member.id}', extra: member);
-    if (mounted && _activeTab == 1 && !_qrHandled) {
-      _scannerController.start();
+    if (mounted) {
+      _startScannerIfVisible();
     }
   }
 
@@ -287,12 +323,13 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                         activeTab: _activeTab,
                         onTabChanged: (i) {
                           if (_activeTab != i) {
-                            if (i == 1 && !_qrHandled) {
-                              _scannerController.start();
-                            } else {
+                            if (i != 1) {
                               _scannerController.stop();
                             }
                             setState(() => _activeTab = i);
+                            if (i == 1) {
+                              _startScannerIfVisible();
+                            }
                             context.read<MemberSearchBloc>().add(MemberSearchReset());
                             if (i == 1) {
                               _pinCtrl.clear();

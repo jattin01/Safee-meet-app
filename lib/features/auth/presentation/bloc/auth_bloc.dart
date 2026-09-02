@@ -9,6 +9,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../../core/dependency_injection/injection_container.dart';
+import '../../../../core/services/fcm_service.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
@@ -277,6 +278,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       sl<ProfileBloc>().reset();
       sl<CurrentUserCubit>().reset();
       sl<CurrentSubscriptionCubit>().reset();
+      sl<FcmService>().resetSession();
       sl<SocketService>().disconnect();
     } catch (_) {}
   }

@@ -1033,8 +1033,7 @@ class _UpgradeCardState extends State<_UpgradeCard>
       child: SlideTransition(
         position: _slideAnimation,
         child: GestureDetector(
-          onTap:
-              isHighestPlan ? null : () => context.push(AppRoutes.subscription),
+          onTap:() => context.push(AppRoutes.subscription),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Container(

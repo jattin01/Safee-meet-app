@@ -23,13 +23,19 @@ class FcmService {
   );
 
   bool _initialized = false;
+  String? _lastSyncedUserId;
+  Future<void>? _tokenSyncInFlight;
 
   FcmService(this._firestore, this._session, this._api)
       : _messaging = FirebaseMessaging.instance;
 
-  /// Called after successful login. Safe to call multiple times.
+  /// Called while an authenticated user navigates the app. Notification
+  /// listeners are installed once and the token is synced once per session.
   Future<void> initialize() async {
-    if (_initialized) return;
+    if (_initialized) {
+      await _syncTokenForCurrentUser();
+      return;
+    }
     _initialized = true;
 
     // Background handler is registered in main.dart before runApp().
@@ -51,9 +57,7 @@ class FcmService {
       sound: true,
     );
 
-    final token = await _messaging.getToken();
-    print('[FCM] getToken() -> ${token ?? "null"}');
-    if (token != null) await _saveToken(token);
+    await _syncTokenForCurrentUser();
 
     // Keep token fresh — FCM rotates it occasionally.
     _messaging.onTokenRefresh.listen(_saveToken);
@@ -66,6 +70,47 @@ class FcmService {
     // App was launched (cold start) by tapping a notification.
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) _handleNotificationTap(initialMessage);
+  }
+
+  /// An FCM token belongs to the app installation, not to a login session.
+  /// Register it once for each signed-in user, but never on every router guard
+  /// run (which happens on every button/navigation tap).
+  Future<void> _syncTokenForCurrentUser() async {
+    final userId = await _session.getUserId();
+    if (userId == null || userId == _lastSyncedUserId) return;
+
+    // Several route guards can run at the same time during navigation. Share
+    // their in-flight sync instead of POSTing the same token repeatedly.
+    final pendingSync = _tokenSyncInFlight;
+    if (pendingSync != null) {
+      await pendingSync;
+      return _syncTokenForCurrentUser();
+    }
+
+    final sync = _syncTokenForUser(userId);
+    _tokenSyncInFlight = sync;
+    try {
+      await sync;
+    } finally {
+      if (identical(_tokenSyncInFlight, sync)) {
+        _tokenSyncInFlight = null;
+      }
+    }
+  }
+
+  Future<void> _syncTokenForUser(String userId) async {
+    final token = await _messaging.getToken();
+    print('[FCM] getToken() -> ${token ?? "null"}');
+    if (token == null || await _session.getUserId() != userId) return;
+
+    await _saveToken(token, userId: userId);
+    _lastSyncedUserId = userId;
+  }
+
+  /// Clears the per-session guard after logout or account deletion. The next
+  /// login (including the same account) will register the token again.
+  void resetSession() {
+    _lastSyncedUserId = null;
   }
 
   Future<void> _initLocalNotifications() async {
@@ -83,8 +128,8 @@ class FcmService {
         ?.createNotificationChannel(_androidChannel);
   }
 
-  Future<void> _saveToken(String token) async {
-    final uid = await _session.getUserId();
+  Future<void> _saveToken(String token, {String? userId}) async {
+    final uid = userId ?? await _session.getUserId();
     if (uid == null) {
       print('[FCM] _saveToken skipped — no logged-in user id in storage yet');
       return;
