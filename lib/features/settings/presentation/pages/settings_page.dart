@@ -16,7 +16,6 @@ import '../../../../core/shared/widgets/app_list_card.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
 import '../../../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../../../features/auth/presentation/bloc/auth_event.dart';
-import '../../../../features/auth/presentation/bloc/auth_state.dart';
 import '../../../../core/services/google_auth_service.dart';
 import '../../../../core/shared/widgets/section_header.dart';
 import '../../../../core/shared/widgets/skeleton_item.dart';
@@ -344,40 +343,6 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                           ),
                         ),
                         const SizedBox(height: 16),
-                        GestureDetector(
-                          onTap: _deleteAccount,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: AppColors.error.withOpacity(0.5),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.delete_outline,
-                                  color: AppColors.error,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Delete Account',
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.error,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
                         Center(
                           child: Text(
                             'SAFEE MEET v2.4.1',
@@ -424,48 +389,6 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
     context.go(AppRoutes.auth);
   }
 
-  Future<void> _deleteAccount() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Account', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text(
-          'Are you sure you want to delete your account? This action is permanent and cannot be undone. All your data will be erased.',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !mounted) return;
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-    
-    final authBloc = context.read<AuthBloc>();
-    authBloc.add(const DeleteAccountRequested());
-    
-    await authBloc.stream.firstWhere(
-      (state) => state is LogoutSuccess || state is AuthFailureState || state is AuthError,
-    );
-    
-    if (!mounted) return;
-    context.pop(); // Pop loading dialog
-    context.go(AppRoutes.auth);
-  }
 }
 
 class _ProfileMiniCard extends StatelessWidget {
