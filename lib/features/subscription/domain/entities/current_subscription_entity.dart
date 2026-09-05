@@ -54,7 +54,18 @@ class CurrentSubscriptionEntity extends Equatable {
   /// Whether the account currently gets paid-plan perks — true while active
   /// or trialing, even if the user has already scheduled a cancellation
   /// that only takes effect at [renewsAt].
-  bool get hasActiveAccess => isActive || isTrialing;
+  ///
+  /// Also guards against [renewsAt] having already passed: the backend is
+  /// expected to flip `status` away from 'active'/'trialing' once a period
+  /// lapses, but until that server-side behavior is confirmed/implemented,
+  /// this is a client-side safety net so a stale 'trialing'/'active' status
+  /// past its own renewal date doesn't keep unlocking paid features
+  /// forever. Remove this date check once the backend reliably updates
+  /// `status` itself on expiry — `status` should then be the sole source
+  /// of truth again.
+  bool get hasActiveAccess =>
+      (isActive || isTrialing) &&
+      (renewsAt == null || renewsAt!.isAfter(DateTime.now()));
 
   bool get hasTrial => (trialDays ?? plan.trialDays ?? 0) > 0;
 

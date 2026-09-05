@@ -69,9 +69,19 @@ class SecureStorageService {
       _storage.write(key: _kAuthStatus, value: 'authenticated');
 
   /// True only if a Sanctum access token AND auth status are both stored.
+  ///
+  /// This runs on every single navigation (AppRouter's redirect guard calls
+  /// it on every route change, not just at startup), so the two reads are
+  /// fired concurrently instead of sequentially — same two platform-channel
+  /// round trips either way, same result, just not paying for both back to
+  /// back on the navigation-critical path.
   Future<bool> isAuthenticated() async {
-    final token  = await getAccessToken();
-    final status = await _storage.read(key: _kAuthStatus);
+    final results = await Future.wait([
+      getAccessToken(),
+      _storage.read(key: _kAuthStatus),
+    ]);
+    final token  = results[0];
+    final status = results[1];
     return token != null && token.isNotEmpty && status == 'authenticated';
   }
 

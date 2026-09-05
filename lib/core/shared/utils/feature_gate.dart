@@ -52,7 +52,13 @@ bool requireFeature(
 ) {
   final subscription =
       context.read<CurrentSubscriptionCubit>().state.subscription;
-  if (subscription != null && subscription.plan.hasFeature(featureSlug)) {
+  // hasActiveAccess also rejects an expired/lapsed subscription row (see
+  // its doc comment) — without it, a subscription object that's merely
+  // non-null (regardless of status or whether renewsAt has already
+  // passed) would keep unlocking paid features indefinitely.
+  if (subscription != null &&
+      subscription.hasActiveAccess &&
+      subscription.plan.hasFeature(featureSlug)) {
     return true;
   }
 
