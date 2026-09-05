@@ -377,12 +377,28 @@ class AppRouter {
 
   Future<bool> _isVerifiedUser(CurrentUserCubit cubit) async {
     if (cubit.state.profile == null) {
-      if (cubit.state.status == CurrentUserStatus.loading) {
-        await cubit.stream.firstWhere(
-          (s) => s.profile != null || s.status == CurrentUserStatus.error,
-        );
-      } else {
-        await cubit.load();
+      // This runs on the navigation-critical path (every tap into a
+      // restricted route blocks here until this resolves), so it must
+      // never hang navigation indefinitely on a slow/unresponsive network —
+      // bound the wait and fall through to `cubit.isVerified` below on
+      // timeout. That still evaluates to false here (profile is still
+      // null), i.e. the same fail-closed outcome the real request would
+      // eventually reach anyway if it kept failing — this only stops the
+      // UI from freezing while waiting to find that out. The load already
+      // kicked off keeps running in the background regardless, so the very
+      // next navigation attempt picks up the real result once it lands.
+      try {
+        if (cubit.state.status == CurrentUserStatus.loading) {
+          await cubit.stream
+              .firstWhere(
+                (s) => s.profile != null || s.status == CurrentUserStatus.error,
+              )
+              .timeout(const Duration(seconds: 5));
+        } else {
+          await cubit.load().timeout(const Duration(seconds: 5));
+        }
+      } on TimeoutException {
+        // Handled by falling through to `cubit.isVerified` below.
       }
     }
     return cubit.isVerified;
