@@ -78,11 +78,20 @@ class UserModel {
             (json['phoneVerifiedAt'] ?? json['phone_verified_at']) as String?,
         lastLoginAt: (json['lastLoginAt'] ?? json['last_login_at']) as String?,
         createdAt: (json['createdAt'] ?? json['created_at']) as String?,
-        verificationLevel: ((json['verificationLevelId'] ??
-                json['verification_level_id']) as num?)
-            ?.toInt(),
+        verificationLevel: _parseLevelId(json),
         verificationStatus: (json['verificationStatus'] ?? json['verification_status']) as String?,
       );
+
+  static int? _parseLevelId(Map<String, dynamic> d) {
+    final id = d['verificationLevelId'] ?? d['verification_level_id'];
+    if (id is num) return id.toInt();
+    final level = d['verificationLevel'] ?? d['verification_level'];
+    if (level is num) return level.toInt();
+    if (level is String) {
+      return int.tryParse(RegExp(r'\d+').stringMatch(level) ?? '');
+    }
+    return null;
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,

@@ -85,7 +85,14 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
         safetyScore: (d['safetyScore'] as num?)?.toInt() ?? 0,
         totalMeetings: (d['totalMeetings'] as num?)?.toInt() ?? 0,
         badges: List<String>.from(d['badges'] as List? ?? []),
+        badgeIcon: _parseBadgeIconUrl(d['badgeIcon']),
       );
+
+  static String? _parseBadgeIconUrl(dynamic url) {
+    if (url == null || url is! String || url.isEmpty) return null;
+    if (url.startsWith('http')) return url;
+    return 'http://168.144.112.102:8080$url';
+  }
 
   Failure _map(DioException e) {
     if (isConnectivityError(e)) return const NetworkFailure();

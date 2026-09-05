@@ -344,21 +344,21 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding:
-                        EdgeInsets.fromLTRB(16, 20, 16, context.bottomSafePadding(32)),
+                        EdgeInsets.fromLTRB(16, 16, 16, context.bottomSafePadding(32)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _MeetingProgressCard(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         _TrustedContactsCard(contacts: data?.emergencyContacts),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         _LiveLocationCard(
                           position: currentPosition,
                           meetingLocation: data?.meeting?.location,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         _buildActionButtons(data),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         _EndMeetingButton(loading: _ending, onTap: _showEndDialog),
                       ],
                     ),
@@ -665,17 +665,17 @@ class _MapSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 200,
+      height: 230,
       child: Stack(
         children: [
           _hasMeetingLocation
               ? _LiveMap(meeting: meeting!, partner: partner)
               : const _MapPlaceholder(),
 
-          // Countdown-to-meeting badge (top-left)
+          // Countdown-to-meeting badge (top-right)
           Positioned(
             top: 14,
-            left: 16,
+            right: 16,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
@@ -701,11 +701,11 @@ class _MapSection extends StatelessWidget {
             ),
           ),
 
-          // Live distance-to-meeting badge (bottom-right)
+          // Live distance-to-meeting badge (bottom-left)
           if (_distanceLabel != null)
             Positioned(
               bottom: 12,
-              right: 14,
+              left: 14,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
@@ -763,6 +763,7 @@ class _LiveMap extends StatelessWidget {
       painter: _LiveMapPainter(
         hasPartnerLocation: hasPartnerLocation,
         partnerName: partner?.name,
+        meetingLocation: meeting.location,
       ),
       child: const SizedBox.expand(),
     );
@@ -772,7 +773,8 @@ class _LiveMap extends StatelessWidget {
 class _LiveMapPainter extends CustomPainter {
   final bool hasPartnerLocation;
   final String? partnerName;
-  const _LiveMapPainter({required this.hasPartnerLocation, this.partnerName});
+  final String? meetingLocation;
+  const _LiveMapPainter({required this.hasPartnerLocation, this.partnerName, this.meetingLocation});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -828,7 +830,7 @@ class _LiveMapPainter extends CustomPainter {
           Offset(startX, midY), 7, Paint()..color = const Color(0xFF3B82F6));
       _drawBadge(canvas, Offset(startX, midY + 22),
           partnerName?.split(' ').first ?? 'Partner',
-          const Color(0xFF1E293B), Colors.white.withOpacity(0.95));
+          Colors.white, const Color(0xFF1E293B), maxWidth: 80);
     } else {
       // Still waiting for the partner's first GPS ping — a hollow ring
       // instead of a solid dot, and no route line to a position we don't
@@ -842,7 +844,7 @@ class _LiveMapPainter extends CustomPainter {
           ..style = PaintingStyle.stroke,
       );
       _drawBadge(canvas, Offset(startX, midY + 22), 'You',
-          const Color(0xFF1E293B), Colors.white.withOpacity(0.95));
+          Colors.white, const Color(0xFF1E293B), maxWidth: 80);
     }
 
     // Meeting point pin (red) — always known, this is fixed at booking time.
@@ -862,12 +864,13 @@ class _LiveMapPainter extends CustomPainter {
     canvas.drawCircle(Offset(px, py - 6), 4, Paint()..color = Colors.white);
 
     // Label under the meeting location circle
-    _drawBadge(canvas, Offset(px, py + 26), 'Meeting Location',
-        const Color(0xFFDC2626), Colors.white.withOpacity(0.95));
+    final locationLabel = meetingLocation?.isNotEmpty == true ? 'Meeting Location:\n$meetingLocation' : 'Meeting Location';
+    _drawBadge(canvas, Offset(px, py + 26), locationLabel,
+        Colors.white, const Color(0xFFDC2626), maxWidth: 120);
   }
 
   void _drawBadge(Canvas canvas, Offset point, String text, Color textColor,
-      Color bgColor) {
+      Color bgColor, {double? maxWidth}) {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
@@ -878,8 +881,11 @@ class _LiveMapPainter extends CustomPainter {
           letterSpacing: 0.2,
         ),
       ),
+      textAlign: TextAlign.center,
       textDirection: ui.TextDirection.ltr,
-    )..layout();
+      maxLines: 2,
+      ellipsis: '...',
+    )..layout(maxWidth: maxWidth ?? double.infinity);
 
     final bgRect = Rect.fromCenter(
       center: point,
@@ -973,7 +979,7 @@ class _MapPainter extends CustomPainter {
       text: const TextSpan(
         text: 'You',
         style: TextStyle(
-          color: Color(0xFF1E293B),
+          color: Colors.white,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.2,
@@ -989,7 +995,7 @@ class _MapPainter extends CustomPainter {
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(userBgRect, const Radius.circular(6)),
-      Paint()..color = Colors.white.withOpacity(0.95),
+      Paint()..color = const Color(0xFF1E293B),
     );
     tpUser.paint(
       canvas,
@@ -1016,7 +1022,7 @@ class _MapPainter extends CustomPainter {
       text: const TextSpan(
         text: 'Meeting Location',
         style: TextStyle(
-          color: Color(0xFFDC2626),
+          color: Colors.white,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.2,
@@ -1032,7 +1038,7 @@ class _MapPainter extends CustomPainter {
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(meetingBgRect, const Radius.circular(6)),
-      Paint()..color = Colors.white.withOpacity(0.95),
+      Paint()..color = const Color(0xFFDC2626),
     );
     tpMeeting.paint(
       canvas,
@@ -1057,7 +1063,7 @@ class _MeetingProgressCard extends StatelessWidget {
     ];
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1075,7 +1081,7 @@ class _MeetingProgressCard extends StatelessWidget {
               letterSpacing: 1.0,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           Row(
             children: [
               for (int i = 0; i < steps.length; i++) ...[
@@ -1561,7 +1567,7 @@ class _ActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(16),

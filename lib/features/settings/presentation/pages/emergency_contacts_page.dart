@@ -186,7 +186,13 @@ class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
                           )
                         else
                           GestureDetector(
-                            onTap: () => setState(() => _showAddForm = true),
+                            onTap: () {
+                              if (contacts.length >= 3) {
+                                AppSnackbar.error(context, 'You can only add up to 3 emergency contacts.');
+                              } else {
+                                setState(() => _showAddForm = true);
+                              }
+                            },
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(

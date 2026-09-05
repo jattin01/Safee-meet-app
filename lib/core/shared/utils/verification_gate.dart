@@ -26,6 +26,18 @@ bool requireVerification(BuildContext context) {
   final cubit = context.read<CurrentUserCubit>();
   if (cubit.isVerified) return true;
 
+  if (!cubit.state.hasProfile) {
+    if (cubit.state.status != CurrentUserStatus.loading) {
+      cubit.load();
+    }
+    AppSnackbar.info(
+      context,
+      'Loading profile, please wait a moment...',
+      duration: const Duration(seconds: 1),
+    );
+    return false;
+  }
+
   AppSnackbar.info(
     context,
     'Complete your verification to access this feature.',
@@ -47,6 +59,19 @@ bool requireVerification(BuildContext context) {
 /// been submitted; the Verification Status page for every other case.
 void openVerificationScreen(BuildContext context) {
   final cubit = context.read<CurrentUserCubit>();
+  
+  if (!cubit.state.hasProfile) {
+    if (cubit.state.status != CurrentUserStatus.loading) {
+      cubit.load();
+    }
+    AppSnackbar.info(
+      context,
+      'Loading profile, please wait a moment...',
+      duration: const Duration(seconds: 1),
+    );
+    return;
+  }
+
   final verificationStatus = cubit.state.profile?.verificationStatus;
   
   context.push(

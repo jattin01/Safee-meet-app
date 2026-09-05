@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1171,6 +1172,133 @@ class _MemberResultCardState extends State<_MemberResultCard> {
     }
   }
 
+  void _showMemberBadgeDialog(BuildContext context, MemberEntity member) {
+    final level = member.verificationLevel;
+    final levelName = level == 'level3'
+        ? 'Level 3 • Professional'
+        : level == 'level2'
+            ? 'Level 2 • Enhanced Trust'
+            : 'Level 1 • Identity Verified';
+    final tierColor = level == 'level3'
+        ? AppColors.warning
+        : level == 'level2'
+            ? AppColors.blue
+            : AppColors.primary;
+
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.85),
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF141927),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: tierColor.withOpacity(0.35), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: tierColor.withOpacity(0.2),
+                blurRadius: 30,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: tierColor.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.verified_user_rounded,
+                          color: tierColor, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Official Trust Certificate',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            levelName,
+                            style: TextStyle(
+                              color: tierColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        if (!dialogContext.mounted) return;
+                        Navigator.of(dialogContext).pop();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close,
+                            color: Colors.white70, size: 18),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 380),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: member.badgeIcon != null
+                        ? Image.network(
+                            member.badgeIcon!,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const SizedBox(
+                              width: double.infinity,
+                              height: 380,
+                              child: Center(
+                                child: Icon(Icons.broken_image,
+                                    color: Colors.white24, size: 48),
+                              ),
+                            ),
+                          )
+                        : Image.asset(
+                            level == 'level3' || level == 'level2'
+                                ? 'assets/images/level2_image-removebg.png'
+                                : 'assets/images/level1_badge-removebg.png',
+                            fit: BoxFit.contain,
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _spinner(Color color) => SizedBox(
         height: 16,
         width: 16,
@@ -1228,17 +1356,49 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(member.name,
-                                  style: GoogleFonts.inter(
-                                      color: AppColors.textPrimary,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800)),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(member.name,
+                                        style: GoogleFonts.inter(
+                                            color: AppColors.textPrimary,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800)),
+                                  ),
+                                  if (member.verificationLevel != 'none') ...[
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () => _showMemberBadgeDialog(context, member),
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(left: 2, right: 8, top: 4, bottom: 4),
+                                        child: Icon(
+                                          Icons.verified,
+                                          color: member.verificationLevel == 'level3'
+                                              ? AppColors.warning
+                                              : member.verificationLevel == 'level2'
+                                                  ? AppColors.blue
+                                                  : AppColors.primary,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                               const SizedBox(height: 2),
                               Text('SAFEE PIN: ${member.safeePIN}',
                                   style: const TextStyle(
                                       color: AppColors.textTertiary,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600)),
+                              if (member.verificationLevel != 'none') ...[
+                                const SizedBox(height: 8),
+                                _VerifiedPill(
+                                  label: '${member.verificationLevel.replaceAll('level', 'Level ')} Verified',
+                                  color: AppColors.success,
+                                ),
+                              ],
                               if (member.badges.isNotEmpty) ...[
                                 const SizedBox(height: 6),
                                 Wrap(

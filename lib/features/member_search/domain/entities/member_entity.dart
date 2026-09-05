@@ -11,6 +11,7 @@ class MemberEntity extends Equatable {
   final int safetyScore;
   final int totalMeetings;
   final List<String> badges;
+  final String? badgeIcon;
 
   const MemberEntity({
     required this.id,
@@ -23,6 +24,7 @@ class MemberEntity extends Equatable {
     required this.safetyScore,
     required this.totalMeetings,
     required this.badges,
+    this.badgeIcon,
   });
 
   String get initials {
@@ -35,5 +37,5 @@ class MemberEntity extends Equatable {
 
   @override
   List<Object?> get props => [id, name, safeePIN, avatarUrl, trustScore,
-        verificationLevel, subscriptionPlan, safetyScore, totalMeetings, badges];
+        verificationLevel, subscriptionPlan, safetyScore, totalMeetings, badges, badgeIcon];
 }

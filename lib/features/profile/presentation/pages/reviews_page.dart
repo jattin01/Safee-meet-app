@@ -489,12 +489,7 @@ const List<Color> _kAvatarPalette = [
 Color _avatarColorFor(String seed) =>
     _kAvatarPalette[seed.hashCode.abs() % _kAvatarPalette.length];
 
-String _verificationLabel(String level) => switch (level) {
-      'level1' => 'Level 1 Verified',
-      'level2' => 'Level 2 Verified',
-      'professional' => 'Professional Verified',
-      _ => 'Unverified',
-    };
+
 
 class _ReviewCard extends StatelessWidget {
   final ReviewEntity review;
@@ -503,7 +498,6 @@ class _ReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final verified = review.authorVerificationLevel != 'none';
     final tag = review.meetingType;
 
     return Container(
@@ -555,21 +549,20 @@ class _ReviewCard extends StatelessWidget {
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700)),
                         ),
-                        const SizedBox(width: 5),
-                        Tooltip(
-                          message: _verificationLabel(review.authorVerificationLevel),
-                          child: Icon(
-                            verified ? Icons.verified_rounded : Icons.shield_outlined,
-                            color:
-                                verified ? AppColors.blue : AppColors.textTertiary,
-                            size: 15,
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 3),
                     Row(
                       children: [
+                        Text(
+                          review.rating.toStringAsFixed(1),
+                          style: GoogleFonts.inter(
+                            color: AppColors.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
                         ...List.generate(
                             5,
                             (i) => Icon(
