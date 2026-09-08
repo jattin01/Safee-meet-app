@@ -147,6 +147,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       phone:           event.phone,
       accountType:     event.accountType,
       companyName:     event.companyName,
+      jobTitleId:      event.jobTitleId,
       consentAccepted: event.consentAccepted,
     ));
     result.fold(

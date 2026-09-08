@@ -138,7 +138,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     final code = capture.barcodes.first.rawValue?.trim();
     if (code == null || code.isEmpty) return;
     _qrHandled = true;
-    _scannerController.stop(); // Stop camera to prevent buffer exhaustion while viewing results
+    _scannerController
+        .stop(); // Stop camera to prevent buffer exhaustion while viewing results
     context.read<MemberSearchBloc>().add(QRSearchRequested(code));
   }
 
@@ -248,7 +249,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
             backgroundColor: Colors.transparent,
             insetPadding: const EdgeInsets.symmetric(horizontal: 20),
             child: _UpgradeLimitCard(
-              message: 'You have reached your limit of $historyLimit meetings for this plan.',
+              message:
+                  'You have reached your limit of $historyLimit meetings for this plan.',
               onTap: () async {
                 // Pop the dialog with its own (builder-scoped) context, but
                 // push the next route with the outer page context (`ctx`),
@@ -259,7 +261,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
                 // this page itself is alive.
                 Navigator.pop(context);
                 _scannerController.stop();
-                await ctx.push(AppRoutes.subscription, extra: 'basic_unlimited');
+                await ctx.push(AppRoutes.subscription,
+                    extra: 'basic_unlimited');
                 if (mounted) {
                   _startScannerIfVisible();
                 }
@@ -272,7 +275,8 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
     }
 
     _scannerController.stop();
-    await ctx.push('${AppRoutes.meetingSetup}?memberId=${member.id}', extra: member);
+    await ctx.push('${AppRoutes.meetingSetup}?memberId=${member.id}',
+        extra: member);
     if (mounted) {
       _startScannerIfVisible();
     }
@@ -292,184 +296,204 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
         },
         builder: (context, state) {
           return RefreshIndicator(
-            color: AppColors.primary,
-            onRefresh: () async {
-              final bloc = context.read<MemberSearchBloc>();
-              
-              // We want to wait for whichever loading state is applicable to finish
-              final future = bloc.stream.firstWhere(
-                (s) => !s.isLoadingRecentSearches && s is! MemberSearchLoading,
-              );
-              
-              if (state is MemberSearchFound) {
-                bloc.add(PINSearchRequested(state.member.safeePIN));
-              } else {
-                bloc.add(const RecentSearchesRequested());
-              }
-              
-              await future;
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DarkScreenHeader(
-                  title: 'Search Member',
-                  childGap: 20,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _TabPillRow(
-                        activeTab: _activeTab,
-                        onTabChanged: (i) {
-                          if (_activeTab != i) {
-                            if (i != 1) {
-                              _scannerController.stop();
-                            }
-                            setState(() => _activeTab = i);
-                            if (i == 1) {
-                              _startScannerIfVisible();
-                            }
-                            context.read<MemberSearchBloc>().add(MemberSearchReset());
-                            if (i == 1) {
-                              _pinCtrl.clear();
-                            }
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      if (_activeTab == 0)
-                        _buildPinTab(state)
-                      else
-                        _buildQrTab(state),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      20, 24, 20, context.bottomSafePadding(32)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _RecentSearchesSection(
-                        members: state.recentSearches,
-                        isLoading: state.isLoadingRecentSearches,
-                        selectedMemberId:
-                            state is MemberSearchFound ? state.member.id : null,
-                        onSelect: _selectRecent,
-                      ),
+              color: AppColors.primary,
+              onRefresh: () async {
+                final bloc = context.read<MemberSearchBloc>();
 
-                      // Result or loading
-                      Column(
-                        key: _resultSectionKey,
+                // We want to wait for whichever loading state is applicable to finish
+                final future = bloc.stream.firstWhere(
+                  (s) =>
+                      !s.isLoadingRecentSearches && s is! MemberSearchLoading,
+                );
+
+                if (state is MemberSearchFound) {
+                  bloc.add(PINSearchRequested(state.member.safeePIN));
+                } else {
+                  bloc.add(const RecentSearchesRequested());
+                }
+
+                await future;
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DarkScreenHeader(
+                      title: 'Search Member',
+                      childGap: 20,
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (state is MemberSearchLoading) ...[
-                            const SizedBox(height: 32),
-                            const Center(
-                              child: CircularProgressIndicator(
-                                  color: AppColors.primary),
-                            ),
-                          ] else if (state is MemberSearchFound) ...[
-                            const SizedBox(height: 24),
-                            _MemberResultCard(
-                              member: state.member,
-                              onChat: () => _openChat(context, state.member),
-                              onMeet: () => _openMeeting(context, state.member),
-                            ),
-                          ] else if (state is MemberSearchError) ...[
-                            const SizedBox(height: 24),
-                            (state.upgradeRequired ||
-                                    state.message.toLowerCase().contains('limit') ||
-                                    state.message.toLowerCase().contains('upgrade') ||
-                                    state.message.toLowerCase().contains('subscription'))
-                                ? _UpgradeLimitCard(
-                                    message: state.message,
-                                    onTap: () =>
-                                        context.push(AppRoutes.subscription, extra: 'basic_unlimited'),
-                                  )
-                                : Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 32, horizontal: 24),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.error.withValues(alpha: 0.02),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                          color: AppColors.error.withValues(alpha: 0.1)),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: AppColors.error.withValues(alpha: 0.05),
-                                          blurRadius: 24,
-                                          offset: const Offset(0, 8),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(16),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.error.withValues(alpha: 0.1),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: Icon(Icons.person_off_outlined,
-                                              color: AppColors.error, size: 32),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          state.message,
-                                          style: GoogleFonts.inter(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'Double-check the PIN or ask the person to share their QR code.',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            color: AppColors.textTertiary,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                          ],
+                          _TabPillRow(
+                            activeTab: _activeTab,
+                            onTabChanged: (i) {
+                              if (_activeTab != i) {
+                                if (i != 1) {
+                                  _scannerController.stop();
+                                }
+                                setState(() => _activeTab = i);
+                                if (i == 1) {
+                                  _startScannerIfVisible();
+                                }
+                                context
+                                    .read<MemberSearchBloc>()
+                                    .add(MemberSearchReset());
+                                if (i == 1) {
+                                  _pinCtrl.clear();
+                                }
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          if (_activeTab == 0)
+                            _buildPinTab(state)
+                          else
+                            _buildQrTab(state),
                         ],
                       ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                          20, 24, 20, context.bottomSafePadding(32)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _RecentSearchesSection(
+                            members: state.recentSearches,
+                            isLoading: state.isLoadingRecentSearches,
+                            selectedMemberId: state is MemberSearchFound
+                                ? state.member.id
+                                : null,
+                            onSelect: _selectRecent,
+                          ),
 
-                      const SizedBox(height: 28),
-                      Text(
-                        'HOW TO FIND A MEMBER',
-                        style: GoogleFonts.inter(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.6,
-                        ),
+                          // Result or loading
+                          Column(
+                            key: _resultSectionKey,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (state is MemberSearchLoading) ...[
+                                const SizedBox(height: 32),
+                                const Center(
+                                  child: CircularProgressIndicator(
+                                      color: AppColors.primary),
+                                ),
+                              ] else if (state is MemberSearchFound) ...[
+                                const SizedBox(height: 24),
+                                _MemberResultCard(
+                                  member: state.member,
+                                  onChat: () =>
+                                      _openChat(context, state.member),
+                                  onMeet: () =>
+                                      _openMeeting(context, state.member),
+                                ),
+                              ] else if (state is MemberSearchError) ...[
+                                const SizedBox(height: 24),
+                                (state.upgradeRequired ||
+                                        state.message
+                                            .toLowerCase()
+                                            .contains('limit') ||
+                                        state.message
+                                            .toLowerCase()
+                                            .contains('upgrade') ||
+                                        state.message
+                                            .toLowerCase()
+                                            .contains('subscription'))
+                                    ? _UpgradeLimitCard(
+                                        message: state.message,
+                                        onTap: () => context.push(
+                                            AppRoutes.subscription,
+                                            extra: 'basic_unlimited'),
+                                      )
+                                    : Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 32, horizontal: 24),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.error
+                                              .withValues(alpha: 0.02),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          border: Border.all(
+                                              color: AppColors.error
+                                                  .withValues(alpha: 0.1)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppColors.error
+                                                  .withValues(alpha: 0.05),
+                                              blurRadius: 24,
+                                              offset: const Offset(0, 8),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(16),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.error
+                                                    .withValues(alpha: 0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                  Icons.person_off_outlined,
+                                                  color: AppColors.error,
+                                                  size: 32),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              state.message,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Double-check the PIN or ask the person to share their QR code.',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 14,
+                                                color: AppColors.textTertiary,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                              ],
+                            ],
+                          ),
+
+                          const SizedBox(height: 28),
+                          Text(
+                            'HOW TO FIND A MEMBER',
+                            style: GoogleFonts.inter(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _HintCard(
+                            icon: Icons.person_search,
+                            text:
+                                'Ask the other person for their SAFEE PIN (e.g. SMHIPZTWPS) and type it above.',
+                          ),
+                          const SizedBox(height: 8),
+                          _HintCard(
+                            icon: Icons.qr_code_2,
+                            text:
+                                'Or switch to the QR Scanner tab and scan their profile QR code.',
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      _HintCard(
-                        icon: Icons.person_search,
-                        text:
-                            'Ask the other person for their SAFEE PIN (e.g. SMHIPZTWPS) and type it above.',
-                      ),
-                      const SizedBox(height: 8),
-                      _HintCard(
-                        icon: Icons.qr_code_2,
-                        text:
-                            'Or switch to the QR Scanner tab and scan their profile QR code.',
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ));
+              ));
         },
       ),
     );
@@ -525,8 +549,11 @@ class _MemberSearchViewState extends State<_MemberSearchView> {
             final pin = value.text.trim().toUpperCase();
             final isValid = pin.isNotEmpty;
             return _SearchButton(
-              label: state is MemberSearchLoading ? 'Searching...' : 'Search Member',
-              onTap: (!isValid || state is MemberSearchLoading) ? null : _search,
+              label: state is MemberSearchLoading
+                  ? 'Searching...'
+                  : 'Search Member',
+              onTap:
+                  (!isValid || state is MemberSearchLoading) ? null : _search,
             );
           },
         ),
@@ -1004,17 +1031,19 @@ class _SearchButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: isDisabled ? AppColors.border : null,
-          gradient: isDisabled 
+          gradient: isDisabled
               ? null
               : const LinearGradient(
                   colors: [AppColors.primary, AppColors.primaryLight]),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: isDisabled ? [] : [
-            BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 8)),
-          ],
+          boxShadow: isDisabled
+              ? []
+              : [
+                  BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8)),
+                ],
         ),
         child: Center(
           child: Text(label,
@@ -1264,7 +1293,8 @@ class _MemberResultCardState extends State<_MemberResultCard> {
               ),
               const Divider(color: Colors.white12, height: 1),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 380),
                   child: ClipRRect(
@@ -1273,6 +1303,14 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                         ? Image.network(
                             member.badgeIcon!,
                             fit: BoxFit.contain,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return SizedBox(
+                                width: double.infinity,
+                                height: 380,
+                                child: _SkeletonLoader(level),
+                              );
+                            },
                             errorBuilder: (context, error, stackTrace) =>
                                 const SizedBox(
                               width: double.infinity,
@@ -1348,7 +1386,10 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showMemberBadgeDialog(context, member),
+                      child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1365,25 +1406,27 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                                             fontSize: 18,
                                             fontWeight: FontWeight.w800)),
                                   ),
-                                  if (member.verificationLevel != 'none') ...[
-                                    const SizedBox(width: 6),
-                                    GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () => _showMemberBadgeDialog(context, member),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(left: 2, right: 8, top: 4, bottom: 4),
+                                    if (member.verificationLevel != 'none') ...[
+                                      const SizedBox(width: 6),
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                            left: 2,
+                                            right: 8,
+                                            top: 4,
+                                            bottom: 4),
                                         child: Icon(
                                           Icons.verified,
-                                          color: member.verificationLevel == 'level3'
+                                          color: member.verificationLevel ==
+                                                  'level3'
                                               ? AppColors.warning
-                                              : member.verificationLevel == 'level2'
+                                              : member.verificationLevel ==
+                                                      'level2'
                                                   ? AppColors.blue
                                                   : AppColors.primary,
                                           size: 22,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
                                 ],
                               ),
                               const SizedBox(height: 2),
@@ -1392,23 +1435,69 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                                       color: AppColors.textTertiary,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600)),
-                              if (member.verificationLevel != 'none') ...[
-                                const SizedBox(height: 8),
-                                _VerifiedPill(
-                                  label: '${member.verificationLevel.replaceAll('level', 'Level ')} Verified',
-                                  color: AppColors.success,
-                                ),
-                              ],
-                              if (member.badges.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Wrap(
-                                  spacing: 4,
-                                  runSpacing: 4,
-                                  children: member.badges
-                                      .map((b) => _MiniBadge(b))
-                                      .toList(),
-                                ),
-                              ],
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Builder(builder: (context) {
+                                    final hasJobTitle = member.jobTitle != null && member.jobTitle!.isNotEmpty;
+                                    final hasCompany = member.companyName != null && member.companyName!.isNotEmpty;
+                                    
+                                    String? professionalTitle;
+                                    if (hasJobTitle && hasCompany) {
+                                      professionalTitle = '${member.jobTitle} at ${member.companyName}';
+                                    } else if (hasJobTitle) {
+                                      professionalTitle = member.jobTitle;
+                                    } else if (hasCompany) {
+                                      professionalTitle = member.companyName;
+                                    }
+
+                                    if (professionalTitle == null) return const SizedBox.shrink();
+
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: Colors.grey.withOpacity(0.2),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.work_outline_rounded, size: 12, color: AppColors.textSecondary),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              professionalTitle,
+                                              style: const TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                letterSpacing: 0.2,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                  if (member.verificationLevel != 'none')
+                                    _VerifiedPill(
+                                      label:
+                                          '${member.verificationLevel.replaceAll('level', 'Level ')} Verified',
+                                      color: AppColors.success,
+                                    ),
+                                  if (member.badges.isNotEmpty)
+                                    ...member.badges.map((b) => _MiniBadge(b)).toList(),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -1433,6 +1522,7 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                         ),
                       ],
                     ),
+                  ),
                     const SizedBox(height: 20),
                     // Stats
                     Row(
@@ -1481,13 +1571,14 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                                 : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.chat_bubble_outline, size: 16),
-                                      const SizedBox(width: 6),
-                                      Text('Message',
-                                          style: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13)),
-                                    ]),
+                                        const Icon(Icons.chat_bubble_outline,
+                                            size: 16),
+                                        const SizedBox(width: 6),
+                                        Text('Message',
+                                            style: GoogleFonts.inter(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13)),
+                                      ]),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -1525,14 +1616,15 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                                 : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.calendar_today_outlined,
-                                          size: 16),
-                                      const SizedBox(width: 6),
-                                      Text('Meet',
-                                          style: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13)),
-                                    ]),
+                                        const Icon(
+                                            Icons.calendar_today_outlined,
+                                            size: 16),
+                                        const SizedBox(width: 6),
+                                        Text('Meet',
+                                            style: GoogleFonts.inter(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13)),
+                                      ]),
                           ),
                         ),
                       ],
@@ -1563,8 +1655,8 @@ class _MemberResultCardState extends State<_MemberResultCard> {
               ),
               child: member.avatarUrl != null
                   ? ClipOval(
-                      child: Image.network(member.avatarUrl!,
-                          fit: BoxFit.cover),
+                      child:
+                          Image.network(member.avatarUrl!, fit: BoxFit.cover),
                     )
                   : Center(
                       child: Text(member.initials,
@@ -1649,3 +1741,53 @@ class _VerifiedPill extends StatelessWidget {
         ]),
       );
 }
+
+class _SkeletonLoader extends StatefulWidget {
+  final String level;
+  const _SkeletonLoader(this.level);
+
+  @override
+  State<_SkeletonLoader> createState() => _SkeletonLoaderState();
+}
+
+class _SkeletonLoaderState extends State<_SkeletonLoader>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ColorFiltered(
+          colorFilter: ColorFilter.mode(
+            Colors.white.withOpacity(0.05 + (_controller.value * 0.1)),
+            BlendMode.srcIn,
+          ),
+          child: Image.asset(
+            widget.level == 'level3' || widget.level == 'level2'
+                ? 'assets/images/level2_image-removebg.png'
+                : 'assets/images/level1_badge-removebg.png',
+            fit: BoxFit.contain,
+          ),
+        );
+      },
+    );
+  }
+}
+

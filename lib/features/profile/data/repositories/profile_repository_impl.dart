@@ -153,6 +153,13 @@ class ProfileRepositoryImpl implements ProfileRepository {
     return 'http://168.144.112.102:8080$url';
   }
 
+  static String? _parseJobTitle(dynamic title) {
+    if (title == null) return null;
+    if (title is String) return title;
+    if (title is Map<String, dynamic>) return title['name'] as String?;
+    return null;
+  }
+
   ProfileEntity _parseProfile(Map<String, dynamic> d, {String? phone}) =>
       ProfileEntity(
         id: d['id'] as String? ?? '',
@@ -160,6 +167,8 @@ class ProfileRepositoryImpl implements ProfileRepository {
         safeePIN: d['safeeId'] as String? ?? '',
         avatarUrl: d['avatarUrl'] as String?,
         badgeIconUrl: _parseBadgeIconUrl(d['badgeIcon'] ?? d['badge_icon']),
+        jobTitle: _parseJobTitle(d['jobTitle'] ?? d['job_title']),
+        companyName: d['companyName'] ?? d['company_name'] as String?,
         phone: d['phone'] as String? ?? phone,
         email: d['email'] as String?,
         trustScore: (d['trustScore'] as num?)?.toInt() ?? 0,

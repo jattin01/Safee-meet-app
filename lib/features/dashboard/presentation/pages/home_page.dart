@@ -486,8 +486,41 @@ class _DarkHeader extends StatelessWidget {
                           const SizedBox(height: 6),
                           Wrap(
                             spacing: 8,
-                            runSpacing: 4,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
+                              if (profile.jobTitle != null && profile.jobTitle!.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.12),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.work_outline_rounded, size: 12, color: Colors.white.withOpacity(0.8)),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          profile.jobTitle!,
+                                          style: TextStyle(
+                                            color: Colors.white.withOpacity(0.9),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.2,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               _HeaderBadge(
                                 label: _verificationLabel,
                                 color: AppColors.blue,
@@ -687,7 +720,7 @@ class _QuickActions extends StatelessWidget {
   static const _actions = [
     _QuickAction(
       icon: Icons.shield_outlined,
-      label: 'Verify',
+      label: 'Get Verified',
       color: AppColors.primary,
       route: AppRoutes.verification,
     ),
@@ -721,7 +754,7 @@ class _QuickActions extends StatelessWidget {
               (action) => Expanded(
                 child: Padding(
                   padding: EdgeInsets.only(
-                    right: _actions.last == action ? 0 : 10,
+                    right: _actions.last == action ? 0 : 6,
                   ),
                   child: _QuickActionTile(action: action),
                 ),
@@ -741,7 +774,7 @@ class _QuickActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        if (action.label == 'Verify') {
+        if (action.label == 'Get Verified' || action.label == 'Verify') {
           openVerificationScreen(context);
           return;
         }
@@ -751,7 +784,7 @@ class _QuickActionTile extends StatelessWidget {
         context.push(action.route);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),

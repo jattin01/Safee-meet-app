@@ -6,6 +6,8 @@ class UserModel {
   final String displayName;
   final String? avatarUrl;
   final String? badgeIconUrl;
+  final String? jobTitle;
+  final String? companyName;
   final String accountType;
   final String authProvider;
   final String status;
@@ -28,6 +30,8 @@ class UserModel {
     required this.displayName,
     this.avatarUrl,
     this.badgeIconUrl,
+    this.jobTitle,
+    this.companyName,
     required this.accountType,
     required this.authProvider,
     required this.status,
@@ -54,6 +58,8 @@ class UserModel {
             'SAFEE User') as String,
         avatarUrl: (json['avatarUrl'] ?? json['avatar_url']) as String?,
         badgeIconUrl: _parseBadgeIconUrl(json['badgeIcon'] ?? json['badge_icon']),
+        jobTitle: _parseJobTitle(json['jobTitle'] ?? json['job_title']),
+        companyName: json['companyName'] ?? json['company_name'] as String?,
         accountType:
             (json['accountType'] ?? json['account_type'] ?? 'normal') as String,
         authProvider: (json['authProvider'] ?? json['auth_provider'] ?? 'phone')
@@ -93,11 +99,20 @@ class UserModel {
     return null;
   }
 
+  static String? _parseJobTitle(dynamic title) {
+    if (title == null) return null;
+    if (title is String) return title;
+    if (title is Map<String, dynamic>) return title['name'] as String?;
+    return null;
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'safeeId': safeeId,
         'displayName': displayName,
         'avatarUrl': avatarUrl,
+        'jobTitle': jobTitle,
+        'companyName': companyName,
         'accountType': accountType,
         'authProvider': authProvider,
         'status': status,
@@ -128,6 +143,8 @@ class UserModel {
         displayName: displayName,
         avatarUrl: avatarUrl,
         badgeIconUrl: badgeIconUrl,
+        jobTitle: jobTitle,
+        companyName: companyName,
         accountType: accountType,
         authProvider: authProvider,
         status: status,
@@ -150,6 +167,8 @@ class UserModel {
         safeeId: entity.safeeId,
         displayName: entity.displayName,
         avatarUrl: entity.avatarUrl,
+        jobTitle: entity.jobTitle,
+        companyName: entity.companyName,
         accountType: entity.accountType,
         authProvider: entity.authProvider,
         status: entity.status,

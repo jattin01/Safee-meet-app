@@ -9,6 +9,8 @@ class ProfileEntity extends Equatable {
   final String? coverUrl;
   final String? phone;
   final String? email;
+  final String? jobTitle;
+  final String? companyName;
   final int trustScore;
   final String verificationLevel;
   /// Raw backend status: 'not_submitted' | 'pending' | 'approved' | 'rejected'.
@@ -35,6 +37,8 @@ class ProfileEntity extends Equatable {
     this.coverUrl,
     this.phone,
     this.email,
+    this.jobTitle,
+    this.companyName,
     required this.trustScore,
     required this.verificationLevel,
     this.verificationStatus = 'not_submitted',
@@ -66,6 +70,8 @@ class ProfileEntity extends Equatable {
         coverUrl,
         phone,
         email,
+        jobTitle,
+        companyName,
         trustScore,
         verificationLevel,
         subscriptionPlan,

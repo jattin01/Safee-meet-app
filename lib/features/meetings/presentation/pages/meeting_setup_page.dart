@@ -874,12 +874,12 @@ class _NotesField extends StatelessWidget {
         controller: controller,
         maxLines: 4,
         minLines: 4,
-        style: TextStyle(color: AppColors.textPrimary),
-        decoration: InputDecoration(
+        style: const TextStyle(color: AppColors.textPrimary),
+        decoration: const InputDecoration(
           hintText: 'Add any notes or instructions…',
           hintStyle: TextStyle(color: AppColors.textTertiary),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(16),
+          contentPadding: EdgeInsets.all(16),
         ),
       ),
     );

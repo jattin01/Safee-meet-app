@@ -11,6 +11,7 @@ abstract class AuthRemoteDataSource {
     String? phone,
     String? accountType,
     String? companyName,
+    int?    jobTitleId,
     required bool consentAccepted,
   });
 
@@ -66,6 +67,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     String? phone,
     String? accountType,
     String? companyName,
+    int?    jobTitleId,
     required bool consentAccepted,
   }) async {
     final res = await _dio.post('/v1/auth/register', data: {
@@ -76,6 +78,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       if (phone != null)       'phone':       phone,
       if (accountType != null) 'accountType': accountType,
       if (companyName != null) 'companyName': companyName,
+      if (jobTitleId != null)  'jobTitleId':  jobTitleId,
       'consentAccepted':         consentAccepted,
     });
     return AuthResponseModel.fromJson(res.data as Map<String, dynamic>);

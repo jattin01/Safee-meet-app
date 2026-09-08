@@ -21,6 +21,7 @@ import '../../../auth/data/remote_data_sources/auth_remote_data_source.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
+import '../../../../core/services/api_client.dart';
 
 enum _AccountType { normalUser, employer }
 
@@ -43,6 +44,11 @@ class _RegisterPageState extends State<RegisterPage> {
   final _phoneCtrl       = TextEditingController();
   final _emailCtrl       = TextEditingController();
   final _companyNameCtrl = TextEditingController();
+
+  // ── Job Titles (employer only) ─────────────────────────────────────────────
+  List<Map<String, dynamic>> _jobTitles = [];
+  bool _loadingJobTitles = false;
+  int? _selectedJobTitleId;
 
   // ── Phone OTP (backend-verified) state ────────────────────────────────────
   String? _firebaseIdToken;
@@ -95,7 +101,9 @@ class _RegisterPageState extends State<RegisterPage> {
       case 2: return _phoneDigits.length >= 7 && _phoneDigits.length <= 15 && !_sendingOtp;
       case 3: return (_enteredOtp?.length ?? 0) == 6 && !_verifyingOtp;
       default:
-        if (_step == 4 && _isEmployer) return _companyNameCtrl.text.trim().isNotEmpty;
+        if (_step == 4 && _isEmployer) {
+          return _companyNameCtrl.text.trim().isNotEmpty && _selectedJobTitleId != null;
+        }
         if (_step == emailStep) {
           final email = _emailCtrl.text.trim();
           return email.isNotEmpty && email.contains('@') && email.contains('.');
@@ -223,8 +231,25 @@ class _RegisterPageState extends State<RegisterPage> {
       phone:           _toE164(_phoneCtrl.text.trim()),
       accountType:     _isEmployer ? 'employer' : 'normal',
       companyName:     _isEmployer ? _companyNameCtrl.text.trim() : null,
+      jobTitleId:      _isEmployer ? _selectedJobTitleId : null,
       consentAccepted: _consentAccepted,
     ));
+  }
+
+  Future<void> _fetchJobTitles() async {
+    setState(() => _loadingJobTitles = true);
+    try {
+      final res = await GetIt.I<ApiClient>().dio.get('/v1/job-titles');
+      if (res.data != null && res.data['success'] == true) {
+        final rawList = res.data['data'] as List;
+        final list = rawList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        if (mounted) setState(() => _jobTitles = list);
+      }
+    } catch (e) {
+      debugPrint('Failed to load job titles: $e');
+    } finally {
+      if (mounted) setState(() => _loadingJobTitles = false);
+    }
   }
 
   void _onBack() {
@@ -249,7 +274,12 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     if (_accountType == null) {
       return _TypeSelectionScreen(
-        onTypeSelected: (type) => setState(() => _accountType = type),
+        onTypeSelected: (type) {
+          setState(() => _accountType = type);
+          if (type == _AccountType.employer) {
+            _fetchJobTitles();
+          }
+        },
         onSignIn: () => context.pop(),
       );
     }
@@ -522,6 +552,54 @@ class _RegisterPageState extends State<RegisterPage> {
         onChanged:          (_) => setState(() {}),
       ),
       const SizedBox(height: 16),
+      Text('Job Title',
+          style: GoogleFonts.inter(
+              fontSize: 13, fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border, width: 1.5),
+        ),
+        child: _loadingJobTitles
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            : DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _selectedJobTitleId,
+                  dropdownColor: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  elevation: 8,
+                  menuMaxHeight: MediaQuery.of(context).size.height * 0.4,
+                  hint: Text('Select your job title',
+                      style: TextStyle(color: AppColors.textTertiary)),
+                  isExpanded: true,
+                  icon: Icon(Icons.keyboard_arrow_down, color: AppColors.textTertiary),
+                  style: GoogleFonts.inter(fontSize: 15, color: AppColors.textPrimary, fontWeight: FontWeight.w500),
+                  items: _jobTitles.map((job) {
+                    return DropdownMenuItem<int>(
+                      value: job['id'] as int,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(job['name'] as String),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) => setState(() => _selectedJobTitleId = val),
+                ),
+              ),
+      ),
+      const SizedBox(height: 16),
       const InfoBanner(
         emoji: '🏢',
         text:  'Company details appear on your employer profile visible to members.',
@@ -554,7 +632,7 @@ class _RegisterPageState extends State<RegisterPage> {
               style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 20),
-            _ConsentItem(icon: Icons.verified_user_outlined,  text: 'Identity verification powered by Firebase'),
+            _ConsentItem(icon: Icons.verified_user_outlined,  text: 'Identity verification powered by SAFEE MEET'),
             _ConsentItem(icon: Icons.lock_outline,            text: 'Your data is encrypted end-to-end'),
             _ConsentItem(icon: Icons.visibility_off_outlined, text: 'We never share your info with third parties'),
             const SizedBox(height: 20),
@@ -582,7 +660,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   Expanded(
                     child: RichText(
                       text: TextSpan(
-                        style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.5),
                         children: [
                           const TextSpan(text: 'I agree to the SAFEE MEET '),
                           TextSpan(
@@ -638,7 +716,7 @@ class _ConsentItem extends StatelessWidget {
       const SizedBox(width: 10),
       Expanded(
         child: Text(text,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
       ),
     ]),
   );
@@ -714,14 +792,23 @@ class _TypeSelectionScreenState extends State<_TypeSelectionScreen> {
                     title:       'Employer / Business',
                     description: "I represent a company and want to conduct verified, safe business meetings.",
                     selected:    _selected == _AccountType.employer,
-                    onTap:       () => setState(() => _selected = _AccountType.employer),
+                    onTap:       () {
+                      setState(() => _selected = _AccountType.employer);
+                    },
                   ),
                   const SizedBox(height: 32),
                   PrimaryButton(
                     label:        'Continue',
                     onPressed:    _selected == null
                         ? null
-                        : () => widget.onTypeSelected(_selected!),
+                        : () {
+                            if (_selected == _AccountType.employer) {
+                              // Trigger fetch before pushing the type
+                              // However, the state is passed to the parent callback.
+                              // So the fetch can be called from the parent.
+                            }
+                            widget.onTypeSelected(_selected!);
+                          },
                     icon:         const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
                     gradientStart: _selected == null ? AppColors.textTertiary : null,
                     gradientEnd:   _selected == null ? AppColors.textTertiary : null,

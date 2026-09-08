@@ -611,7 +611,7 @@ class _PartnerCard extends StatelessWidget {
   }
 }
 
-class _MapSection extends StatelessWidget {
+class _MapSection extends StatefulWidget {
   final String countdown;
   final EmergencyShareMeetingEntity? meeting;
   final EmergencyShareUserEntity? partner;
@@ -624,8 +624,141 @@ class _MapSection extends StatelessWidget {
     this.currentPosition,
   });
 
+  @override
+  State<_MapSection> createState() => _MapSectionState();
+}
+
+class _MapSectionState extends State<_MapSection> {
+  String? _partnerShortAddress;
+  String? _partnerFullAddress;
+  bool _resolving = false;
+  double? _resolvedLat;
+  double? _resolvedLng;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeResolvePartnerAddress();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MapSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _maybeResolvePartnerAddress();
+  }
+
+  Future<void> _maybeResolvePartnerAddress() async {
+    final lat = widget.partner?.latitude;
+    final lng = widget.partner?.longitude;
+    if (lat == null || lng == null) return;
+
+    if (_resolving) return;
+    if (_resolvedLat != null && _resolvedLng != null) {
+      final movedMeters = Geolocator.distanceBetween(_resolvedLat!, _resolvedLng!, lat, lng);
+      if (movedMeters < 40) return;
+    }
+
+    _resolving = true;
+    String shortResolved;
+    String fullResolved;
+    try {
+      final placemarks = await placemarkFromCoordinates(lat, lng);
+      final p = placemarks.first;
+      final shortParts = [p.street, p.subLocality]
+          .where((s) => s != null && s.isNotEmpty)
+          .toSet()
+          .toList();
+      shortResolved = shortParts.isNotEmpty
+          ? shortParts.join(', ')
+          : '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+          
+      final fullParts = [p.street, p.subLocality, p.locality, p.administrativeArea, p.postalCode]
+          .where((s) => s != null && s.isNotEmpty)
+          .toList();
+      fullResolved = fullParts.isNotEmpty ? fullParts.join(', ') : shortResolved;
+      
+    } catch (_) {
+      shortResolved = '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+      fullResolved = shortResolved;
+    }
+
+    _resolving = false;
+    _resolvedLat = lat;
+    _resolvedLng = lng;
+
+    if (!mounted) return;
+    setState(() {
+      _partnerShortAddress = shortResolved;
+      _partnerFullAddress = fullResolved;
+    });
+  }
+
+  void _showAddressDialog(String title, String address) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppColors.darkBg2,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, color: Colors.white, size: 16),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.place_outlined, color: AppColors.primary, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      address,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   bool get _hasMeetingLocation =>
-      meeting?.latitude != null && meeting?.longitude != null;
+      widget.meeting?.latitude != null && widget.meeting?.longitude != null;
 
   String _formatMeters(double meters) {
     if (meters < 1000) {
@@ -638,23 +771,23 @@ class _MapSection extends StatelessWidget {
     if (!_hasMeetingLocation) return null;
 
     // 1. If partner's live GPS ping is available, show partner's distance to meeting
-    if (partner?.hasLocation == true) {
+    if (widget.partner?.hasLocation == true) {
       final meters = Geolocator.distanceBetween(
-        partner!.latitude!,
-        partner!.longitude!,
-        meeting!.latitude!,
-        meeting!.longitude!,
+        widget.partner!.latitude!,
+        widget.partner!.longitude!,
+        widget.meeting!.latitude!,
+        widget.meeting!.longitude!,
       );
-      return '${partner?.name?.split(' ').first ?? 'Partner'}: ${_formatMeters(meters)} away';
+      return '${widget.partner?.name?.split(' ').first ?? 'Partner'}: ${_formatMeters(meters)} away';
     }
 
     // 2. If current user's GPS is available, show your distance to the venue
-    if (currentPosition != null) {
+    if (widget.currentPosition != null) {
       final meters = Geolocator.distanceBetween(
-        currentPosition!.lat,
-        currentPosition!.lng,
-        meeting!.latitude!,
-        meeting!.longitude!,
+        widget.currentPosition!.lat,
+        widget.currentPosition!.lng,
+        widget.meeting!.latitude!,
+        widget.meeting!.longitude!,
       );
       return '${_formatMeters(meters)} to venue';
     }
@@ -669,7 +802,24 @@ class _MapSection extends StatelessWidget {
       child: Stack(
         children: [
           _hasMeetingLocation
-              ? _LiveMap(meeting: meeting!, partner: partner)
+              ? _LiveMap(
+                  meeting: widget.meeting!,
+                  partner: widget.partner,
+                  partnerAddress: _partnerShortAddress,
+                  onPartnerTap: () {
+                    if (_partnerFullAddress != null) {
+                      _showAddressDialog(
+                        '${widget.partner?.name?.split(' ').first ?? 'Partner'}\'s Location',
+                        _partnerFullAddress!,
+                      );
+                    }
+                  },
+                  onMeetingTap: () {
+                    if (widget.meeting?.location != null) {
+                      _showAddressDialog('Meeting Location', widget.meeting!.location);
+                    }
+                  },
+                )
               : const _MapPlaceholder(),
 
           // Countdown-to-meeting badge (top-right)
@@ -688,7 +838,7 @@ class _MapSection extends StatelessWidget {
                   const Icon(Icons.access_time, color: Colors.white, size: 14),
                   const SizedBox(width: 6),
                   Text(
-                    countdown,
+                    widget.countdown,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 15,
@@ -754,18 +904,50 @@ class _MapSection extends StatelessWidget {
 class _LiveMap extends StatelessWidget {
   final EmergencyShareMeetingEntity meeting;
   final EmergencyShareUserEntity? partner;
-  const _LiveMap({required this.meeting, required this.partner});
+  final String? partnerAddress;
+  final VoidCallback? onPartnerTap;
+  final VoidCallback? onMeetingTap;
+
+  const _LiveMap({
+    required this.meeting,
+    required this.partner,
+    this.partnerAddress,
+    this.onPartnerTap,
+    this.onMeetingTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final hasPartnerLocation = partner != null && partner!.hasLocation;
-    return CustomPaint(
-      painter: _LiveMapPainter(
-        hasPartnerLocation: hasPartnerLocation,
-        partnerName: partner?.name,
-        meetingLocation: meeting.location,
+    return GestureDetector(
+      onTapUp: (details) {
+        final size = context.size;
+        if (size == null) return;
+        final startX = size.width * 0.28;
+        final endX = size.width * 0.72;
+        final midY = (size.height * 0.52) - 12;
+        
+        final partnerRect = Rect.fromCenter(center: Offset(startX, midY + 38), width: 140, height: 70);
+        if (partnerRect.contains(details.localPosition)) {
+          onPartnerTap?.call();
+          return;
+        }
+        
+        final meetingRect = Rect.fromCenter(center: Offset(endX, midY + 38), width: 140, height: 70);
+        if (meetingRect.contains(details.localPosition)) {
+          onMeetingTap?.call();
+          return;
+        }
+      },
+      child: CustomPaint(
+        painter: _LiveMapPainter(
+          hasPartnerLocation: hasPartnerLocation,
+          partnerName: partner?.name,
+          meetingLocation: meeting.location,
+          partnerAddress: partnerAddress,
+        ),
+        child: const SizedBox.expand(),
       ),
-      child: const SizedBox.expand(),
     );
   }
 }
@@ -774,7 +956,8 @@ class _LiveMapPainter extends CustomPainter {
   final bool hasPartnerLocation;
   final String? partnerName;
   final String? meetingLocation;
-  const _LiveMapPainter({required this.hasPartnerLocation, this.partnerName, this.meetingLocation});
+  final String? partnerAddress;
+  const _LiveMapPainter({required this.hasPartnerLocation, this.partnerName, this.meetingLocation, this.partnerAddress});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -804,7 +987,7 @@ class _LiveMapPainter extends CustomPainter {
 
     final startX = size.width * 0.28;
     final endX = size.width * 0.72;
-    final midY = size.height * 0.52;
+    final midY = (size.height * 0.52) - 12;
 
     if (hasPartnerLocation) {
       // Route line (dashed green) — only drawn once the partner's position
@@ -828,9 +1011,11 @@ class _LiveMapPainter extends CustomPainter {
       canvas.drawCircle(Offset(startX, midY), 10, Paint()..color = Colors.white);
       canvas.drawCircle(
           Offset(startX, midY), 7, Paint()..color = const Color(0xFF3B82F6));
-      _drawBadge(canvas, Offset(startX, midY + 22),
-          partnerName?.split(' ').first ?? 'Partner',
-          Colors.white, const Color(0xFF1E293B), maxWidth: 80);
+      final label = partnerAddress?.isNotEmpty == true 
+          ? '${partnerName?.split(' ').first ?? 'Partner'}:\n$partnerAddress' 
+          : (partnerName?.split(' ').first ?? 'Partner');
+      _drawBadge(canvas, Offset(startX, midY + 38), label,
+          Colors.white, const Color(0xFF1E293B), maxWidth: 120);
     } else {
       // Still waiting for the partner's first GPS ping — a hollow ring
       // instead of a solid dot, and no route line to a position we don't
@@ -843,7 +1028,7 @@ class _LiveMapPainter extends CustomPainter {
           ..strokeWidth = 2
           ..style = PaintingStyle.stroke,
       );
-      _drawBadge(canvas, Offset(startX, midY + 22), 'You',
+      _drawBadge(canvas, Offset(startX, midY + 34), 'You',
           Colors.white, const Color(0xFF1E293B), maxWidth: 80);
     }
 
@@ -863,10 +1048,18 @@ class _LiveMapPainter extends CustomPainter {
     canvas.drawPath(pinPath, pinPaint);
     canvas.drawCircle(Offset(px, py - 6), 4, Paint()..color = Colors.white);
 
-    // Label under the meeting location circle
-    final locationLabel = meetingLocation?.isNotEmpty == true ? 'Meeting Location:\n$meetingLocation' : 'Meeting Location';
-    _drawBadge(canvas, Offset(px, py + 26), locationLabel,
-        Colors.white, const Color(0xFFDC2626), maxWidth: 120);
+    // Shorten the meeting location for the map display
+    String shortMeetingLocation = meetingLocation ?? '';
+    if (shortMeetingLocation.isNotEmpty) {
+      final segments = shortMeetingLocation.split(',');
+      if (segments.length > 2) {
+        shortMeetingLocation = segments.take(2).join(',').trim();
+      }
+    }
+
+    final locationLabel = shortMeetingLocation.isNotEmpty ? 'Meeting Location:\n$shortMeetingLocation' : 'Meeting Location';
+    _drawBadge(canvas, Offset(px, py + 38), locationLabel,
+        const Color(0xFFDC2626), Colors.white, maxWidth: 120);
   }
 
   void _drawBadge(Canvas canvas, Offset point, String text, Color textColor,
@@ -951,7 +1144,7 @@ class _MapPainter extends CustomPainter {
     // Route line (dashed green)
     final startX = size.width * 0.28;
     final endX = size.width * 0.72;
-    final midY = size.height * 0.52;
+    final midY = (size.height * 0.52) - 12;
 
     final dashPaint = Paint()
       ..color = const Color(0xFF22C55E)
@@ -1410,8 +1603,9 @@ class _LiveLocationCardState extends State<_LiveLocationCard> {
     try {
       final placemarks = await placemarkFromCoordinates(lat, lng);
       final p = placemarks.first;
-      final parts = [p.street, p.locality, p.administrativeArea]
+      final parts = [p.street, p.subLocality]
           .where((s) => s != null && s.isNotEmpty)
+          .toSet()
           .toList();
       resolved = parts.isNotEmpty
           ? parts.join(', ')

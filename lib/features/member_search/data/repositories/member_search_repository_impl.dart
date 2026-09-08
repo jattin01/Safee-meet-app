@@ -86,12 +86,21 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
         totalMeetings: (d['totalMeetings'] as num?)?.toInt() ?? 0,
         badges: List<String>.from(d['badges'] as List? ?? []),
         badgeIcon: _parseBadgeIconUrl(d['badgeIcon']),
+        jobTitle: _parseJobTitle(d['jobTitle'] ?? d['job_title']),
+        companyName: d['companyName'] ?? d['company_name'] as String?,
       );
 
   static String? _parseBadgeIconUrl(dynamic url) {
     if (url == null || url is! String || url.isEmpty) return null;
     if (url.startsWith('http')) return url;
     return 'http://168.144.112.102:8080$url';
+  }
+
+  static String? _parseJobTitle(dynamic title) {
+    if (title == null) return null;
+    if (title is String) return title;
+    if (title is Map<String, dynamic>) return title['name'] as String?;
+    return null;
   }
 
   Failure _map(DioException e) {

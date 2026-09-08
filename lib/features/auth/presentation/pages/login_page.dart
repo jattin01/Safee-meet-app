@@ -195,26 +195,7 @@ class _LoginViewState extends State<_LoginView> {
                   _ => 'none',
                 };
 
-          final profile = ProfileEntity(
-            id: state.user.id,
-            name: state.user.displayName,
-            safeePIN: state.user.safeeId,
-            avatarUrl: state.user.avatarUrl,
-            badgeIconUrl: state.user.badgeIconUrl,
-            phone: _toE164(_phoneCtrl.text.trim()),
-            trustScore: state.user.trustScore,
-            verificationLevel: levelStr,
-            verificationStatus: state.user.verificationStatus ?? 'not_submitted',
-            subscriptionPlan: 'free',
-            safetyScore: 0,
-            totalMeetings: state.user.meetingCount,
-            totalReviews: 0,
-            badges: const [],
-            status: state.user.status,
-            pinSearchCount: 0,
-          );
-          
-          context.read<CurrentUserCubit>().setProfile(profile);
+          context.read<CurrentUserCubit>().load(forceRefresh: true);
           // ProfileBloc is a separate app-lifetime singleton (see
           // injection_container.dart) that backs the Profile screen and
           // only self-loads once, the first time it's ever resolved. If a

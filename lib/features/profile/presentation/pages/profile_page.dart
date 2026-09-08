@@ -513,7 +513,57 @@ class _ProfileAvatarSection extends StatelessWidget {
               ],
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
+          Builder(builder: (context) {
+            final hasJobTitle = profile?.jobTitle != null && profile!.jobTitle!.isNotEmpty;
+            final hasCompany = profile?.companyName != null && profile!.companyName!.isNotEmpty;
+            
+            String? professionalTitle;
+            if (hasJobTitle && hasCompany) {
+              professionalTitle = '${profile!.jobTitle} at ${profile!.companyName}';
+            } else if (hasJobTitle) {
+              professionalTitle = profile!.jobTitle;
+            } else if (hasCompany) {
+              professionalTitle = profile!.companyName;
+            }
+
+            if (professionalTitle == null) return const SizedBox.shrink();
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.12),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.work_outline_rounded, size: 14, color: Colors.white.withOpacity(0.8)),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        professionalTitle,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
           if (email != null)
             Text(email,
                 style: const TextStyle(

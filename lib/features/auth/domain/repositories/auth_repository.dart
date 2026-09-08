@@ -13,6 +13,7 @@ abstract class AuthRepository {
     String? phone,
     String? accountType,
     String? companyName,
+    int?    jobTitleId,
     required bool consentAccepted,
   });
 

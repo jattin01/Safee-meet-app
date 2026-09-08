@@ -51,6 +51,7 @@ class AuthRepositoryImpl implements AuthRepository {
     String? phone,
     String? accountType,
     String? companyName,
+    int?    jobTitleId,
     required bool consentAccepted,
   }) async {
     try {
@@ -62,6 +63,7 @@ class AuthRepositoryImpl implements AuthRepository {
         phone:           phone,
         accountType:     accountType,
         companyName:     companyName,
+        jobTitleId:      jobTitleId,
         consentAccepted: consentAccepted,
       );
       final entity = model.toEntity();

@@ -20,6 +20,7 @@ class RegisterRequested extends AuthEvent {
   final String? phone;
   final String? accountType;
   final String? companyName;
+  final int?    jobTitleId;
   final bool    consentAccepted;
 
   const RegisterRequested({
@@ -30,11 +31,12 @@ class RegisterRequested extends AuthEvent {
     this.phone,
     this.accountType,
     this.companyName,
+    this.jobTitleId,
     this.consentAccepted = true,
   });
 
   @override
-  List<Object?> get props => [provider, providerToken, name, email, phone, accountType, companyName, consentAccepted];
+  List<Object?> get props => [provider, providerToken, name, email, phone, accountType, companyName, jobTitleId, consentAccepted];
 }
 
 /// Checks whether a phone number is already registered *before* an OTP is

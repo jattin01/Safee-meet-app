@@ -6,6 +6,8 @@ class UserEntity extends Equatable {
   final String  displayName;
   final String? avatarUrl;
   final String? badgeIconUrl;
+  final String? jobTitle;
+  final String? companyName;
   final String  accountType;
   final String  authProvider;
   final String  status;
@@ -28,6 +30,8 @@ class UserEntity extends Equatable {
     required this.displayName,
     this.avatarUrl,
     this.badgeIconUrl,
+    this.jobTitle,
+    this.companyName,
     required this.accountType,
     required this.authProvider,
     required this.status,
@@ -56,7 +60,7 @@ class UserEntity extends Equatable {
 
   @override
   List<Object?> get props => [
-        id, safeeId, displayName, avatarUrl, badgeIconUrl,
+        id, safeeId, displayName, avatarUrl, badgeIconUrl, jobTitle, companyName,
         accountType, authProvider, status,
         trustScore, trustTier,
         isChatEnabled,
