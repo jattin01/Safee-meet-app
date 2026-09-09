@@ -41,6 +41,12 @@ abstract final class AppConstants {
   // backend's live secret key — before this app is used for real charges.
   static const String stripePublishableKey =
       'pk_test_51TsnbMBhFiphlmD9lIlrcqzede2CHVzRDhUtCG5akNPQGIRE5Gwavmt4Tk00zD01ef8MBZ9fJNdSDJNiPkWFXWkV00MrCh3c8O';
+  // ── Google Maps ────────────────────────────────────────────────────────────
+  // Same key as AndroidManifest.xml's com.google.android.geo.API_KEY —
+  // used here only for Places Autocomplete HTTP calls (the Maps widget itself
+  // reads the key directly from the manifest via the platform channel).
+  static const String googleMapsApiKey = 'AIzaSyBejEQQ0RAY4gLtLbHByt2t7j546G1CsJM';
+
   // ── Emergency ────────────────────────────────────────────────────────────
   static const int maxEmergencyContacts = 5;
   static const int sosCountdownSeconds = 5;

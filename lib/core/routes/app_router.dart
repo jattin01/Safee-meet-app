@@ -16,6 +16,7 @@ import '../../features/meetings/presentation/pages/emergency_share_page.dart';
 import '../../features/meetings/presentation/pages/live_location_page.dart';
 import '../../features/meetings/presentation/pages/meeting_setup_page.dart';
 import '../../features/meetings/presentation/pages/meetings_list_page.dart';
+import '../../features/meetings/domain/entities/meeting_entity.dart';
 import '../../features/member_search/domain/entities/member_entity.dart';
 import '../../features/member_search/presentation/pages/member_search_page.dart';
 import '../../features/messaging/domain/entities/message_entity.dart';
@@ -208,13 +209,21 @@ class AppRouter {
       ),
       GoRoute(
         path: '${AppRoutes.liveLocation}/:id',
-        builder: (_, state) => MultiBlocProvider(
-          providers: [
-            BlocProvider(create: (_) => sl<EmergencyShareBloc>()),
-            BlocProvider(create: (_) => sl<GpsTrackingBloc>()),
-          ],
-          child: LiveLocationPage(meetingId: state.pathParameters['id']!),
-        ),
+        builder: (_, state) {
+          final meeting =
+              state.extra is MeetingEntity ? state.extra as MeetingEntity : null;
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider(create: (_) => sl<EmergencyShareBloc>()),
+              BlocProvider(create: (_) => sl<GpsTrackingBloc>()),
+            ],
+            child: LiveLocationPage(
+              meetingId: state.pathParameters['id']!,
+              partnerName: meeting?.partnerName,
+              partnerAvatarUrl: meeting?.partnerAvatarUrl,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '${AppRoutes.emergencyShare}/:id',

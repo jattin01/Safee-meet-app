@@ -151,11 +151,13 @@ class MemberSearchBloc extends Bloc<MemberSearchEvent, MemberSearchState> {
       final currentUserId = await _session.getUserId();
       if (currentUserId == null || currentUserId == member.id) return;
       final currentUserName = await _session.getUserName() ?? 'Me';
+      final currentUserAvatarUrl = await _session.getUserAvatarUrl();
       await _createOrGetRoom(
         currentUserId: currentUserId,
         partnerId: member.id,
         currentUserName: currentUserName,
         partnerName: member.name,
+        currentUserAvatarUrl: currentUserAvatarUrl,
         partnerAvatarUrl: member.avatarUrl,
       );
     } catch (_) {

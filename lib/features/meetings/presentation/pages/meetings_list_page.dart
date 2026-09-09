@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
@@ -80,7 +81,8 @@ class _MeetingsListViewState extends State<_MeetingsListView>
 
   Future<void> _refresh() async {
     final bloc = context.read<MeetingsBloc>();
-    final future = bloc.stream.firstWhere((s) => s is MeetingsListLoaded || s is MeetingsError);
+    final future = bloc.stream
+        .firstWhere((s) => s is MeetingsListLoaded || s is MeetingsError);
     bloc.add(const MeetingsLoadRequested());
     await future;
   }
@@ -298,7 +300,7 @@ class _MeetingCard extends StatelessWidget {
       );
       return;
     }
-    context.push('${AppRoutes.liveLocation}/${meeting.id}');
+    context.push('${AppRoutes.liveLocation}/${meeting.id}', extra: meeting);
   }
 
   @override
@@ -328,25 +330,30 @@ class _MeetingCard extends StatelessWidget {
             Row(
               children: [
                 // Avatar
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryLight],
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      meeting.partnerInitials,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+                Builder(
+                  builder: (context) {
+                    final avatarUrl = meeting.partnerAvatarUrl;
+                    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+                      return Container(
+                        width: 48,
+                        height: 48,
+                        decoration: const BoxDecoration(shape: BoxShape.circle),
+                        clipBehavior: Clip.hardEdge,
+                        child: CachedNetworkImage(
+                          imageUrl: avatarUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            color: AppColors.primaryLight,
+                            child: const Center(
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2)),
+                          ),
+                          errorWidget: (_, __, ___) => _buildFallbackAvatar(),
+                        ),
+                      );
+                    }
+                    return _buildFallbackAvatar();
+                  },
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -390,7 +397,8 @@ class _MeetingCard extends StatelessWidget {
                 ),
                 if (clickable) ...[
                   const SizedBox(width: 8),
-                  const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
+                  const Icon(Icons.chevron_right,
+                      color: AppColors.textTertiary, size: 20),
                 ],
               ],
             ),
@@ -436,7 +444,9 @@ class _MeetingCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12, height: 1.35),
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        height: 1.35),
                   ),
                 ),
               ],
@@ -519,6 +529,29 @@ class _MeetingCard extends StatelessWidget {
       case MeetingStatus.incidentReported:
         return 'Incident Reported';
     }
+  }
+
+  Widget _buildFallbackAvatar() {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryLight],
+        ),
+      ),
+      child: Center(
+        child: Text(
+          meeting.partnerInitials,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
@@ -591,75 +592,182 @@ class _PartnerCard extends StatelessWidget {
   final VoidCallback onTap;
   const _PartnerCard({this.partner, this.partnerId, required this.onTap});
 
-  // Mirrors the level naming ('none'/'low'/'medium'/'high') the API returns
-  // and every other verification-level display in the app (settings,
-  // profile, home) already switches on — just abbreviated to fit this
-  // compact inline badge.
   static const _levelLabels = {'low': 'L1', 'medium': 'L2', 'high': 'L3'};
+
+  Widget _buildStatChip(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 10),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: GoogleFonts.inter(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final hasPartner = partner != null;
     final isVerified = hasPartner && partner!.verificationLevel != 'none';
+    
+    String profession = '';
+    if (hasPartner) {
+      if (partner!.jobTitle != null && partner!.jobTitle!.isNotEmpty) {
+        profession = partner!.jobTitle!;
+        if (partner!.companyName != null && partner!.companyName!.isNotEmpty) {
+          profession += ' at ${partner!.companyName}';
+        }
+      } else {
+        profession = 'SAFEE PIN: ${partner!.safeePIN}';
+      }
+    }
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: hasPartner ? AppColors.border : AppColors.warning),
+          border: Border.all(color: hasPartner ? AppColors.border.withOpacity(0.5) : AppColors.warning),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(color: Color(0xFFDCEBFF), shape: BoxShape.circle),
-              child: Center(
-                child: Text(
-                  hasPartner ? partner!.initials : '?',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
+            // Avatar with Badge
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: Stack(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    clipBehavior: Clip.hardEdge,
+                    decoration: const BoxDecoration(color: Color(0xFFDCEBFF), shape: BoxShape.circle),
+                    child: hasPartner && partner!.avatarUrl != null
+                        ? GestureDetector(
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (dialogContext) => Dialog(
+                                  backgroundColor: Colors.transparent,
+                                  insetPadding: const EdgeInsets.all(16),
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      InteractiveViewer(
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(16),
+                                          child: CachedNetworkImage(
+                                            imageUrl: partner!.avatarUrl!,
+                                            fit: BoxFit.contain,
+                                            placeholder: (_, __) => const CircularProgressIndicator(color: Colors.white),
+                                            errorWidget: (_, __, ___) => Container(color: Colors.white, padding: const EdgeInsets.all(40), child: const Icon(Icons.error, size: 40)),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 0,
+                                        right: 0,
+                                        child: IconButton(
+                                          icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                                          onPressed: () => Navigator.of(dialogContext).pop(),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                            child: CachedNetworkImage(
+                              imageUrl: partner!.avatarUrl!,
+                              fit: BoxFit.cover,
+                              errorWidget: (_, __, ___) => Center(
+                                child: Text(
+                                  partner!.initials,
+                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ),
+                          )
+                        : Center(
+                            child: Text(
+                              hasPartner ? partner!.initials : '?',
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    hasPartner ? partner!.name : (partnerId ?? 'No member selected'),
-                    style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700),
+                  // Name and Verification
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          hasPartner ? partner!.name : (partnerId ?? 'No member selected'),
+                          style: GoogleFonts.inter(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                   if (hasPartner) ...[
                     const SizedBox(height: 2),
+                    // Profession / PIN
                     Text(
-                      'SAFEE PIN: ${partner!.safeePIN}',
-                      style: const TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
+                      profession,
+                      style: GoogleFonts.inter(
+                        color: AppColors.textTertiary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
-                    Row(
+                    const SizedBox(height: 8),
+                    // Trust Indicators
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
-                        Icon(
-                          isVerified ? Icons.verified : Icons.shield_outlined,
-                          color: isVerified ? AppColors.blue : AppColors.textTertiary,
-                          size: 13,
+                        _buildStatChip(
+                          Icons.shield_outlined,
+                          'Trust ${partner!.trustScore}',
+                          partner!.trustScore > 70 ? AppColors.success : (partner!.trustScore > 30 ? AppColors.warning : AppColors.error),
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          isVerified
-                              ? '${_levelLabels[partner!.verificationLevel] ?? partner!.verificationLevel.toUpperCase()} Verified'
-                              : 'Unverified',
-                          style: TextStyle(
-                            color: isVerified ? AppColors.blue : AppColors.textTertiary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        _buildStatChip(
+                          Icons.health_and_safety_outlined,
+                          'Safety ${partner!.safetyScore}',
+                          partner!.safetyScore > 70 ? AppColors.success : (partner!.safetyScore > 30 ? AppColors.warning : AppColors.error),
                         ),
                       ],
                     ),
@@ -667,9 +775,18 @@ class _PartnerCard extends StatelessWidget {
                 ],
               ),
             ),
-            Text(
-              hasPartner ? 'Change' : 'Select',
-              style: GoogleFonts.inter(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w700),
+            const SizedBox(width: 8),
+            // Change Button
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                hasPartner ? 'Change' : 'Select',
+                style: GoogleFonts.inter(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),

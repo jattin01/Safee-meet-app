@@ -13,6 +13,7 @@ import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../domain/entities/message_entity.dart';
 import '../bloc/messaging_bloc.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../widgets/attachment_picker_sheet.dart';
 import '../../../../features/profile/presentation/cubit/current_user_cubit.dart';
 import 'image_preview_page.dart';
@@ -607,19 +608,34 @@ class _ChatHeader extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
+                clipBehavior: Clip.hardEdge,
                 decoration: const BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
-                child: Center(
-                  child: Text(
-                    partnerName.isNotEmpty ? _initials : '?',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700),
-                  ),
-                ),
+                child: avatarUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: avatarUrl!,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => Center(
+                          child: Text(
+                            partnerName.isNotEmpty ? _initials : '?',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Text(
+                          partnerName.isNotEmpty ? _initials : '?',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ),
               ),
               if (isOnline)
                 Positioned(

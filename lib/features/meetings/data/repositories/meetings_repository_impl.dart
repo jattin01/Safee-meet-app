@@ -65,12 +65,14 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
         if (notes != null && notes.isNotEmpty) 'purpose': notes,
-        if (itemOrService != null && itemOrService.isNotEmpty) 'item_or_service': itemOrService,
+        if (itemOrService != null && itemOrService.isNotEmpty)
+          'item_or_service': itemOrService,
         'type': purpose.name,
       });
 
       final body = res.data as Map<String, dynamic>;
-      final meetingId = (body['data'] as Map<String, dynamic>)['meeting_id'].toString();
+      final meetingId =
+          (body['data'] as Map<String, dynamic>)['meeting_id'].toString();
 
       // The create response only carries the new id — fetch the full
       // record (with host/guest details) to populate the entity.
@@ -152,10 +154,13 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
   }
 
   MeetingEntity _parse(Map<String, dynamic> d, String? currentUserId) {
-    final hostId = d['host_user_id'] as String?;
-    final guestId = d['guest_user_id'] as String?;
+    final hostId = d['host_user_id']?.toString();
+    final guestId = d['guest_user_id']?.toString();
     final isHost = currentUserId != null && currentUserId == hostId;
-    final partner = isHost ? d['guest'] as Map<String, dynamic>? : d['host'] as Map<String, dynamic>?;
+    final partner = d['partner'] as Map<String, dynamic>? ??
+        (isHost
+            ? d['guest'] as Map<String, dynamic>?
+            : d['host'] as Map<String, dynamic>?);
 
     final typeStr = d['type'] as String? ?? 'other';
     final statusStr = d['status'] as String? ?? 'scheduled';
@@ -170,11 +175,25 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
       d['scheduled_start_at'] as String?,
     );
 
+    String partnerName = 'SAFEE User';
+    if (partner != null) {
+      if (partner['first_name'] != null) {
+        partnerName =
+            '${partner['first_name']} ${partner['last_name'] ?? ''}'.trim();
+      } else if (partner['display_name'] != null) {
+        partnerName = partner['display_name'] as String;
+      }
+    }
+
     return MeetingEntity(
       id: d['id'].toString(),
       partnerId: (isHost ? guestId : hostId) ?? '',
-      partnerName: partner?['display_name'] as String? ?? 'SAFEE User',
-      partnerAvatarUrl: partner?['avatar_url'] as String?,
+      partnerName: partnerName,
+      partnerAvatarUrl: _parseImageUrl(partner?['profile_image_url'] ??
+          partner?['avatarUrl'] ??
+          partner?['avatar_url'] ??
+          partner?['profileImage'] ??
+          partner?['profile_image']),
       partnerVerificationLevel: partner?['trust_tier'] as String? ?? 'none',
       scheduledAt: scheduledAt,
       purpose: purpose,
@@ -185,6 +204,13 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
       partnerLng: _toDouble(d['longitude']),
       isHost: isHost,
     );
+  }
+
+  static String? _parseImageUrl(dynamic url) {
+    if (url == null || url is! String || url.isEmpty) return null;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
+    return 'http://168.144.112.102:8080/$url';
   }
 
   // `meeting_date` is a full ISO datetime at UTC midnight (e.g.

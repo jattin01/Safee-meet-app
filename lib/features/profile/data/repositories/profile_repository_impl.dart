@@ -56,7 +56,12 @@ class ProfileRepositoryImpl implements ProfileRepository {
       final user = (body['data']?['user'] ?? body['data'] ?? body)
           as Map<String, dynamic>;
       final phone = await _storage.getUserPhone();
-      return Right(_parseProfile(user, phone: phone));
+      final profile = _parseProfile(user, phone: phone);
+      await _storage.saveUserName(profile.name);
+      if (profile.avatarUrl != null) {
+        await _storage.saveUserAvatarUrl(profile.avatarUrl!);
+      }
+      return Right(profile);
     } on DioException catch (e) {
       return Left(_map(e));
     } catch (_) {
@@ -165,7 +170,10 @@ class ProfileRepositoryImpl implements ProfileRepository {
         id: d['id'] as String? ?? '',
         name: d['displayName'] as String? ?? 'SAFEE User',
         safeePIN: d['safeeId'] as String? ?? '',
-        avatarUrl: d['avatarUrl'] as String?,
+        avatarUrl: _parseImageUrl(d['avatarUrl'] ??
+            d['avatar_url'] ??
+            d['profileImage'] ??
+            d['profile_image']),
         badgeIconUrl: _parseBadgeIconUrl(d['badgeIcon'] ?? d['badge_icon']),
         jobTitle: _parseJobTitle(d['jobTitle'] ?? d['job_title']),
         companyName: d['companyName'] ?? d['company_name'] as String?,
@@ -173,7 +181,8 @@ class ProfileRepositoryImpl implements ProfileRepository {
         email: d['email'] as String?,
         trustScore: (d['trustScore'] as num?)?.toInt() ?? 0,
         verificationLevel: _resolveVerificationLevel(d),
-        verificationStatus: d['verificationStatus'] as String? ?? 'not_submitted',
+        verificationStatus:
+            d['verificationStatus'] as String? ?? 'not_submitted',
         pinSearchCount: (d['pinSearchCount'] as num?)?.toInt() ?? 0,
         subscriptionPlan: 'free',
         safetyScore: (d['safetyScore'] as num?)?.toInt() ?? 0,
@@ -227,7 +236,8 @@ class ProfileRepositoryImpl implements ProfileRepository {
       );
 
   ReviewsSummaryEntity _parseReviewsSummary(Map<String, dynamic> body) {
-    final breakdownJson = body['breakdown'] as Map<String, dynamic>? ?? const {};
+    final breakdownJson =
+        body['breakdown'] as Map<String, dynamic>? ?? const {};
     final breakdown = <int, int>{
       for (final entry in breakdownJson.entries)
         int.parse(entry.key): (entry.value as num).toInt(),
@@ -269,10 +279,9 @@ class ProfileRepositoryImpl implements ProfileRepository {
       id: d['id'].toString(),
       authorId: reviewer['id']?.toString() ?? '',
       authorName: reviewer['name'] as String? ?? 'SAFEE User',
-      // GET /v1/reviews doesn't return a reviewer avatar — the UI falls
-      // back to initials, same as everywhere else in the app.
-      authorAvatarUrl: null,
-      authorVerificationLevel: reviewer['verification_level'] as String? ?? 'none',
+      authorAvatarUrl: _parseImageUrl(reviewer['profile_image_url']),
+      authorVerificationLevel:
+          reviewer['verification_level'] as String? ?? 'none',
       rating: (d['rating'] as num?)?.toDouble() ?? 0,
       text: d['comment'] as String? ?? '',
       // Reviews only ever exist for completed meetings (the backend
@@ -283,7 +292,8 @@ class ProfileRepositoryImpl implements ProfileRepository {
       punctual: d['punctual'] as bool? ?? false,
       trustworthy: d['trustworthy'] as bool? ?? false,
       responsive: d['responsive'] as bool? ?? false,
-      createdAt: DateTime.tryParse(d['created_at'] as String? ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(d['created_at'] as String? ?? '') ?? DateTime.now(),
       helpfulCount: (d['helpful_count'] as num?)?.toInt() ?? 0,
     );
   }
@@ -307,6 +317,13 @@ class ProfileRepositoryImpl implements ProfileRepository {
             ? DateTime.tryParse(d['created_at'] as String)
             : null,
       );
+
+  static String? _parseImageUrl(dynamic url) {
+    if (url == null || url is! String || url.isEmpty) return null;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
+    return 'http://168.144.112.102:8080/$url';
+  }
 
   Failure _map(DioException e) => mapDioException(e);
 }

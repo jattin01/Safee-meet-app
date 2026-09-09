@@ -141,22 +141,31 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       final data = Map<String, dynamic>.from(snap.data()!);
       data['roomId'] = snap.id;
 
-      // Self-heal: refresh OUR OWN name/avatar in this room's
-      // participantNames/participantAvatars every time we open or use it,
-      // not just at room creation. Only the caller's own entry is ever
-      // touched here — never the partner's — because `partnerName`/
-      // `partnerAvatarUrl` are whatever the caller happens to have cached
-      // and could themselves be stale; blindly overwriting the partner's
-      // entry with that could undo a self-heal the partner already did on
-      // their own side the next time they opened this same room.
+      // Self-heal: refresh both OUR OWN name/avatar and the partner's name/avatar 
+      // in this room's participantNames/participantAvatars every time we open or use it.
+      // This ensures that if we fetch fresh data (e.g. from a PIN search), the room 
+      // is immediately updated with the latest profile image for both users.
       final storedNames = Map<String, dynamic>.from(
           (data['participantNames'] as Map?) ?? const {});
       final storedAvatars = Map<String, dynamic>.from(
           (data['participantAvatars'] as Map?) ?? const {});
+          
+      bool needsUpdate = false;
       if (storedNames[currentUserId] != currentUserName ||
           storedAvatars[currentUserId] != currentUserAvatarUrl) {
         storedNames[currentUserId] = currentUserName;
         storedAvatars[currentUserId] = currentUserAvatarUrl;
+        needsUpdate = true;
+      }
+      
+      if (storedNames[partnerId] != partnerName ||
+          storedAvatars[partnerId] != partnerAvatarUrl) {
+        storedNames[partnerId] = partnerName;
+        storedAvatars[partnerId] = partnerAvatarUrl;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
         await ref.update({
           'participantNames': storedNames,
           'participantAvatars': storedAvatars,

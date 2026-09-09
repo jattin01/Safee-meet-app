@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -271,10 +272,11 @@ class _RevieweeHeader extends StatelessWidget {
           decoration: const BoxDecoration(color: AppColors.blue, shape: BoxShape.circle),
           child: avatarUrl != null
               ? ClipOval(
-                  child: Image.network(
-                    avatarUrl!,
+                  child: CachedNetworkImage(
+                    imageUrl: avatarUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _InitialsText(_initials),
+                    placeholder: (_, __) => const SizedBox(),
+                    errorWidget: (_, __, ___) => _InitialsText(_initials),
                   ),
                 )
               : _InitialsText(_initials),

@@ -56,7 +56,7 @@ class UserModel {
             json['display_name'] ??
             json['name'] ??
             'SAFEE User') as String,
-        avatarUrl: (json['avatarUrl'] ?? json['avatar_url']) as String?,
+        avatarUrl: _parseImageUrl(json['avatarUrl'] ?? json['avatar_url'] ?? json['profileImage'] ?? json['profile_image']),
         badgeIconUrl: _parseBadgeIconUrl(json['badgeIcon'] ?? json['badge_icon']),
         jobTitle: _parseJobTitle(json['jobTitle'] ?? json['job_title']),
         companyName: json['companyName'] ?? json['company_name'] as String?,
@@ -185,4 +185,11 @@ class UserModel {
         verificationLevel: entity.verificationLevel,
         verificationStatus: entity.verificationStatus,
       );
+}
+
+String? _parseImageUrl(dynamic url) {
+  if (url == null || url is! String || url.isEmpty) return null;
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
+  return 'http://168.144.112.102:8080/$url';
 }

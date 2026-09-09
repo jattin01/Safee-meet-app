@@ -78,7 +78,7 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
         id: d['id'] as String,
         name: d['name'] as String,
         safeePIN: d['safeePIN'] as String,
-        avatarUrl: d['avatarUrl'] as String?,
+        avatarUrl: _parseImageUrl(d['avatarUrl'] ?? d['avatar_url'] ?? d['profileImage'] ?? d['profile_image']),
         trustScore: (d['trustScore'] as num).toInt(),
         verificationLevel: d['verificationLevel'] as String? ?? 'none',
         subscriptionPlan: d['subscriptionPlan'] as String? ?? 'free',
@@ -89,6 +89,13 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
         jobTitle: _parseJobTitle(d['jobTitle'] ?? d['job_title']),
         companyName: d['companyName'] ?? d['company_name'] as String?,
       );
+
+  static String? _parseImageUrl(dynamic url) {
+    if (url == null || url is! String || url.isEmpty) return null;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
+    return 'http://168.144.112.102:8080/$url';
+  }
 
   static String? _parseBadgeIconUrl(dynamic url) {
     if (url == null || url is! String || url.isEmpty) return null;

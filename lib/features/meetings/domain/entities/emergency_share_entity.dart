@@ -41,6 +41,7 @@ class EmergencyShareUserEntity extends Equatable {
   final String id;
   final String name;
   final String? phone;
+  final String? avatarUrl;
 
   /// Most recent GPS ping for this participant (from POST
   /// meetings/{id}/location), if any has been recorded yet.
@@ -51,6 +52,7 @@ class EmergencyShareUserEntity extends Equatable {
     required this.id,
     required this.name,
     this.phone,
+    this.avatarUrl,
     this.latitude,
     this.longitude,
   });
@@ -58,7 +60,7 @@ class EmergencyShareUserEntity extends Equatable {
   bool get hasLocation => latitude != null && longitude != null;
 
   @override
-  List<Object?> get props => [id, name, phone, latitude, longitude];
+  List<Object?> get props => [id, name, phone, avatarUrl, latitude, longitude];
 }
 
 class EmergencyShareContactEntity extends Equatable {

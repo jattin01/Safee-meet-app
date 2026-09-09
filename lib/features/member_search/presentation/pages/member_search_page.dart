@@ -7,6 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../../core/config/app_colors.dart';
@@ -1406,27 +1407,27 @@ class _MemberResultCardState extends State<_MemberResultCard> {
                                             fontSize: 18,
                                             fontWeight: FontWeight.w800)),
                                   ),
-                                    if (member.verificationLevel != 'none') ...[
-                                      const SizedBox(width: 6),
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                            left: 2,
-                                            right: 8,
-                                            top: 4,
-                                            bottom: 4),
-                                        child: Icon(
-                                          Icons.verified,
-                                          color: member.verificationLevel ==
-                                                  'level3'
-                                              ? AppColors.warning
-                                              : member.verificationLevel ==
-                                                      'level2'
-                                                  ? AppColors.blue
-                                                  : AppColors.primary,
-                                          size: 22,
-                                        ),
+                                  if (member.verificationLevel != 'none') ...[
+                                    const SizedBox(width: 6),
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 2,
+                                          right: 8,
+                                          top: 4,
+                                          bottom: 4),
+                                      child: Icon(
+                                        Icons.verified,
+                                        color: member.verificationLevel ==
+                                                'level3'
+                                            ? AppColors.warning
+                                            : member.verificationLevel ==
+                                                    'level2'
+                                                ? AppColors.blue
+                                                : AppColors.primary,
+                                        size: 22,
                                       ),
-                                    ],
+                                    ),
+                                  ],
                                 ],
                               ),
                               const SizedBox(height: 2),
@@ -1638,33 +1639,69 @@ class _MemberResultCardState extends State<_MemberResultCard> {
           Positioned(
             top: 36,
             left: 16,
-            child: Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.cardBg,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 3),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: member.avatarUrl != null
-                  ? ClipOval(
-                      child:
-                          Image.network(member.avatarUrl!, fit: BoxFit.cover),
-                    )
-                  : Center(
-                      child: Text(member.initials,
-                          style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800)),
+            child: GestureDetector(
+              onTap: () {
+                if (member.avatarUrl == null) return;
+                showDialog(
+                  context: context,
+                  builder: (dialogContext) => Dialog(
+                    backgroundColor: Colors.transparent,
+                    insetPadding: const EdgeInsets.all(16),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        InteractiveViewer(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: CachedNetworkImage(
+                              imageUrl: member.avatarUrl!,
+                              fit: BoxFit.contain,
+                              placeholder: (_, __) => const CircularProgressIndicator(color: Colors.white),
+                              errorWidget: (_, __, ___) => Container(color: Colors.white, padding: const EdgeInsets.all(40), child: const Icon(Icons.error, size: 40)),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                );
+              },
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.cardBg,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: member.avatarUrl != null
+                    ? ClipOval(
+                        child:
+                            CachedNetworkImage(imageUrl: member.avatarUrl!, fit: BoxFit.cover),
+                      )
+                    : Center(
+                        child: Text(member.initials,
+                            style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800)),
+                      ),
+              ),
             ),
           ),
         ],

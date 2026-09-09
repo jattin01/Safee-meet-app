@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/config/app_colors.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/shared/widgets/dark_screen_header.dart';
@@ -176,7 +177,8 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, color: AppColors.textTertiary, size: 44),
+            const Icon(Icons.cloud_off,
+                color: AppColors.textTertiary, size: 44),
             const SizedBox(height: 12),
             Text(
               message,
@@ -258,7 +260,8 @@ class _RatingSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxCount = summary.maxBreakdownCount == 0 ? 1 : summary.maxBreakdownCount;
+    final maxCount =
+        summary.maxBreakdownCount == 0 ? 1 : summary.maxBreakdownCount;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -312,7 +315,8 @@ class _RatingSummary extends StatelessWidget {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
                                 child: LinearProgressIndicator(
-                                  value: (summary.breakdown[star] ?? 0) / maxCount,
+                                  value:
+                                      (summary.breakdown[star] ?? 0) / maxCount,
                                   minHeight: 6,
                                   backgroundColor:
                                       Colors.white.withOpacity(0.08),
@@ -343,8 +347,7 @@ class _RatingSummary extends StatelessWidget {
             children: [
               Expanded(
                   child: _StatPill(
-                      value: '${summary.punctualPercent}%',
-                      label: 'Punctual')),
+                      value: '${summary.punctualPercent}%', label: 'Punctual')),
               const SizedBox(width: 10),
               Expanded(
                   child: _StatPill(
@@ -489,8 +492,6 @@ const List<Color> _kAvatarPalette = [
 Color _avatarColorFor(String seed) =>
     _kAvatarPalette[seed.hashCode.abs() % _kAvatarPalette.length];
 
-
-
 class _ReviewCard extends StatelessWidget {
   final ReviewEntity review;
   final VoidCallback onHelpful;
@@ -521,18 +522,27 @@ class _ReviewCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                    color: _avatarColorFor(review.authorId),
-                    shape: BoxShape.circle),
-                child: Center(
-                    child: Text(review.authorInitials,
-                        style: GoogleFonts.inter(
-                            color: AppColors.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700))),
+              Builder(
+                builder: (context) {
+                  final avatarUrl = review.authorAvatarUrl;
+                  if (avatarUrl != null && avatarUrl.isNotEmpty) {
+                    return Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(shape: BoxShape.circle),
+                      clipBehavior: Clip.hardEdge,
+                      child: CachedNetworkImage(
+                        imageUrl: avatarUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          color: _avatarColorFor(review.authorId),
+                        ),
+                        errorWidget: (_, __, ___) => _buildFallbackAvatar(),
+                      ),
+                    );
+                  }
+                  return _buildFallbackAvatar();
+                },
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -573,7 +583,8 @@ class _ReviewCard extends StatelessWidget {
                                   size: 14,
                                 )),
                         const SizedBox(width: 6),
-                        Text('· ${DateFormat('MMM d, yyyy').format(review.createdAt)}',
+                        Text(
+                            '· ${DateFormat('MMM d, yyyy').format(review.createdAt)}',
                             style: TextStyle(
                                 color: AppColors.textTertiary, fontSize: 12)),
                       ],
@@ -611,7 +622,8 @@ class _ReviewCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                if (review.punctual) const _RecommendationBadge(label: 'Punctual'),
+                if (review.punctual)
+                  const _RecommendationBadge(label: 'Punctual'),
                 if (review.trustworthy)
                   const _RecommendationBadge(label: 'Trustworthy'),
                 if (review.responsive)
@@ -648,7 +660,8 @@ class _ReviewCard extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               if (review.verifiedMeeting) ...[
-                const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 16),
+                const Icon(Icons.check_circle_rounded,
+                    color: AppColors.success, size: 16),
                 const SizedBox(width: 4),
                 Text(
                   'Verified Meeting',
@@ -662,6 +675,21 @@ class _ReviewCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFallbackAvatar() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+          color: _avatarColorFor(review.authorId), shape: BoxShape.circle),
+      child: Center(
+          child: Text(review.authorInitials,
+              style: GoogleFonts.inter(
+                  color: AppColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700))),
     );
   }
 }
@@ -681,12 +709,15 @@ class _RecommendationBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 14),
+          const Icon(Icons.check_circle_rounded,
+              color: AppColors.success, size: 14),
           const SizedBox(width: 4),
           Text(
             label,
             style: GoogleFonts.inter(
-                color: AppColors.success, fontSize: 11.5, fontWeight: FontWeight.w700),
+                color: AppColors.success,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -700,7 +731,8 @@ class _ShimmerBox extends StatefulWidget {
   final double width;
   final double height;
   final BorderRadius? borderRadius;
-  const _ShimmerBox({required this.width, required this.height, this.borderRadius});
+  const _ShimmerBox(
+      {required this.width, required this.height, this.borderRadius});
 
   @override
   State<_ShimmerBox> createState() => _ShimmerBoxState();
@@ -768,7 +800,10 @@ class _ReviewCardSkeleton extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _ShimmerBox(width: 40, height: 40, borderRadius: BorderRadius.all(Radius.circular(20))),
+          const _ShimmerBox(
+              width: 40,
+              height: 40,
+              borderRadius: BorderRadius.all(Radius.circular(20))),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

@@ -86,6 +86,8 @@ class AuthRepositoryImpl implements AuthRepository {
         _local.cacheUser(model.user),
         if (entity.user.displayName != null)
           _secureStorage.saveUserName(entity.user.displayName!),
+        if (entity.user.avatarUrl != null)
+          _secureStorage.saveUserAvatarUrl(entity.user.avatarUrl!),
         if (firebasePhone != null)
           _secureStorage.saveUserPhone(firebasePhone),
       ]).catchError((_) => const <void>[]));
@@ -134,6 +136,8 @@ class AuthRepositoryImpl implements AuthRepository {
         _local.cacheUser(model.user),
         if (entity.user.displayName != null)
           _secureStorage.saveUserName(entity.user.displayName!),
+        if (entity.user.avatarUrl != null)
+          _secureStorage.saveUserAvatarUrl(entity.user.avatarUrl!),
         if (firebasePhone != null)
           _secureStorage.saveUserPhone(firebasePhone),
       ]).catchError((_) => const <void>[]));

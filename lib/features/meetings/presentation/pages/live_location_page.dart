@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geocoding/geocoding.dart';
@@ -22,7 +23,14 @@ import '../bloc/emergency_share_bloc.dart';
 
 class LiveLocationPage extends StatefulWidget {
   final String? meetingId;
-  const LiveLocationPage({super.key, this.meetingId});
+  final String? partnerName;
+  final String? partnerAvatarUrl;
+  const LiveLocationPage({
+    super.key,
+    this.meetingId,
+    this.partnerName,
+    this.partnerAvatarUrl,
+  });
 
   @override
   State<LiveLocationPage> createState() => _LiveLocationPageState();
@@ -229,6 +237,7 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
           meetingId: meetingId,
           revieweeId: revieweeId,
           revieweeName: partner.name,
+          revieweeAvatarUrl: widget.partnerAvatarUrl,
         ),
       );
     } else {
@@ -377,6 +386,8 @@ class _LiveLocationPageState extends State<LiveLocationPage> {
       countdown: _countdownLabel(data?.meeting),
       meeting: data?.meeting,
       partner: data?.partner,
+      partnerNameFallback: widget.partnerName,
+      partnerAvatarFallback: widget.partnerAvatarUrl,
       currentPosition: currentPosition,
     );
   }
@@ -438,11 +449,15 @@ class _Header extends StatelessWidget {
   final String countdown;
   final EmergencyShareMeetingEntity? meeting;
   final EmergencyShareUserEntity? partner;
+  final String? partnerNameFallback;
+  final String? partnerAvatarFallback;
   final GpsTracking? currentPosition;
   const _Header({
     required this.countdown,
     required this.meeting,
     required this.partner,
+    this.partnerNameFallback,
+    this.partnerAvatarFallback,
     this.currentPosition,
   });
 
@@ -491,7 +506,12 @@ class _Header extends StatelessWidget {
           // Meeting partner card
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _PartnerCard(meeting: meeting, partner: partner),
+            child: _PartnerCard(
+              meeting: meeting,
+              partner: partner,
+              partnerNameFallback: partnerNameFallback,
+              partnerAvatarFallback: partnerAvatarFallback,
+            ),
           ),
           const SizedBox(height: 12),
 
@@ -511,9 +531,16 @@ class _Header extends StatelessWidget {
 class _PartnerCard extends StatelessWidget {
   final EmergencyShareMeetingEntity? meeting;
   final EmergencyShareUserEntity? partner;
-  const _PartnerCard({required this.meeting, required this.partner});
+  final String? partnerNameFallback;
+  final String? partnerAvatarFallback;
+  const _PartnerCard({
+    required this.meeting,
+    required this.partner,
+    this.partnerNameFallback,
+    this.partnerAvatarFallback,
+  });
 
-  String get _partnerName => partner?.name ?? 'SAFEE User';
+  String get _partnerName => partner?.name ?? partnerNameFallback ?? 'SAFEE User';
 
   String get _subtitle {
     if (meeting == null) return '';
@@ -539,17 +566,47 @@ class _PartnerCard extends StatelessWidget {
       child: Row(
         children: [
           // Avatar
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.blue,
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-              child: Icon(Icons.person, color: Colors.white, size: 20),
-            ),
-          ),
+          Builder(builder: (context) {
+            final url = partner?.avatarUrl ?? partnerAvatarFallback;
+            final initials = _partnerName
+                .trim()
+                .split(' ')
+                .where((p) => p.isNotEmpty)
+                .take(2)
+                .map((p) => p[0].toUpperCase())
+                .join();
+            return Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.blue,
+                shape: BoxShape.circle,
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: url != null && url.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: url,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => const Center(
+                        child: Icon(Icons.person, color: Colors.white, size: 20),
+                      ),
+                      errorWidget: (_, __, ___) => Center(
+                        child: Text(initials,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                    )
+                  : Center(
+                      child: Text(initials,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold)),
+                    ),
+            );
+          }),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

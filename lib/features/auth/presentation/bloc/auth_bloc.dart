@@ -14,7 +14,14 @@ import '../../../../core/services/socket_service.dart';
 import '../../../../core/shared/failures/failures.dart';
 import '../../../profile/presentation/bloc/profile_bloc.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
+import '../../../profile/presentation/cubit/reviews_cubit.dart';
 import '../../../subscription/presentation/cubit/current_subscription_cubit.dart';
+import '../../../subscription/presentation/cubit/subscription_comparison_cubit.dart';
+import '../../../subscription/presentation/bloc/subscription_bloc.dart';
+import '../../../member_search/presentation/bloc/member_search_bloc.dart';
+import '../../../meetings/presentation/bloc/meetings_bloc.dart';
+import '../../../verification/presentation/bloc/verification_bloc.dart';
+import '../../../settings/presentation/bloc/emergency_contact_bloc.dart';
 import '../../domain/use_cases/apple_login_use_case.dart';
 import '../../domain/use_cases/check_auth_status_use_case.dart';
 import '../../domain/use_cases/check_user_exists_use_case.dart';
@@ -276,6 +283,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// from completing.
   void _resetUserScopedState() {
     try {
+      if (sl.isRegistered<MemberSearchBloc>()) sl.resetLazySingleton<MemberSearchBloc>();
+      if (sl.isRegistered<MeetingsBloc>()) sl.resetLazySingleton<MeetingsBloc>();
+      if (sl.isRegistered<VerificationBloc>()) sl.resetLazySingleton<VerificationBloc>();
+      if (sl.isRegistered<EmergencyContactBloc>()) sl.resetLazySingleton<EmergencyContactBloc>();
+      if (sl.isRegistered<SubscriptionBloc>()) sl.resetLazySingleton<SubscriptionBloc>();
+      if (sl.isRegistered<ReviewsCubit>()) sl.resetLazySingleton<ReviewsCubit>();
+      if (sl.isRegistered<SubscriptionComparisonCubit>()) sl.resetLazySingleton<SubscriptionComparisonCubit>();
       sl<ProfileBloc>().reset();
       sl<CurrentUserCubit>().reset();
       sl<CurrentSubscriptionCubit>().reset();

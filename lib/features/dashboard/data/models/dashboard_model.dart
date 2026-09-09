@@ -26,7 +26,7 @@ class DashboardModel {
   factory DashboardModel.fromJson(Map<String, dynamic> json) => DashboardModel(
         userId: json['userId'] as String,
         name: json['name'] as String,
-        avatarUrl: json['avatarUrl'] as String?,
+        avatarUrl: _parseImageUrl(json['avatarUrl'] ?? json['avatar_url'] ?? json['profileImage'] ?? json['profile_image']),
         trustScore: (json['trustScore'] as num).toInt(),
         verificationLevel: json['verificationLevel'] as String? ?? 'none',
         isLocationSharing: json['isLocationSharing'] as bool? ?? false,
@@ -92,4 +92,11 @@ class RecentMeetingModel {
         purpose: purpose,
         location: location,
       );
+}
+
+String? _parseImageUrl(dynamic url) {
+  if (url == null || url is! String || url.isEmpty) return null;
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
+  return 'http://168.144.112.102:8080/$url';
 }

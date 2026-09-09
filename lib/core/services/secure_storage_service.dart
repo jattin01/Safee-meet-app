@@ -61,6 +61,11 @@ class SecureStorageService {
 
   Future<String?> getUserName() => _storage.read(key: 'sm_user_name');
 
+  Future<void> saveUserAvatarUrl(String url) =>
+      _storage.write(key: 'sm_user_avatar', value: url);
+
+  Future<String?> getUserAvatarUrl() => _storage.read(key: 'sm_user_avatar');
+
   // ── Auth State ───────────────────────────────────────────────────────────
 
   Future<String?> getAuthToken() => getAccessToken();
@@ -91,6 +96,7 @@ class SecureStorageService {
     await _storage.delete(key: _kUserId);
     await _storage.delete(key: _kUserPhone);
     await _storage.delete(key: 'sm_user_name');
+    await _storage.delete(key: 'sm_user_avatar');
     await _storage.delete(key: _kAuthStatus);
   }
 

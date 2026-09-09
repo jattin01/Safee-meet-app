@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -5,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/config/app_constants.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 
 typedef PickedLocation = ({double latitude, double longitude, String address});
@@ -26,6 +29,14 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   LatLng _center = _fallback;
   String? _address;
   bool _resolvingAddress = false;
+  
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  Timer? _debounce;
+  List<Map<String, String>> _suggestions = [];
+  bool _showSuggestions = false;
+  
+
 
   @override
   void initState() {
@@ -83,6 +94,78 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
+  Future<void> _searchLocation(String query) async {
+    if (query.trim().isEmpty) return;
+    _searchFocus.unfocus();
+    setState(() => _showSuggestions = false);
+    
+    try {
+      final locations = await locationFromAddress(query);
+      if (locations.isNotEmpty) {
+        final loc = locations.first;
+        final target = LatLng(loc.latitude, loc.longitude);
+        _controller?.animateCamera(CameraUpdate.newLatLngZoom(target, 15));
+        // Camera move triggers onCameraIdle, which resolves the address
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Location not found: "$query"'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    if (query.trim().isEmpty) {
+      setState(() {
+        _suggestions = [];
+        _showSuggestions = false;
+      });
+      return;
+    }
+    
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final dio = Dio();
+        final response = await dio.get(
+          'https://maps.googleapis.com/maps/api/place/autocomplete/json',
+          queryParameters: {
+            'input': query,
+            'key': AppConstants.googleMapsApiKey,
+            'components': 'country:in', // Optional: prioritize Indian results
+          },
+        );
+        
+        if (response.data['status'] == 'OK') {
+          final predictions = response.data['predictions'] as List;
+          if (mounted) {
+            setState(() {
+              _suggestions = predictions.map<Map<String, String>>((p) => {
+                'description': p['description'] as String,
+                'place_id': p['place_id'] as String,
+              }).toList();
+              _showSuggestions = true;
+            });
+          }
+        } else {
+          debugPrint('Places API Error: ${response.data['status']} - ${response.data['error_message']}');
+        }
+      } catch (e) {
+        debugPrint('Places API Exception: $e');
+      }
+    });
+  }
+
+  void _onSuggestionSelected(String description) {
+    _searchController.text = description;
+    _searchLocation(description);
+  }
+
   void _confirm() {
     if (_address == null) return;
     Navigator.of(context).pop<PickedLocation>((
@@ -122,6 +205,92 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   _RoundIconButton(
                     icon: Icons.arrow_back,
                     onTap: () => Navigator.of(context).pop(),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: TextField(
+                            controller: _searchController,
+                            focusNode: _searchFocus,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: _searchLocation,
+                            onChanged: _onSearchChanged,
+                            style: const TextStyle(fontSize: 15, color: Colors.black),
+                            decoration: InputDecoration(
+                              hintText: 'Search for a place...',
+                              hintStyle: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 15,
+                              ),
+                              prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.clear, size: 20),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _onSearchChanged('');
+                                  _searchFocus.unfocus();
+                                },
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 14),
+                            ),
+                          ),
+                        ),
+                        if (_showSuggestions && _suggestions.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 250),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                )
+                              ],
+                            ),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              itemCount: _suggestions.length,
+                              separatorBuilder: (context, index) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final suggestion = _suggestions[index];
+                                return ListTile(
+                                  leading: const Icon(Icons.location_on, color: Colors.grey),
+                                  title: Text(
+                                    suggestion['description'] ?? '',
+                                    style: const TextStyle(color: Colors.black87, fontSize: 14),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: () => _onSuggestionSelected(suggestion['description']!),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),

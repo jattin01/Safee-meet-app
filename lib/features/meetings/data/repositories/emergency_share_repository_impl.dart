@@ -78,10 +78,19 @@ class EmergencyShareRepositoryImpl implements EmergencyShareRepository {
   }
 
   EmergencyShareUserEntity _parseUser(Map<String, dynamic> d) {
+    final rawImage = d['profile_image_url'] as String? ??
+        d['avatar_url'] as String? ??
+        d['avatarUrl'] as String?;
+    final avatarUrl = rawImage == null
+        ? null
+        : rawImage.startsWith('http')
+            ? rawImage
+            : 'http://168.144.112.102:8080${rawImage.startsWith('/') ? rawImage : '/$rawImage'}';
     return EmergencyShareUserEntity(
       id: d['id']?.toString() ?? '',
       name: d['name']?.toString() ?? 'SAFEE User',
       phone: d['phone'] as String?,
+      avatarUrl: avatarUrl,
       latitude: _toDouble(d['latitude']),
       longitude: _toDouble(d['longitude']),
     );

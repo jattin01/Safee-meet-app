@@ -12,6 +12,7 @@ import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../domain/entities/message_entity.dart';
 import '../bloc/messaging_bloc.dart';
 import '../../../profile/presentation/cubit/current_user_cubit.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ConversationsPage extends StatelessWidget {
   const ConversationsPage({super.key});
@@ -416,20 +417,36 @@ class _ConversationTile extends StatelessWidget {
             Container(
               width: 52,
               height: 52,
+              clipBehavior: Clip.hardEdge,
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.10),
                 shape: BoxShape.circle,
               ),
-              child: Center(
-                child: Text(
-                  conversation.partnerInitials,
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              child: conversation.partnerAvatarUrl != null
+                  ? CachedNetworkImage(
+                      imageUrl: conversation.partnerAvatarUrl!,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => Center(
+                        child: Text(
+                          conversation.partnerInitials,
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Text(
+                        conversation.partnerInitials,
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
             ),
             const SizedBox(width: 14),
             Expanded(
