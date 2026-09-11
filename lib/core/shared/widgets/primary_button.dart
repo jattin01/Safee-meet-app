@@ -44,7 +44,8 @@ class _PrimaryButtonState extends State<PrimaryButton> {
         curve: Curves.easeInOut,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          height: 52,
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             gradient: _isDisabled
                 ? null
@@ -81,12 +82,17 @@ class _PrimaryButtonState extends State<PrimaryButton> {
                   ),
                 )
               else ...[
-                Text(
-                  widget.label,
-                  style: GoogleFonts.inter(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                Flexible(
+                  child: Text(
+                    widget.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 if (widget.icon != null) ...[const SizedBox(width: 6), widget.icon!],
