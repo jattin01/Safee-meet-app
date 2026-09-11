@@ -479,6 +479,7 @@ class _MeetingSetupViewState extends State<_MeetingSetupView> {
                             hint: 'Tap to select location on map',
                             controller: _locationCtrl,
                             readOnly: true,
+                            maxLines: null,
                             suffixWidget: const Padding(
                               padding: EdgeInsets.only(right: 12),
                               child: Icon(

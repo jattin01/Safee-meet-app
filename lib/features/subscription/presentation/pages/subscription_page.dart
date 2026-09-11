@@ -423,6 +423,18 @@ class _PlanCard extends StatelessWidget {
     final emoji = _emojiFor(plan.icon);
     final popular = plan.slug == 'premium';
 
+    // Promotional discount pricing (original_price + discount_percent from
+    // the API) for whichever billing cycle is active. Only shown when the
+    // API actually sent both values for that cycle — see hasDiscount().
+    final hasDiscount = plan.hasDiscount(yearly);
+    final discountOriginalPrice = plan.originalPrice(yearly);
+    final discountPercent = plan.discountPercent(yearly);
+    // Discounted cards show the real total for the active cycle (matching
+    // the original price's scale) instead of the per-month-equivalent used
+    // for non-discounted yearly plans.
+    final discountedPrice = yearly ? plan.yearlyPrice : plan.monthlyPrice;
+    final discountPriceSuffix = yearly ? '/year' : '/month';
+
     return GestureDetector(
       onTap: onSelect,
       child: AnimatedContainer(
@@ -552,24 +564,60 @@ class _PlanCard extends StatelessWidget {
                                     fontWeight: FontWeight.w800),
                               ),
                             ),
+                          if (hasDiscount)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Text(
+                                '\$${discountOriginalPrice!.toStringAsFixed(2)}',
+                                style: GoogleFonts.inter(
+                                  color: AppColors.textTertiary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  decoration: TextDecoration.lineThrough,
+                                  decorationColor: AppColors.textTertiary,
+                                ),
+                              ),
+                            ),
                           Text(
                             plan.monthlyPrice == 0
                                 ? '\$0'
-                                : '\$${plan.price(yearly).toStringAsFixed(2)}',
+                                : hasDiscount
+                                    ? '\$${discountedPrice.toStringAsFixed(2)}$discountPriceSuffix'
+                                    : '\$${plan.price(yearly).toStringAsFixed(2)}',
                             style: GoogleFonts.inter(
                                 color: color,
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800),
                           ),
-                          Text('per month',
-                              style: TextStyle(
-                                  color: AppColors.textTertiary, fontSize: 11)),
-                          if (yearly && plan.monthlyPrice > 0)
-                            Text(
-                                'billed \$${plan.yearlyPrice.toStringAsFixed(2)}/yr',
+                          if (hasDiscount)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning.withOpacity(0.14),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                '$discountPercent% OFF',
+                                style: GoogleFonts.inter(
+                                    color: AppColors.warning,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800),
+                              ),
+                            )
+                          else ...[
+                            Text('per month',
                                 style: TextStyle(
                                     color: AppColors.textTertiary,
-                                    fontSize: 10)),
+                                    fontSize: 11)),
+                            if (yearly && plan.monthlyPrice > 0)
+                              Text(
+                                  'billed \$${plan.yearlyPrice.toStringAsFixed(2)}/yr',
+                                  style: TextStyle(
+                                      color: AppColors.textTertiary,
+                                      fontSize: 10)),
+                          ],
                         ],
                       ),
                     ],

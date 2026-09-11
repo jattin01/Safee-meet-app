@@ -6,6 +6,19 @@ class SubscriptionPlanEntity extends Equatable {
   final String slug;
   final double monthlyPrice;
   final double yearlyPrice;
+
+  /// Pre-discount list price for each billing cycle, present only when a
+  /// promotional discount is active on that cycle; `null` otherwise.
+  final double? monthlyOriginalPrice;
+  final double? yearlyOriginalPrice;
+
+  /// Discount percentage (e.g. `25` for "25% OFF") for each billing cycle,
+  /// present only alongside a non-null original price; `null` otherwise.
+  /// Unrelated to [yearlySavingsPercent] below, which is the separate,
+  /// always-computed "pay yearly instead of monthly" savings figure.
+  final int? monthlyDiscountPercent;
+  final int? yearlyDiscountPercent;
+
   final int? trialDays;
   final int? pinSearchLimit;
   final List<String> features;
@@ -32,6 +45,10 @@ class SubscriptionPlanEntity extends Equatable {
     required this.slug,
     required this.monthlyPrice,
     required this.yearlyPrice,
+    this.monthlyOriginalPrice,
+    this.yearlyOriginalPrice,
+    this.monthlyDiscountPercent,
+    this.yearlyDiscountPercent,
     this.trialDays,
     this.pinSearchLimit,
     required this.features,
@@ -47,6 +64,26 @@ class SubscriptionPlanEntity extends Equatable {
   int? getFeatureLimit(String featureSlug) => featureLimits[featureSlug];
 
   double price(bool yearly) => yearly ? yearlyPrice / 12 : monthlyPrice;
+
+  /// Pre-discount original price for the given billing cycle, on the same
+  /// scale as [price] would return the *total* for that cycle (i.e. the
+  /// full monthly amount, or the full annual amount — not divided by 12).
+  double? originalPrice(bool yearly) =>
+      yearly ? yearlyOriginalPrice : monthlyOriginalPrice;
+
+  /// Discount percentage for the given billing cycle (e.g. `25` for
+  /// "25% OFF"), or `null` when no discount is configured for it.
+  int? discountPercent(bool yearly) =>
+      yearly ? yearlyDiscountPercent : monthlyDiscountPercent;
+
+  /// Whether the given billing cycle has a valid, active promotional
+  /// discount to display (both an original price and a positive discount
+  /// percent must be present).
+  bool hasDiscount(bool yearly) {
+    final original = originalPrice(yearly);
+    final percent = discountPercent(yearly);
+    return original != null && original > 0 && percent != null && percent > 0;
+  }
 
   /// How much cheaper billing yearly is vs. paying monthly for 12 months,
   /// as a whole-number percentage — computed straight from [monthlyPrice]/
@@ -67,6 +104,10 @@ class SubscriptionPlanEntity extends Equatable {
         slug,
         monthlyPrice,
         yearlyPrice,
+        monthlyOriginalPrice,
+        yearlyOriginalPrice,
+        monthlyDiscountPercent,
+        yearlyDiscountPercent,
         trialDays,
         pinSearchLimit,
         features,

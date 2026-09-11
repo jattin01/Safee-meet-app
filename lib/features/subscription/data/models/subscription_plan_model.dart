@@ -6,6 +6,20 @@ class SubscriptionPlanModel {
   final String slug;
   final double monthlyPrice;
   final double yearlyPrice;
+
+  /// Pre-discount list price for each billing cycle, sent by the API only
+  /// when a promotional discount is active on that cycle; `null` otherwise.
+  final double? monthlyOriginalPrice;
+  final double? yearlyOriginalPrice;
+
+  /// Discount percentage (e.g. `25` for "25% OFF") for each billing cycle,
+  /// sent by the API only alongside a non-null original price; `null`
+  /// otherwise. Unrelated to [SubscriptionPlanEntity.yearlySavingsPercent],
+  /// which is the separate, always-computed "pay yearly instead of monthly"
+  /// savings figure.
+  final int? monthlyDiscountPercent;
+  final int? yearlyDiscountPercent;
+
   final int? trialDays;
   final int? pinSearchLimit;
   final List<String> features;
@@ -22,6 +36,10 @@ class SubscriptionPlanModel {
     required this.slug,
     required this.monthlyPrice,
     required this.yearlyPrice,
+    this.monthlyOriginalPrice,
+    this.yearlyOriginalPrice,
+    this.monthlyDiscountPercent,
+    this.yearlyDiscountPercent,
     this.trialDays,
     this.pinSearchLimit,
     required this.features,
@@ -40,6 +58,10 @@ class SubscriptionPlanModel {
         slug: json['slug'] as String,
         monthlyPrice: _toDouble(json['monthly_price']),
         yearlyPrice: _toDouble(json['yearly_price']),
+        monthlyOriginalPrice: _toNullableDouble(json['monthly_original_price']),
+        yearlyOriginalPrice: _toNullableDouble(json['yearly_original_price']),
+        monthlyDiscountPercent: (json['monthly_discount_percent'] as num?)?.toInt(),
+        yearlyDiscountPercent: (json['yearly_discount_percent'] as num?)?.toInt(),
         trialDays: (json['trial_days'] as num?)?.toInt(),
         pinSearchLimit: (json['pin_search_limit'] as num?)?.toInt(),
         features: _parseFeatures(json['features']),
@@ -62,6 +84,9 @@ class SubscriptionPlanModel {
 
   static double _toDouble(dynamic v) =>
       v is String ? double.parse(v) : (v as num).toDouble();
+
+  static double? _toNullableDouble(dynamic v) =>
+      v == null ? null : _toDouble(v);
 
   /// The API now sends each feature as an object (`{id, slug, name}`)
   /// instead of a plain string, so the label the UI shows lives at
@@ -140,6 +165,10 @@ class SubscriptionPlanModel {
         'slug': slug,
         'monthly_price': monthlyPrice,
         'yearly_price': yearlyPrice,
+        'monthly_original_price': monthlyOriginalPrice,
+        'yearly_original_price': yearlyOriginalPrice,
+        'monthly_discount_percent': monthlyDiscountPercent,
+        'yearly_discount_percent': yearlyDiscountPercent,
         'trial_days': trialDays,
         'pin_search_limit': pinSearchLimit,
         'features': features,
@@ -157,6 +186,10 @@ class SubscriptionPlanModel {
         slug: slug,
         monthlyPrice: monthlyPrice,
         yearlyPrice: yearlyPrice,
+        monthlyOriginalPrice: monthlyOriginalPrice,
+        yearlyOriginalPrice: yearlyOriginalPrice,
+        monthlyDiscountPercent: monthlyDiscountPercent,
+        yearlyDiscountPercent: yearlyDiscountPercent,
         trialDays: trialDays,
         pinSearchLimit: pinSearchLimit,
         features: features,

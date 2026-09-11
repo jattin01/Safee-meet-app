@@ -29,12 +29,18 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   LatLng _center = _fallback;
   String? _address;
   bool _resolvingAddress = false;
-  
+
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   Timer? _debounce;
   List<Map<String, String>> _suggestions = [];
   bool _showSuggestions = false;
+
+  // Full address text from a tapped Places suggestion. When set, the next
+  // onCameraIdle should use this verbatim instead of reverse-geocoding the
+  // pin's coordinates (which only yields a truncated street/locality/state
+  // string and would overwrite the full address the user just picked).
+  String? _presetAddress;
   
 
 
@@ -69,6 +75,17 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   }
 
   Future<void> _resolveAddress(LatLng target) async {
+    if (_presetAddress != null) {
+      // The user just picked a Places suggestion — keep its full address
+      // instead of overwriting it with a truncated reverse-geocoded one.
+      final preset = _presetAddress!;
+      _presetAddress = null;
+      setState(() {
+        _address = preset;
+        _resolvingAddress = false;
+      });
+      return;
+    }
     setState(() => _resolvingAddress = true);
     try {
       final placemarks = await placemarkFromCoordinates(
@@ -163,6 +180,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   void _onSuggestionSelected(String description) {
     _searchController.text = description;
+    _presetAddress = description;
+    setState(() => _address = description);
     _searchLocation(description);
   }
 
