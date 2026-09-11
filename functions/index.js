@@ -28,7 +28,7 @@ exports.sendChatNotification = onDocumentCreated(
     const message = event.data.data();
     if (!message) return;
 
-    const { senderId, receiverId, message: content } = message;
+    const { senderId, receiverId } = message;
 
     // Don't notify if receiver is the same as sender
     if (!receiverId || receiverId === senderId) return;
@@ -60,7 +60,9 @@ exports.sendChatNotification = onDocumentCreated(
         token: fcmToken,
         notification: {
           title: senderName,
-          body: content.length > 100 ? content.substring(0, 97) + '…' : content,
+          // Generic body — do not leak message content into the notification
+          // tray (visible on lock screen / notification shade).
+          body: 'Sent you a new message',
         },
         data: {
           // App uses these to navigate to the correct chat on tap

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "firebase": {
+      "command": "firebase",
+      "args": ["mcp", "--dir", "/Users/apple/Desktop/SolutionBowl/Safee-meet-app"]
+    }
+  }
+}

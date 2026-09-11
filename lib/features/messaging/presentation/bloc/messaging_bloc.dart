@@ -788,12 +788,20 @@ class MessagingBloc extends Bloc<MessagingEvent, MessagingState> {
             !streamKeys.contains('${m.senderId}:${m.content}'))
         .toList();
 
-    // Preserve pagination-loaded messages older than the stream window
+    // Preserve pagination-loaded messages older than the stream window.
+    // Also exclude anything whose real Firestore id already appears in this
+    // batch — a message written with FieldValue.serverTimestamp() delivers
+    // two snapshots (pending-write with createdAt still null, then the
+    // server-resolved value); the first snapshot's fallback DateTime.now()
+    // can look "older than" the resolved batch's first message and would
+    // otherwise get kept around as a stale duplicate of the same message.
+    final streamIds = event.messages.map((m) => m.id).toSet();
     final olderLoaded = event.messages.isEmpty
         ? <MessageEntity>[]
         : current.messages
             .where((m) =>
                 !m.id.startsWith('temp_') &&
+                !streamIds.contains(m.id) &&
                 m.createdAt.isBefore(event.messages.first.createdAt))
             .toList();
 

@@ -177,13 +177,16 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       return ChatRoomModel.fromJson(data);
     }
 
-    final now = Timestamp.now();
     final roomData = <String, dynamic>{
       'roomId': roomId,
       'participants': [currentUserId, partnerId],
       'lastMessage': '',
       'lastMessageTime': null,
-      'createdAt': now,
+      // Server timestamp: not spoofable via device clock (matches presence/typing).
+      // ChatRoomModel.fromJson falls back to DateTime.now() for the value
+      // returned synchronously below, until the real-time listener delivers
+      // the resolved server value.
+      'createdAt': FieldValue.serverTimestamp(),
       'isBlocked': false,
       'blockedBy': null,
       'participantNames': {
@@ -228,7 +231,6 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String? mimeType,
   }) async {
     final msgRef = _messages(roomId).doc();
-    final now = Timestamp.now();
 
     final msgData = <String, dynamic>{
       'messageId': msgRef.id,
@@ -237,7 +239,8 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       'message': content,
       'type': type,
       'isRead': false,
-      'createdAt': now,
+      // Server timestamp: not spoofable via device clock (matches presence/typing).
+      'createdAt': FieldValue.serverTimestamp(),
     };
 
     if (attachmentUrl != null) msgData['attachmentUrl'] = attachmentUrl;
@@ -249,11 +252,14 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     batch.set(msgRef, msgData);
     batch.update(_rooms.doc(roomId), {
       'lastMessage': content,
-      'lastMessageTime': now,
+      'lastMessageTime': FieldValue.serverTimestamp(),
       'unreadCounts.$receiverId': FieldValue.increment(1),
     });
     await batch.commit();
 
+    // MessageModel.fromJson falls back to DateTime.now() for createdAt here
+    // (the FieldValue sentinel isn't a resolved Timestamp yet) — the
+    // real-time listener replaces it with the server-resolved value shortly.
     return MessageModel.fromJson(msgData);
   }
 

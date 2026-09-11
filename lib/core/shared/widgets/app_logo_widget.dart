@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../config/app_colors.dart';
-import 'safee_shield_painter.dart';
 
 enum LogoSize { sm, md, lg, xl }
 enum LogoVariant { light, dark, gradient }
@@ -46,7 +45,12 @@ class AppLogoWidget extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SafeeMeetShieldIcon(size: _iconSize),
+        Image.asset(
+          'assets/icons/app_icon.png',
+          width: _iconSize,
+          height: _iconSize,
+          fit: BoxFit.contain,
+        ),
         const SizedBox(width: 10),
         Column(
           mainAxisSize: MainAxisSize.min,

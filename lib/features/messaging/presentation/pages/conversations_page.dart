@@ -324,7 +324,7 @@ class _EncryptionNotice extends StatelessWidget {
         Icon(Icons.lock, color: AppColors.textTertiary, size: 13),
         const SizedBox(width: 6),
         Text(
-          'All chats are end-to-end encrypted',
+          'Your chats are private to you',
           style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
         ),
       ],

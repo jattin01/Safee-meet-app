@@ -71,4 +71,7 @@ abstract final class AppConstants {
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv',
   ];
   static const String chatAttachmentsStoragePath = 'chat_attachments';
+
+  // ── Chat ─────────────────────────────────────────────────────────────────
+  static const int maxChatMessageLength = 5000;
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -76,6 +77,29 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    // App Check — attests that Firestore/Storage/Functions calls come from
+    // our real app build, not a scripted client with a stolen auth token.
+    // MONITOR-ONLY for now: activating the SDK makes the app attach App
+    // Check tokens to its requests, but nothing is rejected yet — no
+    // Firebase service has "Enforce" turned on in the console. That's a
+    // deliberate, separate step for later, once the Play Integrity
+    // (Android)/App Attest (iOS) token metrics look healthy in the console
+    // for existing app builds — turning enforcement on before that would
+    // lock out real users, the same way an unrelated rules change already
+    // broke chat once this session.
+    try {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider:
+            kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+        appleProvider:
+            kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
+      );
+    } catch (e) {
+      // Never let App Check activation failure block app startup.
+      debugPrint('App Check activation skipped: $e');
+    }
+
     // Register background message handler BEFORE runApp so it works in
     // terminated state. Must be called after Firebase.initializeApp().
     FirebaseMessaging.onBackgroundMessage(_onBackgroundMessage);

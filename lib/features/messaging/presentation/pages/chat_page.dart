@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/config/app_constants.dart';
 import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/widgets/skeleton_item.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
@@ -120,8 +121,11 @@ class _ChatViewState extends State<_ChatView> {
   }
 
   void _send(BuildContext context, ChatState state) {
-    final content = _textCtrl.text.trim();
+    var content = _textCtrl.text.trim();
     if (content.isEmpty) return;
+    if (content.length > AppConstants.maxChatMessageLength) {
+      content = content.substring(0, AppConstants.maxChatMessageLength);
+    }
     _textCtrl.clear();
     _typingTimer?.cancel();
     context.read<MessagingBloc>().add(const SetTyping(false));
@@ -701,7 +705,7 @@ class _EncryptedBanner extends StatelessWidget {
           const Icon(Icons.lock, color: Color(0xFF2E7D32), size: 11),
           const SizedBox(width: 5),
           Text(
-            'Messages are end-to-end encrypted',
+            'This is a private conversation',
             style: GoogleFonts.inter(
                 color: const Color(0xFF2E7D32),
                 fontSize: 11,
@@ -799,7 +803,7 @@ class _EmptyChat extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'This conversation is end-to-end encrypted.',
+            'Your messages here are just between you two.',
             style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
           ),
         ],
