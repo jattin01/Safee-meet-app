@@ -1,13 +1,16 @@
 import 'package:country_code_picker/country_code_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/config/app_constants.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
 import '../../../../core/shared/widgets/app_logo_widget.dart';
@@ -22,6 +25,17 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../../../../core/services/api_client.dart';
+
+Future<void> _openLegalUrl(BuildContext context, String url) async {
+  final uri = Uri.parse(url);
+  if (!await canLaunchUrl(uri)) {
+    if (context.mounted) {
+      AppSnackbar.info(context, 'Could not open link.');
+    }
+    return;
+  }
+  await launchUrl(uri, mode: LaunchMode.platformDefault);
+}
 
 enum _AccountType { normalUser, employer }
 
@@ -66,6 +80,14 @@ class _RegisterPageState extends State<RegisterPage> {
 
   // ── Consent ───────────────────────────────────────────────────────────────
   bool _consentAccepted = false;
+  // Tap targets for the "Terms of Service"/"Privacy Policy" words inside the
+  // consent RichText — kept as fields (rather than created inline in build)
+  // so they can be disposed properly, and so a tap on them opens the link
+  // instead of falling through to the parent GestureDetector's checkbox toggle.
+  late final _termsOfServiceRecognizer = TapGestureRecognizer()
+    ..onTap = () => _openLegalUrl(context, AppConstants.termsOfServiceUrl);
+  late final _privacyPolicyRecognizer = TapGestureRecognizer()
+    ..onTap = () => _openLegalUrl(context, AppConstants.privacyPolicyUrl);
 
   // ── Step config ───────────────────────────────────────────────────────────
   bool get _isEmployer => _accountType == _AccountType.employer;
@@ -266,6 +288,8 @@ class _RegisterPageState extends State<RegisterPage> {
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _companyNameCtrl.dispose();
+    _termsOfServiceRecognizer.dispose();
+    _privacyPolicyRecognizer.dispose();
     super.dispose();
   }
 
@@ -666,11 +690,13 @@ class _RegisterPageState extends State<RegisterPage> {
                           TextSpan(
                             text:  'Terms of Service',
                             style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                            recognizer: _termsOfServiceRecognizer,
                           ),
                           const TextSpan(text: ' and '),
                           TextSpan(
                             text:  'Privacy Policy',
                             style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                            recognizer: _privacyPolicyRecognizer,
                           ),
                           const TextSpan(text: '.'),
                         ],

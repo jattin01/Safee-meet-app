@@ -74,4 +74,12 @@ abstract final class AppConstants {
 
   // ── Chat ─────────────────────────────────────────────────────────────────
   static const int maxChatMessageLength = 5000;
+
+  // ── Legal ────────────────────────────────────────────────────────────────
+  // Single source of truth for these two links — reused by the Settings
+  // "Legal" section and the sign-up flow's Terms & Consent step.
+  static const String termsOfServiceUrl =
+      'https://safeemeet.testingenv.co.in/terms-and-conditions';
+  static const String privacyPolicyUrl =
+      'https://safeemeet.testingenv.co.in/privacy-policy';
 }

@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_colors.dart';
+import '../../../../core/config/app_constants.dart';
 import '../../../../core/dependency_injection/injection_container.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/shared/utils/safe_bottom_padding.dart';
@@ -328,15 +329,15 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                             icon: Icons.shield_outlined,
                             iconColor: AppColors.textSecondary,
                             label: 'Privacy Policy',
-                            onTap: () => _openUrl(context,
-                                'https://safeemeet.testingenv.co.in/privacy-policy'),
+                            onTap: () => _openUrl(
+                                context, AppConstants.privacyPolicyUrl),
                           ),
                           _NavTile(
                             icon: Icons.shield_outlined,
                             iconColor: AppColors.textSecondary,
                             label: 'Terms of Service',
-                            onTap: () => _openUrl(context,
-                                'https://safeemeet.testingenv.co.in/terms-and-conditions'),
+                            onTap: () => _openUrl(
+                                context, AppConstants.termsOfServiceUrl),
                           ),
                         ]),
                         const SizedBox(height: 24),
