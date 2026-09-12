@@ -268,6 +268,9 @@ class _SubscriptionViewState extends State<_SubscriptionView> {
                                   ? 'Continue with Free'
                                   : 'Get ${selectedPlan.name} — \$${selectedPlan.price(_yearly).toStringAsFixed(2)}/mo'
                                       '${_yearly ? ' (billed yearly)' : ''}',
+                              // This label interpolates the plan name + price, so it can
+                              // get long enough to overflow the button — wrap instead.
+                              wrapLabel: true,
                               isLoading: isProcessing,
                               onPressed: isProcessing || isSelectedCurrent
                                   ? null
@@ -497,7 +500,7 @@ class _PlanCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Container(
                         width: 44,
@@ -513,11 +516,16 @@ class _PlanCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
+                      // Name gets the row to itself (full card width minus the
+                      // icon) so it always fits on one line at full size —
+                      // the price/discount block moves to its own row below
+                      // instead of squeezing this one from the side.
                       Expanded(
                         child: Row(
                           children: [
                             Flexible(
                               child: Text(plan.name,
+                                  maxLines: 1,
                                   style: GoogleFonts.inter(
                                       color: AppColors.textPrimary,
                                       fontSize: 17,
@@ -544,6 +552,12 @@ class _PlanCard extends StatelessWidget {
                           ],
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -566,7 +580,7 @@ class _PlanCard extends StatelessWidget {
                             ),
                           if (hasDiscount)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
+                              padding: const EdgeInsets.only(bottom: 4),
                               child: Text(
                                 '\$${discountOriginalPrice!.toStringAsFixed(2)}',
                                 style: GoogleFonts.inter(

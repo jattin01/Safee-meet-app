@@ -150,6 +150,18 @@ class _MeetingsListViewState extends State<_MeetingsListView>
               backgroundColor: AppColors.lightBg,
               elevation: 0,
               iconTheme: const IconThemeData(color: AppColors.textPrimary),
+              // Some flows reach this screen via context.go(...), which clears
+              // the stack and leaves nothing to pop — Flutter's default AppBar
+              // then hides the back arrow entirely. Show it unconditionally
+              // (same pattern as DarkScreenHeader elsewhere in the app) and
+              // fall back to Home when there's genuinely nothing to pop back to.
+              automaticallyImplyLeading: false,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.canPop()
+                    ? context.pop()
+                    : context.go(AppRoutes.home),
+              ),
               title: const Text(
                 'My Meetings',
                 style: TextStyle(

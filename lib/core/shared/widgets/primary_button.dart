@@ -11,6 +11,12 @@ class PrimaryButton extends StatefulWidget {
   final Color? gradientStart;
   final Color? gradientEnd;
 
+  /// Opt-in fix for callers whose [label] can get long/dynamic (e.g. a plan
+  /// name + price interpolated in) and would otherwise overflow the button.
+  /// Defaults to `false` so every other existing call site renders exactly
+  /// as before — only pass `true` where the overflow actually happens.
+  final bool wrapLabel;
+
   const PrimaryButton({
     super.key,
     required this.label,
@@ -20,6 +26,7 @@ class PrimaryButton extends StatefulWidget {
     this.icon,
     this.gradientStart,
     this.gradientEnd,
+    this.wrapLabel = false,
   });
 
   @override
@@ -44,8 +51,13 @@ class _PrimaryButtonState extends State<PrimaryButton> {
         curve: Curves.easeInOut,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          constraints: const BoxConstraints(minHeight: 52),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          height: widget.wrapLabel ? null : 52,
+          constraints: widget.wrapLabel
+              ? const BoxConstraints(minHeight: 52)
+              : null,
+          padding: widget.wrapLabel
+              ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
+              : null,
           decoration: BoxDecoration(
             gradient: _isDisabled
                 ? null
@@ -81,7 +93,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
                     valueColor: AlwaysStoppedAnimation(Colors.white),
                   ),
                 )
-              else ...[
+              else if (widget.wrapLabel) ...[
                 Flexible(
                   child: Text(
                     widget.label,
@@ -93,6 +105,16 @@ class _PrimaryButtonState extends State<PrimaryButton> {
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
+                  ),
+                ),
+                if (widget.icon != null) ...[const SizedBox(width: 6), widget.icon!],
+              ] else ...[
+                Text(
+                  widget.label,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
                 if (widget.icon != null) ...[const SizedBox(width: 6), widget.icon!],
