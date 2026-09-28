@@ -232,15 +232,15 @@ class _VerificationStatusPageState extends State<VerificationStatusPage> {
                               }
                             },
                           ),
-                        const SizedBox(height: 16),
-                        _LockedLevelCard(
-                          title: 'Professional Verification',
-                          subtitle:
-                              'Business and credentials review is not enabled yet',
-                          onTap: () {
-                            context.push(AppRoutes.subscription, extra: 'professional');
-                          },
-                        ),
+                        // const SizedBox(height: 16),
+                        // _LockedLevelCard(
+                        //   title: 'Professional Verification',
+                        //   subtitle:
+                        //       'Business and credentials review is not enabled yet',
+                        //   onTap: () {
+                        //     context.push(AppRoutes.subscription, extra: 'professional');
+                        //   },
+                        // ),
                         const SizedBox(height: 20),
                         _SafetyScoreBreakdown(status: status),
                         const SizedBox(height: 24),

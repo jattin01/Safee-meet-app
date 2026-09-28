@@ -95,7 +95,7 @@ class SubscriptionPlanModel {
   ///
   /// A `name` can also contain multiple labels glued together with a
   /// line/paragraph separator (seen in the Premium plan's "Priority
-  /// Visibility Trusted Contact Alerts") — split those back into
+  /// VisibilityTrusted Contact Alerts") — split those back into
   /// separate feature lines so each renders as its own checkmark item.
   static List<String> _parseFeatures(dynamic raw) {
     final list = raw as List<dynamic>? ?? [];
