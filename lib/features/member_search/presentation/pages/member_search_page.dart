@@ -978,7 +978,19 @@ class _RecentMemberTile extends StatelessWidget {
             child: member.avatarUrl != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(member.avatarUrl!, fit: BoxFit.cover),
+                    child: Image.network(
+                      member.avatarUrl!,
+                      fit: BoxFit.cover,
+                      // Without an errorBuilder a 404 on the avatar URL is
+                      // reported to FlutterError.onError → Crashlytics fatal.
+                      errorBuilder: (_, __, ___) => Center(
+                        child: Text(member.initials,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
                   )
                 : Center(
                     child: Text(member.initials,

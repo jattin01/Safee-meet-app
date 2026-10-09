@@ -1,6 +1,11 @@
 abstract final class AppConstants {
   // ── API ──────────────────────────────────────────────────────────────────
-  static const String baseUrl = 'http://168.144.112.102:8080/api';
+  //static const String baseUrl = 'http://168.144.112.102:8080/api';
+  static const String baseUrl = 'https://admin.safeemeet.com/api';
+  // Host serving uploaded files (`/storage/...` image paths from the API).
+  // Must point at the same server as [baseUrl], or relative image paths 404.
+  //static const String storageBaseUrl = 'http://168.144.112.102:8080';
+  static const String storageBaseUrl = 'https://admin.safeemeet.com';
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
 
@@ -79,7 +84,7 @@ abstract final class AppConstants {
   // Single source of truth for these two links — reused by the Settings
   // "Legal" section and the sign-up flow's Terms & Consent step.
   static const String termsOfServiceUrl =
-      'https://safeemeet.testingenv.co.in/terms-and-conditions';
+      'https://safeemeet.com/terms-and-conditions.html';
   static const String privacyPolicyUrl =
-      'https://safeemeet.testingenv.co.in/privacy-policy';
+      'https://safeemeet.com/privacy-policy.html';
 }

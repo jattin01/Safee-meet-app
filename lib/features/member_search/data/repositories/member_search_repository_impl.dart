@@ -1,3 +1,4 @@
+import '../../../../core/config/app_constants.dart';
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/shared/failures/dio_failure_mapper.dart';
@@ -93,14 +94,14 @@ class MemberSearchRepositoryImpl implements MemberSearchRepository {
   static String? _parseImageUrl(dynamic url) {
     if (url == null || url is! String || url.isEmpty) return null;
     if (url.startsWith('http')) return url;
-    if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
-    return 'http://168.144.112.102:8080/$url';
+    if (url.startsWith('/')) return '${AppConstants.storageBaseUrl}$url';
+    return '${AppConstants.storageBaseUrl}/$url';
   }
 
   static String? _parseBadgeIconUrl(dynamic url) {
     if (url == null || url is! String || url.isEmpty) return null;
     if (url.startsWith('http')) return url;
-    return 'http://168.144.112.102:8080$url';
+    return '${AppConstants.storageBaseUrl}$url';
   }
 
   static String? _parseJobTitle(dynamic title) {

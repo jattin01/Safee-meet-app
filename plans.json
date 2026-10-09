@@ -2,11 +2,11 @@
 <html>
     <head>
         <meta charset="UTF-8" />
-        <meta http-equiv="refresh" content="0;url='http://168.144.112.102:8080/login'" />
+        <meta http-equiv="refresh" content="0;url='https://admin.safeemeet.com/login'" />
 
-        <title>Redirecting to http://168.144.112.102:8080/login</title>
+        <title>Redirecting to https://admin.safeemeet.com   /login</title>
     </head>
     <body>
-        Redirecting to <a href="http://168.144.112.102:8080/login">http://168.144.112.102:8080/login</a>.
+        Redirecting to <a href="https://admin.safeemeet.com/login">https://admin.safeemeet.com/login</a>.
     </body>
 </html>

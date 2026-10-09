@@ -90,27 +90,33 @@ class DeleteAccountRequested extends AuthEvent {
 
 class SendOtpRequested extends AuthEvent {
   final String phone;
-  const SendOtpRequested(this.phone);
+  /// SMS consent type (`otp`, `alerts`, `marketing`) → granted.
+  final Map<String, bool> consents;
+  const SendOtpRequested(this.phone, {this.consents = const {}});
   @override
-  List<Object?> get props => [phone];
+  List<Object?> get props => [phone, consents];
 }
 
 /// Sends the initial phone OTP during registration via the dedicated
 /// registration endpoint — the login flow uses [SendOtpRequested] instead.
 class SendRegisterOtpRequested extends AuthEvent {
   final String phone;
-  const SendRegisterOtpRequested(this.phone);
+  /// SMS consent type (`otp`, `alerts`, `marketing`) → granted.
+  final Map<String, bool> consents;
+  const SendRegisterOtpRequested(this.phone, {this.consents = const {}});
   @override
-  List<Object?> get props => [phone];
+  List<Object?> get props => [phone, consents];
 }
 
 /// Resend OTP from the verification screen — hits the dedicated resend
 /// endpoint and never navigates the user away from that screen.
 class ResendOtpRequested extends AuthEvent {
   final String phone;
-  const ResendOtpRequested(this.phone);
+  /// SMS consent type (`otp`, `alerts`, `marketing`) → granted.
+  final Map<String, bool> consents;
+  const ResendOtpRequested(this.phone, {this.consents = const {}});
   @override
-  List<Object?> get props => [phone];
+  List<Object?> get props => [phone, consents];
 }
 
 class OtpVerificationRequested extends AuthEvent {

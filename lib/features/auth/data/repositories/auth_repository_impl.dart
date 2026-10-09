@@ -259,9 +259,9 @@ class AuthRepositoryImpl implements AuthRepository {
   // ── Legacy OTP stubs ──────────────────────────────────────────────────────────
 
   @override
-  Future<Either<Failure, int?>> sendOtp(String phone) async {
+  Future<Either<Failure, int?>> sendOtp(String phone, {Map<String, bool> consents = const {}}) async {
     try {
-      final expiresIn = await _remote.sendOtp(phone);
+      final expiresIn = await _remote.sendOtp(phone, consents: consents);
       return Right(expiresIn);
     } on DioException catch (e) {
       return Left(_mapDioError(e));
@@ -271,9 +271,9 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Either<Failure, int?>> resendOtp(String phone) async {
+  Future<Either<Failure, int?>> resendOtp(String phone, {Map<String, bool> consents = const {}}) async {
     try {
-      final expiresIn = await _remote.resendOtp(phone);
+      final expiresIn = await _remote.resendOtp(phone, consents: consents);
       return Right(expiresIn);
     } on DioException catch (e) {
       return Left(_mapDioError(e));
@@ -283,9 +283,9 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Either<Failure, int?>> sendRegisterOtp(String phone) async {
+  Future<Either<Failure, int?>> sendRegisterOtp(String phone, {Map<String, bool> consents = const {}}) async {
     try {
-      final expiresIn = await _remote.sendRegisterOtp(phone);
+      final expiresIn = await _remote.sendRegisterOtp(phone, consents: consents);
       return Right(expiresIn);
     } on DioException catch (e) {
       return Left(_mapDioError(e));

@@ -20,6 +20,7 @@ import '../../../../core/shared/widgets/info_banner.dart';
 import '../../../../core/shared/widgets/otp_input_widget.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
 import '../../../../core/shared/widgets/segmented_bar.dart';
+import '../../../../core/shared/widgets/sms_consent_section.dart';
 import '../../../auth/data/remote_data_sources/auth_remote_data_source.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
@@ -80,6 +81,12 @@ class _RegisterPageState extends State<RegisterPage> {
 
   // ── Consent ───────────────────────────────────────────────────────────────
   bool _consentAccepted = false;
+  // SMS opt-in, collected on the phone step so it's given before the first
+  // OTP SMS is sent. Only the OTP consent gates "Send OTP"; the other two
+  // are optional and don't affect the flow.
+  bool _smsOtpConsent       = false;
+  bool _smsAlertsConsent    = false;
+  bool _smsMarketingConsent = false;
   // Tap targets for the "Terms of Service"/"Privacy Policy" words inside the
   // consent RichText — kept as fields (rather than created inline in build)
   // so they can be disposed properly, and so a tap on them opens the link
@@ -120,7 +127,7 @@ class _RegisterPageState extends State<RegisterPage> {
     final emailStep = _isEmployer ? 5 : 4;
     switch (_step) {
       case 1: return _nameCtrl.text.trim().isNotEmpty;
-      case 2: return _phoneDigits.length >= 7 && _phoneDigits.length <= 15 && !_sendingOtp;
+      case 2: return _phoneDigits.length >= 7 && _phoneDigits.length <= 15 && _smsOtpConsent && !_sendingOtp;
       case 3: return (_enteredOtp?.length ?? 0) == 6 && !_verifyingOtp;
       default:
         if (_step == 4 && _isEmployer) {
@@ -168,13 +175,27 @@ class _RegisterPageState extends State<RegisterPage> {
   void _sendPhoneOtp() {
     final e164 = _toE164(_phoneCtrl.text.trim());
     setState(() { _sendingOtp = true; _otpError = null; });
-    context.read<AuthBloc>().add(SendRegisterOtpRequested(e164));
+    context.read<AuthBloc>().add(SendRegisterOtpRequested(
+      e164,
+      consents: {
+        'otp':       _smsOtpConsent,
+        'alerts':    _smsAlertsConsent,
+        'marketing': _smsMarketingConsent,
+      },
+    ));
   }
 
   // ── Backend: Resend OTP — stays on the OTP step, never navigates away ────
   void _resendPhoneOtp() {
     setState(() { _enteredOtp = null; _otpError = null; });
-    context.read<AuthBloc>().add(ResendOtpRequested(_toE164(_phoneCtrl.text.trim())));
+    context.read<AuthBloc>().add(ResendOtpRequested(
+      _toE164(_phoneCtrl.text.trim()),
+      consents: {
+        'otp':       _smsOtpConsent,
+        'alerts':    _smsAlertsConsent,
+        'marketing': _smsMarketingConsent,
+      },
+    ));
   }
 
   // ── Backend: Verify OTP → Firebase custom-token session ───────────────────
@@ -475,6 +496,15 @@ class _RegisterPageState extends State<RegisterPage> {
         text:  "We'll send a 6-digit OTP to verify this number.",
         color: AppColors.blue,
       ),
+      const SizedBox(height: 16),
+      SmsConsentSection(
+        otpConsent:       _smsOtpConsent,
+        alertsConsent:    _smsAlertsConsent,
+        marketingConsent: _smsMarketingConsent,
+        onOtpConsentChanged:       (v) => setState(() => _smsOtpConsent = v),
+        onAlertsConsentChanged:    (v) => setState(() => _smsAlertsConsent = v),
+        onMarketingConsentChanged: (v) => setState(() => _smsMarketingConsent = v),
+      ),
     ],
   );
 
@@ -657,7 +687,7 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
             const SizedBox(height: 20),
             _ConsentItem(icon: Icons.verified_user_outlined,  text: 'Identity verification powered by SAFEE MEET'),
-            _ConsentItem(icon: Icons.lock_outline,            text: 'Your data is encrypted end-to-end'),
+            _ConsentItem(icon: Icons.lock_outline,            text: 'Your data is stored securely'),
             _ConsentItem(icon: Icons.visibility_off_outlined, text: 'We never share your info with third parties'),
             const SizedBox(height: 20),
             GestureDetector(

@@ -1,3 +1,4 @@
+import '../../../../core/config/app_constants.dart';
 import '../../domain/entities/user_entity.dart';
 
 class UserModel {
@@ -134,7 +135,7 @@ class UserModel {
     if (url == null || url is! String || url.isEmpty) return null;
     if (url.startsWith('http')) return url;
     // The user requested to append this specific IP
-    return 'http://168.144.112.102:8080$url';
+    return '${AppConstants.storageBaseUrl}$url';
   }
 
   UserEntity toEntity() => UserEntity(
@@ -190,6 +191,6 @@ class UserModel {
 String? _parseImageUrl(dynamic url) {
   if (url == null || url is! String || url.isEmpty) return null;
   if (url.startsWith('http')) return url;
-  if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
-  return 'http://168.144.112.102:8080/$url';
+  if (url.startsWith('/')) return '${AppConstants.storageBaseUrl}$url';
+  return '${AppConstants.storageBaseUrl}/$url';
 }

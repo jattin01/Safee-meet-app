@@ -1,3 +1,4 @@
+import '../../../../core/config/app_constants.dart';
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/services/api_client.dart';
@@ -209,8 +210,8 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
   static String? _parseImageUrl(dynamic url) {
     if (url == null || url is! String || url.isEmpty) return null;
     if (url.startsWith('http')) return url;
-    if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
-    return 'http://168.144.112.102:8080/$url';
+    if (url.startsWith('/')) return '${AppConstants.storageBaseUrl}$url';
+    return '${AppConstants.storageBaseUrl}/$url';
   }
 
   // `meeting_date` is a full ISO datetime at UTC midnight (e.g.

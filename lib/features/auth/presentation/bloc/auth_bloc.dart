@@ -368,7 +368,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onSendOtp(SendOtpRequested event, Emitter<AuthState> emit) async {
     emit(const AuthLoading());
-    final result = await sendOtp(event.phone);
+    final result = await sendOtp(event.phone, consents: event.consents);
     result.fold(
       (f) => emit(_mapFailureToState(f)),
       (expiresIn) => emit(OtpSent(event.phone, expiresIn)),
@@ -377,7 +377,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onResendOtp(ResendOtpRequested event, Emitter<AuthState> emit) async {
     emit(const AuthLoading());
-    final result = await resendOtp(event.phone);
+    final result = await resendOtp(event.phone, consents: event.consents);
     result.fold(
       (f) => emit(_mapFailureToState(f)),
       (expiresIn) => emit(OtpResent(event.phone, expiresIn)),
@@ -386,7 +386,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onSendRegisterOtp(SendRegisterOtpRequested event, Emitter<AuthState> emit) async {
     emit(const AuthLoading());
-    final result = await sendRegisterOtp(event.phone);
+    final result = await sendRegisterOtp(event.phone, consents: event.consents);
     result.fold(
       (f) => emit(_mapFailureToState(f)),
       (expiresIn) => emit(OtpSent(event.phone, expiresIn)),

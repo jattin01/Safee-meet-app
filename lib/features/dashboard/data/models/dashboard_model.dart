@@ -1,3 +1,4 @@
+import '../../../../core/config/app_constants.dart';
 import '../../domain/entities/dashboard_entity.dart';
 
 class DashboardModel {
@@ -97,6 +98,6 @@ class RecentMeetingModel {
 String? _parseImageUrl(dynamic url) {
   if (url == null || url is! String || url.isEmpty) return null;
   if (url.startsWith('http')) return url;
-  if (url.startsWith('/')) return 'http://168.144.112.102:8080$url';
-  return 'http://168.144.112.102:8080/$url';
+  if (url.startsWith('/')) return '${AppConstants.storageBaseUrl}$url';
+  return '${AppConstants.storageBaseUrl}/$url';
 }

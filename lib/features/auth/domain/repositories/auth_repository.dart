@@ -55,15 +55,15 @@ abstract class AuthRepository {
 
   // Legacy OTP methods (kept for backward compat)
   /// Returns the OTP's validity window in seconds, if the backend sent one.
-  Future<Either<Failure, int?>> sendOtp(String phone);
+  Future<Either<Failure, int?>> sendOtp(String phone, {Map<String, bool> consents = const {}});
 
   /// Resends the OTP via the dedicated resend endpoint — used by "Resend
   /// OTP" on the verification screen, which never navigates away.
-  Future<Either<Failure, int?>> resendOtp(String phone);
+  Future<Either<Failure, int?>> resendOtp(String phone, {Map<String, bool> consents = const {}});
 
   /// Sends the initial phone OTP during registration via the dedicated
   /// registration endpoint — the login flow uses [sendOtp] instead.
-  Future<Either<Failure, int?>> sendRegisterOtp(String phone);
+  Future<Either<Failure, int?>> sendRegisterOtp(String phone, {Map<String, bool> consents = const {}});
 
   Future<Either<Failure, void>> sendEmailOtp(String email);
 

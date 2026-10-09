@@ -6,10 +6,10 @@ class SendRegisterOtpUseCase {
   final AuthRepository _repository;
   SendRegisterOtpUseCase(this._repository);
 
-  Future<Either<Failure, int?>> call(String phone) {
+  Future<Either<Failure, int?>> call(String phone, {Map<String, bool> consents = const {}}) {
     if (phone.trim().isEmpty) {
       return Future.value(const Left(ValidationFailure('Phone number is required')));
     }
-    return _repository.sendRegisterOtp(phone.trim());
+    return _repository.sendRegisterOtp(phone.trim(), consents: consents);
   }
 }

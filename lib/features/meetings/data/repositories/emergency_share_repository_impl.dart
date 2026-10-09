@@ -1,3 +1,4 @@
+import '../../../../core/config/app_constants.dart';
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -85,7 +86,7 @@ class EmergencyShareRepositoryImpl implements EmergencyShareRepository {
         ? null
         : rawImage.startsWith('http')
             ? rawImage
-            : 'http://168.144.112.102:8080${rawImage.startsWith('/') ? rawImage : '/$rawImage'}';
+            : '${AppConstants.storageBaseUrl}${rawImage.startsWith('/') ? rawImage : '/$rawImage'}';
     return EmergencyShareUserEntity(
       id: d['id']?.toString() ?? '',
       name: d['name']?.toString() ?? 'SAFEE User',

@@ -36,6 +36,9 @@ class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
   final _nameCtrl = TextEditingController();
   final _relationshipCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  // The contact hasn't opted in to SOS SMS themselves, so the user must
+  // confirm they have the contact's permission before adding them.
+  bool _contactConsent = false;
 
   @override
   void dispose() {
@@ -53,6 +56,10 @@ class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
       AppSnackbar.info(context, 'Full name, relationship and phone number are required.');
       return;
     }
+    if (!_contactConsent) {
+      AppSnackbar.info(context, "Please confirm you have this contact's permission.");
+      return;
+    }
 
     context.read<EmergencyContactBloc>().add(
           EmergencyContactAddRequested(
@@ -65,7 +72,10 @@ class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
     _nameCtrl.clear();
     _relationshipCtrl.clear();
     _phoneCtrl.clear();
-    setState(() => _showAddForm = false);
+    setState(() {
+      _showAddForm = false;
+      _contactConsent = false;
+    });
   }
 
   Future<void> _refresh(BuildContext context) {
@@ -180,8 +190,13 @@ class _EmergencyContactsViewState extends State<_EmergencyContactsView> {
                             relationshipCtrl: _relationshipCtrl,
                             phoneCtrl: _phoneCtrl,
                             isSubmitting: isSubmitting,
-                            onCancel: () =>
-                                setState(() => _showAddForm = false),
+                            consentGiven: _contactConsent,
+                            onConsentChanged: (v) =>
+                                setState(() => _contactConsent = v),
+                            onCancel: () => setState(() {
+                              _showAddForm = false;
+                              _contactConsent = false;
+                            }),
                             onAdd: _submitContact,
                           )
                         else
@@ -300,6 +315,8 @@ class _AddContactForm extends StatelessWidget {
   final TextEditingController relationshipCtrl;
   final TextEditingController phoneCtrl;
   final bool isSubmitting;
+  final bool consentGiven;
+  final ValueChanged<bool> onConsentChanged;
   final VoidCallback onCancel;
   final VoidCallback onAdd;
 
@@ -308,6 +325,8 @@ class _AddContactForm extends StatelessWidget {
     required this.relationshipCtrl,
     required this.phoneCtrl,
     required this.isSubmitting,
+    required this.consentGiven,
+    required this.onConsentChanged,
     required this.onCancel,
     required this.onAdd,
   });
@@ -344,6 +363,46 @@ class _AddContactForm extends StatelessWidget {
               FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s()]'))
             ],
           ),
+          const SizedBox(height: 14),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: isSubmitting ? null : () => onConsentChanged(!consentGiven),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: consentGiven ? AppColors.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: consentGiven
+                          ? AppColors.primary
+                          : AppColors.textTertiary,
+                      width: 2,
+                    ),
+                  ),
+                  child: consentGiven
+                      ? const Icon(Icons.check, color: Colors.white, size: 14)
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'I confirm this person has agreed to receive emergency SMS '
+                    'alerts from SAFEE MEET on my behalf. They can reply STOP '
+                    'to opt out at any time.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -368,12 +427,14 @@ class _AddContactForm extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: isSubmitting ? null : onAdd,
+                  onTap: (isSubmitting || !consentGiven) ? null : onAdd,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                          colors: [AppColors.primary, AppColors.primaryLight]),
+                          colors: consentGiven
+                              ? [AppColors.primary, AppColors.primaryLight]
+                              : [AppColors.textTertiary, AppColors.textTertiary]),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Center(

@@ -1,7 +1,7 @@
 name: safee_meet
 description: "SAFEE MEET — Trust, Identity Verification & Meeting Protection Platform"
 publish_to: 'none'
-version: 1.0.10+16
+version: 1.0.13+20
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

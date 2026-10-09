@@ -17,6 +17,7 @@ import '../../../../core/shared/widgets/app_snackbar.dart';
 import '../../../../core/shared/widgets/field_input.dart';
 import '../../../../core/shared/widgets/otp_input_widget.dart';
 import '../../../../core/shared/widgets/primary_button.dart';
+import '../../../../core/shared/widgets/sms_consent_section.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -73,6 +74,12 @@ class _LoginViewState extends State<_LoginView> {
   String? _pendingSocialProvider;
   String? _pendingSocialToken;
 
+  // ── SMS opt-in, given before the first OTP SMS is sent. Only the OTP
+  // consent gates "Send OTP"; the other two are optional. ─────────────────
+  bool _smsOtpConsent       = false;
+  bool _smsAlertsConsent    = false;
+  bool _smsMarketingConsent = false;
+
   @override
   void dispose() {
     _phoneCtrl.dispose();
@@ -111,7 +118,14 @@ class _LoginViewState extends State<_LoginView> {
   // ── Backend: Send OTP (only called once registration is confirmed) ───────
   void _sendPhoneOtp(String e164) {
     setState(() { _sendingOtp = true; _otpError = null; });
-    context.read<AuthBloc>().add(SendOtpRequested(e164));
+    context.read<AuthBloc>().add(SendOtpRequested(
+      e164,
+      consents: {
+        'otp':       _smsOtpConsent,
+        'alerts':    _smsAlertsConsent,
+        'marketing': _smsMarketingConsent,
+      },
+    ));
   }
 
   // ── Backend: Resend OTP — stays on the OTP screen, never navigates away ──
@@ -119,7 +133,14 @@ class _LoginViewState extends State<_LoginView> {
     // A freshly-resent code invalidates the old one server-side, so a new
     // one legitimately needs to go through _verifyPhoneOtp again.
     setState(() { _enteredOtp = null; _otpError = null; _otpAlreadyVerified = false; });
-    context.read<AuthBloc>().add(ResendOtpRequested(_toE164(_phoneCtrl.text.trim())));
+    context.read<AuthBloc>().add(ResendOtpRequested(
+      _toE164(_phoneCtrl.text.trim()),
+      consents: {
+        'otp':       _smsOtpConsent,
+        'alerts':    _smsAlertsConsent,
+        'marketing': _smsMarketingConsent,
+      },
+    ));
   }
 
   // ── Backend: Verify OTP → Firebase custom-token session → Backend Login ──
@@ -311,17 +332,26 @@ class _LoginViewState extends State<_LoginView> {
         onCountryChanged: (country) =>
             setState(() => _dialCode = country.dialCode?.replaceAll('+', '') ?? '91'),
       ),
+      const SizedBox(height: 16),
+      SmsConsentSection(
+        otpConsent:       _smsOtpConsent,
+        alertsConsent:    _smsAlertsConsent,
+        marketingConsent: _smsMarketingConsent,
+        onOtpConsentChanged:       (v) => setState(() => _smsOtpConsent = v),
+        onAlertsConsentChanged:    (v) => setState(() => _smsAlertsConsent = v),
+        onMarketingConsentChanged: (v) => setState(() => _smsMarketingConsent = v),
+      ),
       const SizedBox(height: 20),
       PrimaryButton(
         label: _sendingOtp
             ? 'Sending OTP...'
             : (isLoading ? 'Checking number...' : 'Send OTP'),
-        onPressed: (_sendingOtp || isLoading || !_isValidPhone)
+        onPressed: (_sendingOtp || isLoading || !_isValidPhone || !_smsOtpConsent)
             ? null
             : _onSendOtpPressed,
-        gradientStart: (_sendingOtp || !_isValidPhone)
+        gradientStart: (_sendingOtp || !_isValidPhone || !_smsOtpConsent)
             ? AppColors.textTertiary : null,
-        gradientEnd: (_sendingOtp || !_isValidPhone)
+        gradientEnd: (_sendingOtp || !_isValidPhone || !_smsOtpConsent)
             ? AppColors.textTertiary : null,
       ),
       // const SizedBox(height: 28),
